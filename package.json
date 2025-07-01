@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "detox": "^20.39.0"
+  }
+}
