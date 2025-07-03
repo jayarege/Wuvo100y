@@ -208,6 +208,9 @@ function HomeScreen({
   const [comparisonResults, setComparisonResults] = useState([]);
   const [isComparisonComplete, setIsComparisonComplete] = useState(false);
   const [showSentimentButtons, setShowSentimentButtons] = useState(false);
+  const [selectedEmotion, setSelectedEmotion] = useState(null);
+  const [currentMovieRating, setCurrentMovieRating] = useState(null);
+  const [emotionModalVisible, setEmotionModalVisible] = useState(false);
   
   // **ANIMATION SYSTEM - ENGINEER TEAM 4-6**
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -853,60 +856,276 @@ function HomeScreen({
 
   const handleComparison = useCallback((winner) => {
     const currentComparisonMovie = comparisonMovies[currentComparison];
-    const result = {
-      comparison: currentComparison + 1,
-      winner: winner === 'new' ? selectedMovie : currentComparisonMovie,
-      loser: winner === 'new' ? currentComparisonMovie : selectedMovie,
-      userChoice: winner
-    };
-
-    const newResults = [...comparisonResults, result];
-    setComparisonResults(newResults);
-
-    if (currentComparison < 2) {
+    const newMovieWon = winner === 'new';
+    
+    if (currentComparison === 0) {
+      // FIRST COMPARISON: Unknown vs Known (no baseline - pure comparison result)
+      const opponentRating = currentComparisonMovie.userRating;
+      let derivedRating;
+      
+      if (newMovieWon) {
+        // If unknown movie won, it should be rated higher than opponent
+        // Use a simple heuristic: winner gets opponent rating + small bonus
+        derivedRating = Math.min(10, opponentRating + 0.5);
+      } else {
+        // If unknown movie lost, it should be rated lower than opponent  
+        // Use a simple heuristic: loser gets opponent rating - small penalty
+        derivedRating = Math.max(1, opponentRating - 0.5);
+      }
+      
+      // Round to nearest 0.1
+      derivedRating = Math.round(derivedRating * 10) / 10;
+      
+      setCurrentMovieRating(derivedRating);
+      
+      console.log(`🎯 Round 1 (Unknown vs Known): ${newMovieWon ? 'WIN' : 'LOSS'} vs ${currentComparisonMovie.title} (${opponentRating}) -> Initial Rating: ${derivedRating}`);
+      
+      // Move to next comparison
+      setCurrentComparison(1);
+      
+    } else if (currentComparison < comparisonMovies.length - 1) {
+      // SUBSEQUENT COMPARISONS: Known vs Known
+      let updatedRating;
+      if (newMovieWon) {
+        const { updatedSeenContent, updatedNewContent } = adjustRatingWildcard(
+          currentMovieRating,  // New movie current rating
+          currentComparisonMovie.userRating,  // Opponent rating
+          true,  // New movie won
+          currentComparison,  // New movie now has currentComparison games played
+          5      // Opponent has experience
+        );
+        updatedRating = updatedSeenContent;
+      } else {
+        const { updatedSeenContent, updatedNewContent } = adjustRatingWildcard(
+          currentComparisonMovie.userRating,  // Opponent won
+          currentMovieRating,  // New movie current rating
+          true,  // Opponent won
+          5,     // Opponent has experience
+          currentComparison   // New movie now has currentComparison games played
+        );
+        updatedRating = updatedNewContent;
+      }
+      
+      setCurrentMovieRating(updatedRating);
+      
+      console.log(`🎯 Round ${currentComparison + 1} (Known vs Known): ${newMovieWon ? 'WIN' : 'LOSS'} vs ${currentComparisonMovie.title} (${currentComparisonMovie.userRating}) -> Rating: ${updatedRating}`);
+      
       // Move to next comparison
       setCurrentComparison(currentComparison + 1);
+      
     } else {
-      // All comparisons complete
+      // FINAL COMPARISON: Known vs Known
+      let finalRating;
+      if (newMovieWon) {
+        const { updatedSeenContent, updatedNewContent } = adjustRatingWildcard(
+          currentMovieRating,  // New movie current rating
+          currentComparisonMovie.userRating,  // Opponent rating
+          true,  // New movie won
+          currentComparison,  // New movie now has currentComparison games played
+          5      // Opponent has experience
+        );
+        finalRating = updatedSeenContent;
+      } else {
+        const { updatedSeenContent, updatedNewContent } = adjustRatingWildcard(
+          currentComparisonMovie.userRating,  // Opponent won
+          currentMovieRating,  // New movie current rating
+          true,  // Opponent won
+          5,     // Opponent has experience
+          currentComparison   // New movie now has currentComparison games played
+        );
+        finalRating = updatedNewContent;
+      }
+      
+      console.log(`🎯 Round ${currentComparison + 1} (Known vs Known - FINAL): ${newMovieWon ? 'WIN' : 'LOSS'} vs ${currentComparisonMovie.title} (${currentComparisonMovie.userRating}) -> Final Rating: ${finalRating}`);
+      
+      // Complete the rating process
       setIsComparisonComplete(true);
-      
-      // Calculate final rating based on comparison results
-      const newMovieWins = newResults.filter(r => r.userChoice === 'new').length;
-      const finalRating = calculateRatingFromComparisons(newMovieWins, newResults);
-      
-      console.log(`🎯 Comparison Complete: ${newMovieWins}/3 wins, Final Rating: ${finalRating}`);
-      
       setTimeout(() => {
         setComparisonModalVisible(false);
         handleConfirmRating(finalRating);
       }, 1500);
     }
-  }, [currentComparison, comparisonResults, comparisonMovies, selectedMovie]);
+  }, [currentComparison, comparisonMovies, selectedMovie, selectedEmotion, currentMovieRating, adjustRatingWildcard]);
 
-  const calculateRatingFromComparisons = useCallback((wins, results) => {
-    // Get the comparison movies' ratings
-    const comparisonRatings = results.map(r => {
-      const movie = r.winner === selectedMovie ? r.loser : r.winner;
-      return movie.userRating || (movie.eloRating / 100);
-    });
-
-    const avgComparisonRating = comparisonRatings.reduce((sum, r) => sum + r, 0) / comparisonRatings.length;
+  // ELO-based rating calculation using Wildcard's superior system
+  const calculateRatingFromELOComparisons = useCallback((results) => {
+    // Start with an initial rating estimate (we'll refine it through ELO)
+    let currentRating = 7.0; // Default starting rating
     
-    // Adjust rating based on wins vs losses
-    if (wins === 3) {
-      // Won all comparisons - higher end of category
-      return Math.min(10, avgComparisonRating + 0.5);
-    } else if (wins === 2) {
-      // Won majority - middle-high of category  
-      return Math.min(10, avgComparisonRating + 0.2);
-    } else if (wins === 1) {
-      // Won minority - middle-low of category
-      return Math.max(1, avgComparisonRating - 0.2);
-    } else {
-      // Won nothing - lower end of category
-      return Math.max(1, avgComparisonRating - 0.5);
-    }
+    // Process each comparison using Wildcard's ELO logic
+    results.forEach((result, index) => {
+      const opponent = result.winner === selectedMovie ? result.loser : result.winner;
+      const newMovieWon = result.userChoice === 'new';
+      
+      const opponentRating = opponent.userRating || (opponent.eloRating / 100);
+      const ratingDifference = Math.abs(currentRating - opponentRating);
+      const expectedWinProbability = 1 / (1 + Math.pow(10, (opponentRating - currentRating) / 4));
+      
+      // Use Wildcard's K-factor system
+      const kFactor = index < 2 ? 0.5 : 0.25; // Higher K for early comparisons
+      const ratingChange = Math.max(0.1, kFactor * (newMovieWon ? 1 - expectedWinProbability : 0 - expectedWinProbability));
+      
+      let adjustedRatingChange = ratingChange;
+      
+      // Apply Wildcard's underdog bonus
+      if (newMovieWon && currentRating < opponentRating) {
+        adjustedRatingChange *= 1.2;
+      }
+      
+      // Apply Wildcard's major upset bonus
+      const isMajorUpset = newMovieWon && currentRating < opponentRating && ratingDifference > 3.0;
+      if (isMajorUpset) {
+        adjustedRatingChange += 3.0;
+        console.log(`🚨 MAJOR UPSET! ${selectedMovie.title} (${currentRating}) defeated ${opponent.title} (${opponentRating}). Adding 3.0 bonus points!`);
+      }
+      
+      // Apply rating change with Wildcard's limits
+      const MAX_RATING_CHANGE = 0.7;
+      if (!isMajorUpset) {
+        adjustedRatingChange = Math.min(MAX_RATING_CHANGE, adjustedRatingChange);
+      }
+      
+      currentRating = newMovieWon ? currentRating + adjustedRatingChange : currentRating - adjustedRatingChange;
+      
+      // Enforce bounds like Wildcard
+      currentRating = Math.round(Math.min(10, Math.max(1, currentRating)) * 10) / 10;
+      
+      console.log(`📊 Comparison ${index + 1}: ${newMovieWon ? 'WIN' : 'LOSS'} vs ${opponent.title} (${opponentRating}) -> Rating: ${currentRating}`);
+    });
+    
+    return currentRating;
   }, [selectedMovie]);
+
+  // Note: Emotion baselines removed - using pure Unknown vs Known comparison
+  
+  // Select movie from percentile based on emotion (from InitialRatingFlow logic)
+  const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
+    const percentileRanges = {
+      LOVED: [0.0, 0.25],      // Top 25%
+      LIKED: [0.25, 0.50],     // Upper-middle 25-50% 
+      AVERAGE: [0.50, 0.75],   // Lower-middle 50-75%
+      DISLIKED: [0.75, 1.0]    // Bottom 25%
+    };
+    
+    const range = percentileRanges[emotion] || [0.25, 0.75];
+    
+    // Sort movies by rating descending
+    const sortedMovies = [...seenMovies]
+      .filter(movie => movie.userRating && !isNaN(movie.userRating))
+      .sort((a, b) => b.userRating - a.userRating);
+    
+    if (sortedMovies.length === 0) return null;
+    
+    const startIndex = Math.floor(range[0] * sortedMovies.length);
+    const endIndex = Math.floor(range[1] * sortedMovies.length);
+    const candidates = sortedMovies.slice(startIndex, Math.max(endIndex, startIndex + 1));
+    
+    // Return random movie from the percentile range
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }, []);
+  
+  // Handle emotion selection and start comparison process
+  const handleEmotionSelected = useCallback((emotion) => {
+    console.log('🎭 EMOTION SELECTED:', emotion);
+    console.log('🎭 SEEN MOVIES COUNT:', seen.length);
+    console.log('🎭 SEEN MOVIES:', seen.map(m => `${m.title}: ${m.userRating}`));
+    
+    setSelectedEmotion(emotion);
+    setEmotionModalVisible(false);
+    setMovieDetailModalVisible(false);
+    
+    // Select first opponent from percentile
+    const firstOpponent = selectMovieFromPercentile(seen, emotion);
+    if (!firstOpponent) {
+      console.log('❌ NO FIRST OPPONENT FOUND');
+      Alert.alert(
+        '🎬 Need More Ratings', 
+        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+    
+    // Select second and third opponents randomly from all seen movies (for known vs known)
+    const remainingMovies = seen.filter(movie => movie.id !== firstOpponent.id);
+    
+    if (remainingMovies.length < 2) {
+      console.log('❌ NOT ENOUGH REMAINING MOVIES');
+      Alert.alert(
+        '🎬 Need More Ratings', 
+        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+    
+    // Shuffle remaining movies and pick 2
+    const shuffled = remainingMovies.sort(() => 0.5 - Math.random());
+    const secondOpponent = shuffled[0];
+    const thirdOpponent = shuffled[1];
+    
+    // Set up comparison movies and start
+    setComparisonMovies([firstOpponent, secondOpponent, thirdOpponent]);
+    setCurrentComparison(0);
+    setComparisonResults([]);
+    setIsComparisonComplete(false);
+    setCurrentMovieRating(null);
+    setComparisonModalVisible(true);
+    
+    console.log(`🎭 Starting rating for ${selectedMovie?.title} with emotion: ${emotion} (no baseline)`);
+    console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
+    console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
+    console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
+  }, [selectedMovie, seen, selectMovieFromPercentile]);
+
+  // Wildcard's exact adjustRating function for home screen use
+  const adjustRatingWildcard = useCallback((winnerRating, loserRating, winnerWon, winnerGamesPlayed = 0, loserGamesPlayed = 5) => {
+    const ratingDifference = Math.abs(winnerRating - loserRating);
+    const expectedWinProbability = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 4));
+    
+    // Use Wildcard's K-factor calculation
+    const calculateKFactor = (gamesPlayed) => {
+      if (gamesPlayed < 5) return 0.5;
+      if (gamesPlayed < 10) return 0.25;
+      if (gamesPlayed < 20) return 0.125;
+      return 0.1;
+    };
+    
+    const winnerK = calculateKFactor(winnerGamesPlayed);
+    const loserK = calculateKFactor(loserGamesPlayed);
+    
+    const winnerIncrease = Math.max(0.1, winnerK * (1 - expectedWinProbability));
+    const loserDecrease = Math.max(0.1, loserK * (1 - expectedWinProbability));
+    
+    let adjustedWinnerIncrease = winnerIncrease;
+    let adjustedLoserDecrease = loserDecrease;
+    if (winnerRating < loserRating) {
+      adjustedWinnerIncrease *= 1.2;
+    }
+    
+    const isMajorUpset = winnerRating < loserRating && ratingDifference > 3.0;
+    if (isMajorUpset) {
+      adjustedWinnerIncrease += 3.0;
+      console.log(`🚨 MAJOR UPSET! Winner (${winnerRating}) defeated Loser (${loserRating}). Adding 3.0 bonus points!`);
+    }
+    
+    const MAX_RATING_CHANGE = 0.7;
+    if (!isMajorUpset) {
+      adjustedWinnerIncrease = Math.min(MAX_RATING_CHANGE, adjustedWinnerIncrease);
+      adjustedLoserDecrease = Math.min(MAX_RATING_CHANGE, adjustedLoserDecrease);
+    }
+    
+    let newWinnerRating = winnerRating + adjustedWinnerIncrease;
+    let newLoserRating = loserRating - adjustedLoserDecrease;
+    
+    newWinnerRating = Math.round(Math.min(10, Math.max(1, newWinnerRating)) * 10) / 10;
+    newLoserRating = Math.round(Math.min(10, Math.max(1, newLoserRating)) * 10) / 10;
+    
+    return {
+      updatedSeenContent: newWinnerRating,
+      updatedNewContent: newLoserRating
+    };
+  }, []);
 
   const handleConfirmRating = useCallback((finalRating) => {
     console.log('✅ Confirming rating:', finalRating, 'for:', selectedMovie?.title);
@@ -2138,7 +2357,7 @@ function HomeScreen({
                       flexDirection: 'row'
                     }
                   ]}
-                  pointerEvents={showSentimentButtons ? 'none' : 'auto'}
+                  pointerEvents="auto"
                 >
                   {/* Rate Button */}
                   <TouchableOpacity 
@@ -2147,9 +2366,18 @@ function HomeScreen({
                       standardButtonStyles.tertiaryButton
                     ]}
                     onPress={() => {
-                      setSelectedMovie(selectedMovie);
-                      openInitialRatingFlow();
+                      console.log('🚨🚨🚨 RATE BUTTON CLICKED! 🚨🚨🚨');
+                      console.log('selectedMovie:', selectedMovie);
+                      console.log('emotionModalVisible current state:', emotionModalVisible);
+                      
+                      // CLOSE the movie detail modal first to prevent stacking
+                      console.log('Closing movieDetailModalVisible...');
                       setMovieDetailModalVisible(false);
+                      
+                      // Then open emotion modal
+                      console.log('Setting emotionModalVisible to true...');
+                      setEmotionModalVisible(true);
+                      console.log('✅ setEmotionModalVisible(true) called');
                     }}
                     activeOpacity={0.7}
                   >
@@ -2286,8 +2514,56 @@ function HomeScreen({
           </View>
         </Modal>
 
-        {/* **ENHANCED SENTIMENT SELECTION MODAL - REMOVED: Now handled in-place within movie detail modal** */}
-        {/* Sentiment buttons now appear directly in the action button area */}
+        {/* **EMOTION SELECTION MODAL** */}
+        <Modal visible={emotionModalVisible} transparent animationType="fade">
+          <View style={[styles.modalOverlay, { zIndex: 9999 }]}>
+            <LinearGradient
+              colors={colors.primaryGradient || ['#667eea', '#764ba2']}
+              style={[styles.sentimentModalContent]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                How did you feel about this {contentType === 'movies' ? 'movie' : 'show'}?
+              </Text>
+              
+              <View style={styles.emotionButtonsContainer}>
+                <TouchableOpacity 
+                  style={[styles.emotionButton, { backgroundColor: colors.success }]}
+                  onPress={() => handleEmotionSelected('LOVED')}
+                >
+                  <Text style={styles.emotionButtonText}>LOVED</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.emotionButton, { backgroundColor: colors.primary }]}
+                  onPress={() => handleEmotionSelected('LIKED')}
+                >
+                  <Text style={styles.emotionButtonText}>LIKED</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.emotionButton, { backgroundColor: colors.warning }]}
+                  onPress={() => handleEmotionSelected('AVERAGE')}
+                >
+                  <Text style={styles.emotionButtonText}>AVERAGE</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.emotionButton, { backgroundColor: colors.error }]}
+                  onPress={() => handleEmotionSelected('DISLIKED')}
+                >
+                  <Text style={styles.emotionButtonText}>DISLIKED</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity 
+                style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+                onPress={() => setEmotionModalVisible(false)}
+              >
+                <Text style={[styles.cancelButtonText, { color: colors.subText }]}>Cancel</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </Modal>
 
         {/* **WILDCARD COMPARISON MODAL** */}
         <Modal visible={comparisonModalVisible} transparent animationType="slide">
@@ -2556,6 +2832,20 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     padding: 24,
     borderRadius: 16,
+  },
+  emotionButtonsContainer: {
+    marginVertical: 20,
+  },
+  emotionButton: {
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 8,
+    alignItems: 'center',
+  },
+  emotionButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   modalTitle: {
     fontSize: 20,
