@@ -69,10 +69,10 @@ const calculateDynamicRatingCategories = (userMovies) => {
   if (!userMovies || userMovies.length === 0) {
     // Fallback to default percentiles if no user data
     return {
-      LOVED: { percentile: [75, 100], emoji: '❤️', color: '#4CAF50', borderColor: '#1B5E20', label: 'Loved it!', description: 'This was amazing!' },
-      LIKED: { percentile: [50, 74], emoji: '👍', color: '#4CAF50', borderColor: '#4CAF50', label: 'Liked it', description: 'Pretty good!' },
-      AVERAGE: { percentile: [25, 49], emoji: '🟡', color: '#FF9800', borderColor: '#FFC107', label: 'It was okay', description: 'Nothing special' },
-      DISLIKED: { percentile: [0, 24], emoji: '👎', color: '#F44336', borderColor: '#D32F2F', label: 'Disliked it', description: 'Not for me' }
+      LOVED: { percentile: [75, 100], emoji: '❤️', color: '#4CAF50', borderColor: '#1B5E20', label: 'Love', description: 'This was amazing!' },
+      LIKED: { percentile: [50, 74], emoji: '👍', color: '#4CAF50', borderColor: '#4CAF50', label: 'Like', description: 'Pretty good!' },
+      AVERAGE: { percentile: [25, 49], emoji: '🟡', color: '#FF9800', borderColor: '#FFC107', label: 'Okay', description: 'Nothing special' },
+      DISLIKED: { percentile: [0, 24], emoji: '👎', color: '#F44336', borderColor: '#D32F2F', label: 'Dislike', description: 'Not for me' }
     };
   }
 
@@ -105,7 +105,7 @@ const calculateDynamicRatingCategories = (userMovies) => {
       emoji: '❤️', 
       color: '#4CAF50',
       borderColor: '#1B5E20', // Dark green border
-      label: 'Loved it!',
+      label: 'Love',
       description: 'This was amazing!'
     },
     LIKED: { 
@@ -113,7 +113,7 @@ const calculateDynamicRatingCategories = (userMovies) => {
       emoji: '👍', 
       color: '#4CAF50',
       borderColor: '#4CAF50', // Light green border
-      label: 'Liked it',
+      label: 'Like',
       description: 'Pretty good!'
     },
     AVERAGE: { 
@@ -121,7 +121,7 @@ const calculateDynamicRatingCategories = (userMovies) => {
       emoji: '🟡', 
       color: '#FF9800',
       borderColor: '#FFC107', // Yellow border
-      label: 'It was okay',
+      label: 'Okay',
       description: 'Nothing special'
     },
     DISLIKED: { 
@@ -129,7 +129,7 @@ const calculateDynamicRatingCategories = (userMovies) => {
       emoji: '👎', 
       color: '#F44336',
       borderColor: '#D32F2F', // Red border
-      label: 'Disliked it',
+      label: 'Dislike',
       description: 'Not for me'
     }
   };

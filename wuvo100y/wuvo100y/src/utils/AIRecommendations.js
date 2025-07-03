@@ -1109,22 +1109,71 @@ Recommend 20 ${contentType} this user would rate 8+ based on their specific tast
 
       if (enhancedRecommendations && enhancedRecommendations.length > 0) {
         console.log(`✅ Enhanced system returned ${enhancedRecommendations.length} recommendations`);
+        
+        // Filter out already seen/rated movies if filtering lists are provided
+        if (options.seen || options.unseen || options.skipped || options.notInterested) {
+          const filtered = this.filterUnseenContent(
+            enhancedRecommendations,
+            options.seen || [],
+            options.unseen || [],
+            options.skipped || []
+          );
+          console.log(`🔍 Filtered recommendations: ${enhancedRecommendations.length} -> ${filtered.length}`);
+          return filtered;
+        }
+        
         return enhancedRecommendations;
       }
 
       // Fallback to original system if enhanced fails
       console.log('🔄 Enhanced system failed, falling back to original');
-      return await this.getGroqRecommendations(userMovies, mediaType);
+      const fallbackRecommendations = await this.getGroqRecommendations(userMovies, mediaType);
+      
+      // Apply filtering to fallback recommendations too
+      if (options.seen || options.unseen || options.skipped || options.notInterested) {
+        return this.filterUnseenContent(
+          fallbackRecommendations,
+          options.seen || [],
+          options.unseen || [],
+          options.skipped || []
+        );
+      }
+      
+      return fallbackRecommendations;
       
     } catch (error) {
       console.error('❌ Enhanced recommendations failed:', error);
       
       // Double fallback to original system
       try {
-        return await this.getGroqRecommendations(userMovies, mediaType);
+        const fallbackRecommendations = await this.getGroqRecommendations(userMovies, mediaType);
+        
+        // Apply filtering to double fallback too
+        if (options.seen || options.unseen || options.skipped || options.notInterested) {
+          return this.filterUnseenContent(
+            fallbackRecommendations,
+            options.seen || [],
+            options.unseen || [],
+            options.skipped || []
+          );
+        }
+        
+        return fallbackRecommendations;
       } catch (fallbackError) {
         console.error('❌ Fallback recommendations also failed:', fallbackError);
-        return this.getFallbackRecommendations(userMovies, mediaType);
+        const emergencyRecommendations = this.getFallbackRecommendations(userMovies, mediaType);
+        
+        // Apply filtering to emergency fallback too
+        if (options.seen || options.unseen || options.skipped || options.notInterested) {
+          return this.filterUnseenContent(
+            emergencyRecommendations,
+            options.seen || [],
+            options.unseen || [],
+            options.skipped || []
+          );
+        }
+        
+        return emergencyRecommendations;
       }
     }
   }

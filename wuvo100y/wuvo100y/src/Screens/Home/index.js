@@ -75,6 +75,70 @@ const getDefaultRatingForCategory = (categoryKey) => {
 // **DEBUG LOGGING**
 console.log('🏠 HomeScreen: Enhanced Rating System loaded');
 
+// **SHARED BUTTON STYLES** - Consistent styling with semantic variants
+const getStandardizedButtonStyles = (colors) => ({
+  // Base button style - consistent across all variants
+  baseButton: {
+    flex: 1,
+    marginHorizontal: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44, // Accessibility: minimum touch target
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  
+  // Primary button variant - for main actions (Rate)
+  primaryButton: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  
+  // Secondary button variant - for important actions (Watchlist)
+  secondaryButton: {
+    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  
+  // Tertiary button variant - for less prominent actions (Not Interested)
+  tertiaryButton: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  
+  // Base text style - consistent typography with responsive sizing
+  baseText: {
+    fontSize: Math.min(16, width * 0.035), // Responsive font size based on screen width
+    fontWeight: '600',
+    textAlign: 'center',
+    fontFamily: colors.font?.body || 'System',
+    lineHeight: Math.min(20, width * 0.045), // Responsive line height
+  },
+  
+  // Text color variants
+  primaryText: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  
+  secondaryText: {
+    color: colors.accent,
+  },
+  
+  tertiaryText: {
+    color: '#FFFFFF',
+  },
+});
+
 const { width } = Dimensions.get('window');
 
 const MOVIE_CARD_WIDTH = (width - 48) / 2.2;
@@ -106,6 +170,10 @@ function HomeScreen({
   // Get all themed styles
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
+  
+  // Initialize standardized button styles
+  const standardButtonStyles = getStandardizedButtonStyles(colors);
+  
   const headerStyles = getHeaderStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const modalStyles = getModalStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const buttonStyles = getButtonStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
@@ -490,7 +558,11 @@ function HomeScreen({
         {
           count: 20,
           includePopular: true,
-          includeHidden: true
+          includeHidden: true,
+          seen: seen,
+          unseen: unseen,
+          skipped: skippedMovies,
+          notInterested: notInterestedMovies
         }
       );
       
@@ -1008,6 +1080,24 @@ function HomeScreen({
     // Add to seen list with the calibrated rating
     onAddToSeen(ratedMovie);
     
+    // Remove movie from all home screen sections
+    const movieId = ratedMovie.id;
+    setPopularMovies(prev => {
+      const filtered = prev.filter(movie => movie.id !== movieId);
+      console.log(`🗑️ Removed rated movie from popularMovies: ${prev.length} -> ${filtered.length}`);
+      return filtered;
+    });
+    setRecentReleases(prev => {
+      const filtered = prev.filter(movie => movie.id !== movieId);
+      console.log(`🗑️ Removed rated movie from recentReleases: ${prev.length} -> ${filtered.length}`);
+      return filtered;
+    });
+    setAiRecommendations(prev => {
+      const filtered = prev.filter(movie => movie.id !== movieId);
+      console.log(`🗑️ Removed rated movie from aiRecommendations: ${prev.length} -> ${filtered.length}`);
+      return filtered;
+    });
+    
     // Close the flow
     setInitialRatingFlowVisible(false);
     setSelectedMovie(null);
@@ -1081,6 +1171,7 @@ function HomeScreen({
     }
     
     const isInWatchlist = unseen.some(movie => movie.id === selectedMovie.id);
+    const movieId = selectedMovie.id;
     
     if (isInWatchlist) {
       onRemoveFromWatchlist(selectedMovie.id);
@@ -1102,6 +1193,23 @@ function HomeScreen({
       
       if (!seen.some(movie => movie.id === selectedMovie.id)) {
         onAddToUnseen(normalizedMovie);
+        
+        // Remove movie from all home screen sections when added to watchlist
+        setPopularMovies(prev => {
+          const filtered = prev.filter(movie => movie.id !== movieId);
+          console.log(`🗑️ Removed watchlisted movie from popularMovies: ${prev.length} -> ${filtered.length}`);
+          return filtered;
+        });
+        setRecentReleases(prev => {
+          const filtered = prev.filter(movie => movie.id !== movieId);
+          console.log(`🗑️ Removed watchlisted movie from recentReleases: ${prev.length} -> ${filtered.length}`);
+          return filtered;
+        });
+        setAiRecommendations(prev => {
+          const filtered = prev.filter(movie => movie.id !== movieId);
+          console.log(`🗑️ Removed watchlisted movie from aiRecommendations: ${prev.length} -> ${filtered.length}`);
+          return filtered;
+        });
       }
     }
     
@@ -1253,12 +1361,8 @@ function HomeScreen({
   }, [topGenres]);
 
   const getRatingBorderColor = useCallback((movie) => {
-    const ratedMovie = seen?.find(item => item.id === movie?.id);
-    if (!ratedMovie?.userRating) return 'transparent';
-    
-    const category = getRatingCategory(ratedMovie.userRating, seen);
-    return category?.borderColor || 'transparent';
-  }, [seen]);
+    return 'transparent';
+  }, []);
 
   // ============================================================================
   // **PAN RESPONDER SYSTEM**
@@ -2036,74 +2140,68 @@ function HomeScreen({
                   ]}
                   pointerEvents={showSentimentButtons ? 'none' : 'auto'}
                 >
-                  {/* Rate Button with State Management */}
+                  {/* Rate Button */}
                   <TouchableOpacity 
-                    style={[modalStyles.actionButton, { flex: 1, marginHorizontal: 2, padding: 0, borderWidth: 1, borderColor: colors.border?.color || colors.primary, backgroundColor: 'transparent' }]}
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
                     onPress={() => {
                       setSelectedMovie(selectedMovie);
                       openInitialRatingFlow();
                       setMovieDetailModalVisible(false);
                     }}
+                    activeOpacity={0.7}
                   >
-                    <LinearGradient
-                      colors={colors.primaryGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText
+                      ]}
                     >
-                      <Text 
-                        style={[modalStyles.actionButtonText, { color: '#FFF' }]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                        adjustsFontSizeToFit={true}
-                      >
-                        {seen.some(movie => movie.id === selectedMovie?.id) ? 'Re-rate' : 'Rate'}
-                      </Text>
-                    </LinearGradient>
+                      {seen.some(movie => movie.id === selectedMovie?.id) ? 'Re-rate' : 'Rate'}
+                    </Text>
                   </TouchableOpacity>
                   
-                  {/* Watchlist Button with Clear Text */}
+                  {/* Watchlist Button */}
                   <TouchableOpacity 
-                    style={[modalStyles.actionButton, { flex: 1, marginHorizontal: 2, padding: 0, borderWidth: 1, borderColor: colors.border?.color || colors.primary, backgroundColor: 'transparent' }]}
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
                     onPress={handleWatchlistToggle}
+                    activeOpacity={0.7}
                   >
-                    <LinearGradient
-                      colors={colors.primaryGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      adjustsFontSizeToFit={true}
                     >
-                      <Text 
-                        style={[modalStyles.actionButtonText, { color: '#FFF' }]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                        adjustsFontSizeToFit={true}
-                      >
-                        {unseen.some(movie => movie.id === selectedMovie?.id) ? 'Remove from Watchlist' : 'Add to Watchlist'}
-                      </Text>
-                    </LinearGradient>
+                      {unseen.some(movie => movie.id === selectedMovie?.id) ? 'Remove from Watchlist' : 'Watchlist'}
+                    </Text>
                   </TouchableOpacity>
                   
-                  {/* Not Interested Button with Overflow Protection */}
+                  {/* Not Interested Button - Tertiary Action */}
                   <TouchableOpacity 
-                    style={[modalStyles.actionButton, { flex: 1, marginHorizontal: 2, padding: 0, borderWidth: 1, borderColor: colors.border?.color || colors.primary, backgroundColor: 'transparent' }]}
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
                     onPress={handleNotInterested}
+                    activeOpacity={0.7}
                   >
-                    <LinearGradient
-                      colors={colors.primaryGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText
+                      ]}
                     >
-                      <Text 
-                        style={[modalStyles.actionButtonText, { color: '#FFF' }]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                        adjustsFontSizeToFit={true}
-                      >
-                        Not Interested
-                      </Text>
-                    </LinearGradient>
+                      Not Interested
+                    </Text>
                   </TouchableOpacity>
                 </Animated.View>
                 
@@ -2139,10 +2237,20 @@ function HomeScreen({
                         activeOpacity={0.8}
                       >
                         <Text style={{ fontSize: 20, marginBottom: 4 }}>{category.emoji}</Text>
-                        <Text style={[
-                          styles.sentimentLabel,
-                          { color: category.color, fontSize: 12, textAlign: 'center' }
-                        ]}>
+                        <Text 
+                          style={[
+                            styles.sentimentLabel,
+                            { 
+                              color: category.color, 
+                              fontSize: Math.min(14, width * 0.032), 
+                              textAlign: 'center',
+                              fontWeight: '600'
+                            }
+                          ]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          adjustsFontSizeToFit={true}
+                        >
                           {category.label}
                         </Text>
                       </TouchableOpacity>
