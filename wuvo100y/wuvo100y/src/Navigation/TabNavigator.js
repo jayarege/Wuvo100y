@@ -156,6 +156,8 @@ function TabNavigator({
               isDarkMode={isDarkMode}
               onAddToSeen={handleAddToSeen}
               onRemoveFromWatchlist={handleRemoveFromWatchlist}
+              onUpdateRating={onUpdateRating}
+              seen={seen}
             />
           )}
         </Tab.Screen>

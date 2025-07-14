@@ -3,18 +3,8 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet, Alert, Image, Dimensio
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Import Wildcard ELO calculation utilities
-// These will be used for more sophisticated rating calculations
-const calculateKFactor = (gamesPlayed) => {
-  if (gamesPlayed < 5) return 0.5;
-  if (gamesPlayed < 10) return 0.25;
-  if (gamesPlayed < 20) return 0.125;
-  return 0.1;
-};
-
-const calculateExpectedWinProbability = (ratingA, ratingB) => {
-  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 4));
-};
+// Import shared ELO calculation utilities
+import { calculateKFactor, calculateExpectedWinProbability, calculateRatingFromComparisons, adjustRatingWildcard } from '../utils/ELOCalculations';
 
 // Console log to verify file is loading
 console.log('✅ EnhancedRatingSystem component loaded successfully!');
@@ -69,7 +59,7 @@ const calculateDynamicRatingCategories = (userMovies) => {
   if (!userMovies || userMovies.length === 0) {
     // Fallback to default percentiles if no user data
     return {
-      LOVED: { percentile: [75, 100], emoji: '❤️', color: '#4CAF50', borderColor: '#1B5E20', label: 'Love', description: 'This was amazing!' },
+      LOVED: { percentile: [75, 100], emoji: '❤️', color: '#FF0000', borderColor: '#1B5E20', label: 'Love', description: 'This was amazing!' },
       LIKED: { percentile: [50, 74], emoji: '👍', color: '#4CAF50', borderColor: '#4CAF50', label: 'Like', description: 'Pretty good!' },
       AVERAGE: { percentile: [25, 49], emoji: '🟡', color: '#FF9800', borderColor: '#FFC107', label: 'Okay', description: 'Nothing special' },
       DISLIKED: { percentile: [0, 24], emoji: '👎', color: '#F44336', borderColor: '#D32F2F', label: 'Dislike', description: 'Not for me' }
@@ -103,7 +93,7 @@ const calculateDynamicRatingCategories = (userMovies) => {
     LOVED: { 
       percentile: [75, 100], 
       emoji: '❤️', 
-      color: '#4CAF50',
+      color: '#FF0000',
       borderColor: '#1B5E20', // Dark green border
       label: 'Love',
       description: 'This was amazing!'
@@ -227,7 +217,7 @@ const WildcardComparison = ({
       
       // Calculate final rating based on comparison results
       const newMovieWins = newResults.filter(r => r.userChoice === 'new').length;
-      const finalRating = calculateRatingFromComparisons(newMovieWins, newResults, categoryInfo);
+      const finalRating = calculateRatingFromComparisons(newMovieWins, newResults, newMovie);
       
       console.log(`🎯 Comparison Complete: ${newMovieWins}/3 wins, Final Rating: ${finalRating}`);
       
@@ -238,39 +228,6 @@ const WildcardComparison = ({
     }
   }, [currentComparison, comparisonResults, comparisonMovies, newMovie, categoryInfo, onComparisonComplete]);
 
-  const calculateRatingFromComparisons = (wins, results, categoryInfo) => {
-    // Get the comparison movies' ratings
-    const comparisonRatings = results.map(r => {
-      const movie = r.winner === newMovie ? r.loser : r.winner;
-      return movie.userRating || (movie.eloRating / 100);
-    });
-
-    const avgComparisonRating = comparisonRatings.reduce((sum, r) => sum + r, 0) / comparisonRatings.length;
-    
-    // Use Wildcard-style ELO calculation approach
-    // Calculate expected win probability for each comparison
-    let totalExpectedWins = 0;
-    results.forEach(result => {
-      const comparisonMovie = result.winner === newMovie ? result.loser : result.winner;
-      const comparisonRating = comparisonMovie.userRating || (comparisonMovie.eloRating / 100);
-      const expectedWinProbability = 1 / (1 + Math.pow(10, (comparisonRating - avgComparisonRating) / 4));
-      totalExpectedWins += expectedWinProbability;
-    });
-    
-    // Adjust rating based on actual vs expected performance
-    const performance = wins - totalExpectedWins;
-    const baseRating = suggestedRating || avgComparisonRating;
-    
-    // Apply ELO-style rating adjustment
-    const kFactor = 0.3; // Moderate adjustment for rating
-    const ratingAdjustment = kFactor * performance;
-    
-    const finalRating = Math.max(1, Math.min(10, baseRating + ratingAdjustment));
-    
-    console.log(`📊 ELO-style calculation: Base=${baseRating.toFixed(2)}, Wins=${wins}/3, Expected=${totalExpectedWins.toFixed(2)}, Adjustment=${ratingAdjustment.toFixed(2)}, Final=${finalRating.toFixed(2)}`);
-    
-    return finalRating;
-  };
 
   const resetComparison = () => {
     setCurrentComparison(0);
@@ -409,7 +366,7 @@ const WildcardComparison = ({
                       {calculateRatingFromComparisons(
                         comparisonResults.filter(r => r.userChoice === 'new').length,
                         comparisonResults,
-                        categoryInfo
+                        newMovie
                       ).toFixed(1)}/10
                     </Text>
                   </View>
@@ -488,33 +445,43 @@ const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors,
     const isSelected = selectedCategory === categoryKey;
     
     return (
-      <TouchableOpacity
-        key={categoryKey}
-        style={[
-          styles.sentimentButton,
-          { 
-            backgroundColor: isSelected ? category.color : 'transparent',
-            borderColor: category.borderColor || category.color,
-            borderWidth: 3
-          }
-        ]}
-        onPress={() => handleCategorySelect(categoryKey)}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.sentimentEmoji}>{category.emoji}</Text>
-        <Text style={[
-          styles.sentimentLabel,
-          { color: isSelected ? '#FFF' : category.color }
-        ]}>
-          {category.label}
-        </Text>
-        <Text style={[
-          styles.sentimentDescription,
-          { color: isSelected ? 'rgba(255,255,255,0.8)' : colors.subText }
-        ]}>
-          {category.description}
-        </Text>
-      </TouchableOpacity>
+      <View key={categoryKey} style={styles.sentimentButtonWrapper}>
+        <LinearGradient
+          colors={['#FFFFFF', '#F6EEFF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.gradientBorder,
+            { opacity: isSelected ? 1 : 0.5 }
+          ]}
+        />
+        <TouchableOpacity
+          style={[
+            styles.sentimentButton,
+            { 
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              margin: 2,
+              borderRadius: 10,
+            }
+          ]}
+          onPress={() => handleCategorySelect(categoryKey)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sentimentEmoji}>{category.emoji}</Text>
+          <Text style={[
+            styles.sentimentLabel,
+            { color: isSelected ? '#FFF' : colors.text }
+          ]}>
+            {category.label}
+          </Text>
+          <Text style={[
+            styles.sentimentDescription,
+            { color: isSelected ? 'rgba(255,255,255,0.8)' : colors.subText }
+          ]}>
+            {category.description}
+          </Text>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -648,7 +615,7 @@ const EnhancedRatingButton = ({
       userRating: finalRating,
       eloRating: finalRating * 100, // Convert to ELO scale (100-1000)
       comparisonHistory: [],
-      comparisonWins: comparisonMovies.length > 0 ? comparisonResults?.filter(r => r.userChoice === 'new').length || 0 : 0,
+      comparisonWins: 0, // Will be updated by comparison system
       gamesPlayed: (movie.gamesPlayed || 0) + (comparisonMovies.length > 0 ? 3 : 0), // Track comparison games
       mediaType: mediaType,
       ratingCategory: selectedCategory,
@@ -687,7 +654,7 @@ const EnhancedRatingButton = ({
         }
       ]
     );
-  }, [movie, selectedCategory, isAlreadyRated, onUpdateRating, onAddToSeen, mediaType, seen, comparisonMovies, comparisonResults]);
+  }, [movie, selectedCategory, isAlreadyRated, onUpdateRating, onAddToSeen, mediaType, seen, comparisonMovies]);
 
   const handleCloseModals = useCallback(() => {
     console.log('🚫 Closing modals');
@@ -1203,6 +1170,21 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  gradientBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  sentimentButtonWrapper: {
+    position: 'relative',
+    borderRadius: 12,
+    marginBottom: 6,
   },
 });
 

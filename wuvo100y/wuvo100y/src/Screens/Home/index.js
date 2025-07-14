@@ -42,6 +42,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // **ENHANCED RATING SYSTEM IMPORT**
 import { getRatingCategory, calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
+import { adjustRatingWildcard } from '../../utils/ELOCalculations';
 import InitialRatingFlow from '../InitialRatingFlow';
 
 // Helper functions for calculating range from percentile (moved from component)
@@ -211,6 +212,12 @@ function HomeScreen({
   const [selectedEmotion, setSelectedEmotion] = useState(null);
   const [currentMovieRating, setCurrentMovieRating] = useState(null);
   const [emotionModalVisible, setEmotionModalVisible] = useState(false);
+  const [finalCalculatedRating, setFinalCalculatedRating] = useState(null);
+  
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('📊 finalCalculatedRating changed to:', finalCalculatedRating);
+  }, [finalCalculatedRating]);
   
   // **ANIMATION SYSTEM - ENGINEER TEAM 4-6**
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -938,14 +945,16 @@ function HomeScreen({
       
       console.log(`🎯 Round ${currentComparison + 1} (Known vs Known - FINAL): ${newMovieWon ? 'WIN' : 'LOSS'} vs ${currentComparisonMovie.title} (${currentComparisonMovie.userRating}) -> Final Rating: ${finalRating}`);
       
-      // Complete the rating process
+      // SET RATING FIRST, then show completion screen
+      console.log('🎯 SETTING finalCalculatedRating BEFORE completion screen:', finalRating);
+      setFinalCalculatedRating(finalRating);
       setIsComparisonComplete(true);
       setTimeout(() => {
         setComparisonModalVisible(false);
         handleConfirmRating(finalRating);
       }, 1500);
     }
-  }, [currentComparison, comparisonMovies, selectedMovie, selectedEmotion, currentMovieRating, adjustRatingWildcard]);
+  }, [currentComparison, comparisonMovies, selectedMovie, selectedEmotion, currentMovieRating]);
 
   // ELO-based rating calculation using Wildcard's superior system
   const calculateRatingFromELOComparisons = useCallback((results) => {
@@ -1078,58 +1087,14 @@ function HomeScreen({
     console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
   }, [selectedMovie, seen, selectMovieFromPercentile]);
 
-  // Wildcard's exact adjustRating function for home screen use
-  const adjustRatingWildcard = useCallback((winnerRating, loserRating, winnerWon, winnerGamesPlayed = 0, loserGamesPlayed = 5) => {
-    const ratingDifference = Math.abs(winnerRating - loserRating);
-    const expectedWinProbability = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 4));
-    
-    // Use Wildcard's K-factor calculation
-    const calculateKFactor = (gamesPlayed) => {
-      if (gamesPlayed < 5) return 0.5;
-      if (gamesPlayed < 10) return 0.25;
-      if (gamesPlayed < 20) return 0.125;
-      return 0.1;
-    };
-    
-    const winnerK = calculateKFactor(winnerGamesPlayed);
-    const loserK = calculateKFactor(loserGamesPlayed);
-    
-    const winnerIncrease = Math.max(0.1, winnerK * (1 - expectedWinProbability));
-    const loserDecrease = Math.max(0.1, loserK * (1 - expectedWinProbability));
-    
-    let adjustedWinnerIncrease = winnerIncrease;
-    let adjustedLoserDecrease = loserDecrease;
-    if (winnerRating < loserRating) {
-      adjustedWinnerIncrease *= 1.2;
-    }
-    
-    const isMajorUpset = winnerRating < loserRating && ratingDifference > 3.0;
-    if (isMajorUpset) {
-      adjustedWinnerIncrease += 3.0;
-      console.log(`🚨 MAJOR UPSET! Winner (${winnerRating}) defeated Loser (${loserRating}). Adding 3.0 bonus points!`);
-    }
-    
-    const MAX_RATING_CHANGE = 0.7;
-    if (!isMajorUpset) {
-      adjustedWinnerIncrease = Math.min(MAX_RATING_CHANGE, adjustedWinnerIncrease);
-      adjustedLoserDecrease = Math.min(MAX_RATING_CHANGE, adjustedLoserDecrease);
-    }
-    
-    let newWinnerRating = winnerRating + adjustedWinnerIncrease;
-    let newLoserRating = loserRating - adjustedLoserDecrease;
-    
-    newWinnerRating = Math.round(Math.min(10, Math.max(1, newWinnerRating)) * 10) / 10;
-    newLoserRating = Math.round(Math.min(10, Math.max(1, newLoserRating)) * 10) / 10;
-    
-    return {
-      updatedSeenContent: newWinnerRating,
-      updatedNewContent: newLoserRating
-    };
-  }, []);
 
   const handleConfirmRating = useCallback((finalRating) => {
     console.log('✅ Confirming rating:', finalRating, 'for:', selectedMovie?.title);
     if (!selectedMovie || !finalRating) return;
+    
+    // Store the final calculated rating for display
+    console.log('🎯 SETTING finalCalculatedRating to:', finalRating);
+    setFinalCalculatedRating(finalRating);
     
     const ratedMovie = {
       id: selectedMovie.id,
@@ -1177,7 +1142,7 @@ function HomeScreen({
       `You ${RATING_CATEGORIES[selectedCategory]?.label?.toLowerCase()} "${selectedMovie.title}" (${finalRating.toFixed(1)}/10)`,
       [{ text: "OK" }]
     );
-  }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, fetchAIRecommendations]);
+  }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, fetchAIRecommendations, setFinalCalculatedRating]);
 
   const handleCloseEnhancedModals = useCallback(() => {
     setComparisonModalVisible(false);
@@ -1186,6 +1151,7 @@ function HomeScreen({
     setCurrentComparison(0);
     setComparisonResults([]);
     setIsComparisonComplete(false);
+    setFinalCalculatedRating(null);
     
     // Reset sentiment buttons and fade back to action buttons
     Animated.parallel([
@@ -2526,33 +2492,65 @@ function HomeScreen({
               </Text>
               
               <View style={styles.emotionButtonsContainer}>
-                <TouchableOpacity 
-                  style={[styles.emotionButton, { backgroundColor: colors.success }]}
-                  onPress={() => handleEmotionSelected('LOVED')}
-                >
-                  <Text style={styles.emotionButtonText}>LOVED</Text>
-                </TouchableOpacity>
+                <View style={styles.emotionButtonWrapper}>
+                  <LinearGradient
+                    colors={colors.primaryGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.emotionGradientBorder}
+                  />
+                  <TouchableOpacity 
+                    style={[styles.emotionButton]}
+                    onPress={() => handleEmotionSelected('LOVED')}
+                  >
+                    <Text style={styles.emotionButtonText}>LOVED</Text>
+                  </TouchableOpacity>
+                </View>
                 
-                <TouchableOpacity 
-                  style={[styles.emotionButton, { backgroundColor: colors.primary }]}
-                  onPress={() => handleEmotionSelected('LIKED')}
-                >
-                  <Text style={styles.emotionButtonText}>LIKED</Text>
-                </TouchableOpacity>
+                <View style={styles.emotionButtonWrapper}>
+                  <LinearGradient
+                    colors={colors.primaryGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.emotionGradientBorder}
+                  />
+                  <TouchableOpacity 
+                    style={[styles.emotionButton]}
+                    onPress={() => handleEmotionSelected('LIKED')}
+                  >
+                    <Text style={styles.emotionButtonText}>LIKED</Text>
+                  </TouchableOpacity>
+                </View>
                 
-                <TouchableOpacity 
-                  style={[styles.emotionButton, { backgroundColor: colors.warning }]}
-                  onPress={() => handleEmotionSelected('AVERAGE')}
-                >
-                  <Text style={styles.emotionButtonText}>AVERAGE</Text>
-                </TouchableOpacity>
+                <View style={styles.emotionButtonWrapper}>
+                  <LinearGradient
+                    colors={colors.primaryGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.emotionGradientBorder}
+                  />
+                  <TouchableOpacity 
+                    style={[styles.emotionButton]}
+                    onPress={() => handleEmotionSelected('AVERAGE')}
+                  >
+                    <Text style={styles.emotionButtonText}>AVERAGE</Text>
+                  </TouchableOpacity>
+                </View>
                 
-                <TouchableOpacity 
-                  style={[styles.emotionButton, { backgroundColor: colors.error }]}
-                  onPress={() => handleEmotionSelected('DISLIKED')}
-                >
-                  <Text style={styles.emotionButtonText}>DISLIKED</Text>
-                </TouchableOpacity>
+                <View style={styles.emotionButtonWrapper}>
+                  <LinearGradient
+                    colors={colors.primaryGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.emotionGradientBorder}
+                  />
+                  <TouchableOpacity 
+                    style={[styles.emotionButton]}
+                    onPress={() => handleEmotionSelected('DISLIKED')}
+                  >
+                    <Text style={styles.emotionButtonText}>DISLIKED</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               
               <TouchableOpacity 
@@ -2649,26 +2647,60 @@ function HomeScreen({
                       />
                     ))}
                   </View>
+
+                  {/* Too Tough to Decide Button */}
+                  <TouchableOpacity 
+                    style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+                    onPress={() => {
+                      console.log('User selected: Too tough to decide');
+                      // Handle too tough to decide logic - could skip this comparison or record as neutral
+                      if (currentComparison < 2) {
+                        setCurrentComparison(currentComparison + 1);
+                      } else {
+                        // Give a neutral rating based on the selected emotion category
+                        const neutralRating = currentMovieRating || 5.0; // Use current rating or default neutral
+                        console.log('🤷 Too tough to decide - assigning neutral rating:', neutralRating);
+                        console.log('🎯 SETTING finalCalculatedRating BEFORE completion screen (neutral):', neutralRating);
+                        setFinalCalculatedRating(neutralRating);
+                        setIsComparisonComplete(true);
+                        setTimeout(() => {
+                          setComparisonModalVisible(false);
+                          handleConfirmRating(neutralRating);
+                        }, 1500);
+                      }
+                    }}
+                  >
+                    <Text style={[styles.cancelButtonText, { color: colors.subText }]}>Too Tough to Decide</Text>
+                  </TouchableOpacity>
                 </>
               ) : (
                 // Completion Screen
-                <View style={styles.completionScreen}>
-                  <Text style={[styles.modalTitle, { color: colors.text }]}>
-                    🎯 Rating Complete!
-                  </Text>
-                  <Text style={[styles.comparisonSubtitle, { color: colors.subText }]}>
-                    Based on your {comparisonResults.filter(r => r.userChoice === 'new').length}/3 comparisons
+                <View style={styles.finalRatingModal}>
+                  {console.log('🎬 COMPLETION SCREEN RENDERING - finalCalculatedRating:', finalCalculatedRating)}
+                  {/* Movie Poster */}
+                  <Image
+                    source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
+                    style={styles.finalRatingPoster}
+                    resizeMode="cover"
+                  />
+                  
+                  {/* Movie Title */}
+                  <Text style={styles.finalRatingTitle} numberOfLines={1} ellipsizeMode="tail">
+                    {selectedMovie?.title || selectedMovie?.name}
                   </Text>
                   
-                  <View style={styles.resultsContainer}>
-                    {comparisonResults.map((result, index) => (
-                      <View key={index} style={styles.resultRow}>
-                        <Text style={[styles.resultText, { color: colors.text }]}>
-                          {result.comparison}. vs {result.loser.title}: {result.userChoice === 'new' ? '✅ Won' : '❌ Lost'}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
+                  {/* Movie Year */}
+                  <Text style={styles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
+                    ({selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : selectedMovie?.first_air_date ? new Date(selectedMovie.first_air_date).getFullYear() : 'N/A'})
+                  </Text>
+                  
+                  {/* Final Score */}
+                  <Text style={[styles.finalRatingScore, { color: colors.secondary }]}>
+                    {(() => {
+                      console.log('🔍 Rendering final score, finalCalculatedRating is:', finalCalculatedRating);
+                      return finalCalculatedRating?.toFixed(1) || 'test';
+                    })()}
+                  </Text>
                 </View>
               )}
               
@@ -2838,9 +2870,24 @@ const styles = StyleSheet.create({
   },
   emotionButton: {
     padding: 16,
+    borderRadius: 11,
+    alignItems: 'center',
+    flex: 1,
+  },
+  emotionButtonWrapper: {
+    position: 'relative',
     borderRadius: 12,
     marginVertical: 8,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  emotionGradientBorder: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    bottom: 1,
+    borderRadius: 11,
   },
   emotionButtonText: {
     color: 'white',
@@ -3022,6 +3069,38 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     padding: 4,
     zIndex: 2,
+  },
+  
+  // **Final Rating Modal Styles**
+  finalRatingModal: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  finalRatingPoster: {
+    width: 120,
+    height: 180,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  finalRatingTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  finalRatingYear: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  finalRatingScore: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
 
