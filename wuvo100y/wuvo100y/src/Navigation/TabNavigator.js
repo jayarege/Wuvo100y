@@ -124,6 +124,7 @@ function TabNavigator({
   onAddToSeen={handleAddToSeen}
   onAddToUnseen={handleAddToUnseen}
   onRemoveFromWatchlist={handleRemoveFromWatchlist}
+  onUpdateRating={onUpdateRating}
   genres={genres}
   isDarkMode={isDarkMode}
   toggleTheme={toggleTheme}
@@ -156,8 +157,6 @@ function TabNavigator({
               isDarkMode={isDarkMode}
               onAddToSeen={handleAddToSeen}
               onRemoveFromWatchlist={handleRemoveFromWatchlist}
-              onUpdateRating={onUpdateRating}
-              seen={seen}
             />
           )}
         </Tab.Screen>

@@ -22,7 +22,7 @@ import { useAuth } from '../../hooks/useAuth';
 const { width } = Dimensions.get('window');
 const POSTER_SIZE = (width - 60) / 3; // 3 columns with spacing
 
-const ProfileScreen = ({ navigation, seen = [], unseen = [], isDarkMode }) => {
+const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation }) => {
   const { mediaType } = useMediaType();
   const { handleLogout } = useAuth();
   const [selectedTab, setSelectedTab] = useState('posts');

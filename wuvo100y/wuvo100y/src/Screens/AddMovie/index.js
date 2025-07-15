@@ -77,6 +77,7 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
   const [currentMovieRating, setCurrentMovieRating] = useState(null);
   const [finalCalculatedRating, setFinalCalculatedRating] = useState(null);
   const [selectedMovieForRating, setSelectedMovieForRating] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   
 
   // Clear search when media type changes
