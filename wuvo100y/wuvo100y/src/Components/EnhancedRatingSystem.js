@@ -59,10 +59,10 @@ const calculateDynamicRatingCategories = (userMovies) => {
   if (!userMovies || userMovies.length === 0) {
     // Fallback to default percentiles if no user data
     return {
-      LOVED: { percentile: [75, 100], emoji: '❤️', color: '#FF0000', borderColor: '#1B5E20', label: 'Love', description: 'This was amazing!' },
-      LIKED: { percentile: [50, 74], emoji: '👍', color: '#4CAF50', borderColor: '#4CAF50', label: 'Like', description: 'Pretty good!' },
-      AVERAGE: { percentile: [25, 49], emoji: '🟡', color: '#FF9800', borderColor: '#FFC107', label: 'Okay', description: 'Nothing special' },
-      DISLIKED: { percentile: [0, 24], emoji: '👎', color: '#F44336', borderColor: '#D32F2F', label: 'Dislike', description: 'Not for me' }
+      LOVED: { percentile: [75, 100], color: '#FF0000', borderColor: '#1B5E20', label: 'Love', description: 'This was amazing!' },
+      LIKED: { percentile: [50, 74], color: '#4CAF50', borderColor: '#4CAF50', label: 'Like', description: 'Pretty good!' },
+      AVERAGE: { percentile: [25, 49], color: '#FF9800', borderColor: '#FFC107', label: 'Okay', description: 'Nothing special' },
+      DISLIKED: { percentile: [0, 24], color: '#F44336', borderColor: '#D32F2F', label: 'Dislike', description: 'Not for me' }
     };
   }
 
@@ -92,7 +92,6 @@ const calculateDynamicRatingCategories = (userMovies) => {
   return {
     LOVED: { 
       percentile: [75, 100], 
-      emoji: '❤️', 
       color: '#FF0000',
       borderColor: '#1B5E20', // Dark green border
       label: 'Love',
@@ -100,7 +99,6 @@ const calculateDynamicRatingCategories = (userMovies) => {
     },
     LIKED: { 
       percentile: [50, 74], 
-      emoji: '👍', 
       color: '#4CAF50',
       borderColor: '#4CAF50', // Light green border
       label: 'Like',
@@ -108,7 +106,6 @@ const calculateDynamicRatingCategories = (userMovies) => {
     },
     AVERAGE: { 
       percentile: [25, 49], 
-      emoji: '🟡', 
       color: '#FF9800',
       borderColor: '#FFC107', // Yellow border
       label: 'Okay',
@@ -116,7 +113,6 @@ const calculateDynamicRatingCategories = (userMovies) => {
     },
     DISLIKED: { 
       percentile: [0, 24], 
-      emoji: '👎', 
       color: '#F44336',
       borderColor: '#D32F2F', // Red border
       label: 'Dislike',
@@ -256,7 +252,7 @@ const WildcardComparison = ({
             <>
               <View style={styles.comparisonHeader}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {categoryInfo?.emoji} Comparison {currentComparison + 1}/3
+                  Comparison {currentComparison + 1}/3
                 </Text>
                 <Text style={[styles.comparisonSubtitle, { color: colors.subText }]}>
                   Which one do you prefer?
@@ -287,7 +283,7 @@ const WildcardComparison = ({
                     {newMovie?.release_date ? new Date(newMovie.release_date).getFullYear() : 'N/A'}
                   </Text>
                   <Text style={[styles.categoryBadge, { color: categoryInfo?.color }]}>
-                    {categoryInfo?.emoji} {categoryInfo?.label}
+                    {categoryInfo?.label}
                   </Text>
                 </TouchableOpacity>
                 
@@ -349,7 +345,7 @@ const WildcardComparison = ({
             <View style={styles.completionScreen}>
               <View style={[styles.completionHeader, { borderBottomColor: colors.border?.color || '#333' }]}>
                 <Text style={[styles.completionTitle, { color: colors.text }]}>
-                  🎯 Rating Calculated!
+                  Rating Calculated!
                 </Text>
                 <View style={[styles.winsBadge, { backgroundColor: colors.accent }]}>
                   <Text style={styles.winsText}>
@@ -467,16 +463,15 @@ const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors,
           onPress={() => handleCategorySelect(categoryKey)}
           activeOpacity={0.8}
         >
-          <Text style={styles.sentimentEmoji}>{category.emoji}</Text>
           <Text style={[
             styles.sentimentLabel,
-            { color: isSelected ? '#FFF' : colors.text }
+            { color: '#FFF' }
           ]}>
             {category.label}
           </Text>
           <Text style={[
             styles.sentimentDescription,
-            { color: isSelected ? 'rgba(255,255,255,0.8)' : colors.subText }
+            { color: 'rgba(255,255,255,0.8)' }
           ]}>
             {category.description}
           </Text>
@@ -640,10 +635,9 @@ const EnhancedRatingButton = ({
     
     const RATING_CATEGORIES = calculateDynamicRatingCategories(seen);
     const categoryLabel = RATING_CATEGORIES[selectedCategory]?.label || 'rated';
-    const emoji = RATING_CATEGORIES[selectedCategory]?.emoji || '⭐';
     
     Alert.alert(
-      `${emoji} Rating Complete!`, 
+      `Rating Complete!`, 
       `You ${categoryLabel.toLowerCase()} "${movie.title}" (${finalRating.toFixed(1)}/10)\n\nCalculated through ${comparisonMovies.length > 0 ? '3 movie comparisons' : 'category average'}`,
       [
         {
@@ -861,10 +855,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
     minHeight: 80,
-  },
-  sentimentEmoji: {
-    fontSize: 32,
-    marginBottom: 8,
   },
   sentimentLabel: {
     fontSize: 16,
