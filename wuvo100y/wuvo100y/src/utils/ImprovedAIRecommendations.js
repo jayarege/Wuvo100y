@@ -1,9 +1,12 @@
 import { TMDB_API_KEY, GROQ_API_KEY } from '../Constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DiscoverySessionGenerator from './DiscoverySessionGenerator';
 
 // =============================================================================
-// SIMPLIFIED, HIGH-QUALITY RECOMMENDATION ENGINE
+// DISCOVERY SESSION INTEGRATED RECOMMENDATION ENGINE
 // =============================================================================
+// COMMANDMENT 7: "Document the WHY"
+// This engine now supports both legacy recommendations AND new discovery sessions
 
 class ImprovedAIRecommendations {
   constructor() {
@@ -13,7 +16,7 @@ class ImprovedAIRecommendations {
   }
 
   // =============================================================================
-  // MAIN RECOMMENDATION ENGINE - HYBRID TMDB + GROQ
+  // MAIN RECOMMENDATION ENGINE - LEGACY SUPPORT
   // =============================================================================
 
   async getRecommendations(userMovies, mediaType = 'movie', options = {}) {
@@ -60,18 +63,187 @@ class ImprovedAIRecommendations {
   }
 
   // =============================================================================
+  // DISCOVERY SESSION MOVIE CANDIDATES
+  // =============================================================================
+
+  async getCandidateMovies(userProfile, sessionTemplate, targetCount = 50) {
+    try {
+      console.log(`🎬 Getting candidate movies for ${sessionTemplate.name}`);
+      
+      const candidates = [];
+      
+      // Strategy 1: Genre-based candidates
+      if (sessionTemplate.preferredGenres && sessionTemplate.preferredGenres.length > 0) {
+        const genreCandidates = await this.getGenreBasedCandidates(sessionTemplate.preferredGenres, targetCount / 2);
+        candidates.push(...genreCandidates);
+      }
+      
+      // Strategy 2: User preference-based candidates
+      if (userProfile.topGenres && userProfile.topGenres.length > 0) {
+        const prefCandidates = await this.getGenreBasedCandidates(userProfile.topGenres, targetCount / 2);
+        candidates.push(...prefCandidates);
+      }
+      
+      // Strategy 3: Popular quality candidates
+      const popularCandidates = await this.getPopularQualityCandidates(targetCount / 3);
+      candidates.push(...popularCandidates);
+      
+      // Remove duplicates and apply quality filters
+      const uniqueCandidates = this.removeDuplicates(candidates);
+      const filtered = this.applyQualityFilters(uniqueCandidates, sessionTemplate);
+      
+      console.log(`✅ Found ${filtered.length} candidate movies`);
+      return filtered.slice(0, targetCount);
+      
+    } catch (error) {
+      console.error('Error getting candidate movies:', error);
+      return this.getPopularMoviesFallback();
+    }
+  }
+
+  async getGenreBasedCandidates(genreIds, count) {
+    try {
+      const genreQuery = genreIds.slice(0, 3).join(',');
+      const response = await fetch(
+        `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreQuery}&sort_by=vote_average.desc&vote_count.gte=500&page=1`
+      );
+      
+      const data = await response.json();
+      return data.results?.slice(0, count) || [];
+      
+    } catch (error) {
+      console.error('Error fetching genre-based candidates:', error);
+      return [];
+    }
+  }
+
+  async getPopularQualityCandidates(count) {
+    try {
+      const response = await fetch(
+        `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&sort_by=popularity.desc&vote_average.gte=7.0&vote_count.gte=1000&page=1`
+      );
+      
+      const data = await response.json();
+      return data.results?.slice(0, count) || [];
+      
+    } catch (error) {
+      console.error('Error fetching popular candidates:', error);
+      return [];
+    }
+  }
+
+  removeDuplicates(candidates) {
+    const seen = new Set();
+    return candidates.filter(movie => {
+      if (seen.has(movie.id)) {
+        return false;
+      }
+      seen.add(movie.id);
+      return true;
+    });
+  }
+
+  applyQualityFilters(candidates, sessionTemplate) {
+    return candidates.filter(movie => {
+      // Basic quality filters
+      if (!movie.poster_path || !movie.overview) return false;
+      if (movie.vote_count < 100) return false;
+      if (movie.vote_average < (sessionTemplate.qualityThreshold || 6.0)) return false;
+      
+      // Adult content filter
+      if (movie.adult) return false;
+      
+      // Recent enough
+      if (movie.release_date) {
+        const year = parseInt(movie.release_date.substring(0, 4));
+        if (year < 1980) return false;
+      }
+      
+      return true;
+    });
+  }
+
+  // =============================================================================
+  // DISCOVERY SESSION THEME GENERATION
+  // =============================================================================
+
+  async generateSessionTheme(userProfile, sessionTemplate, candidates) {
+    try {
+      return await DiscoverySessionGenerator.generateSessionTheme(userProfile, sessionTemplate, candidates);
+    } catch (error) {
+      console.error('Theme generation failed:', error);
+      return this.createFallbackTheme(sessionTemplate, userProfile);
+    }
+  }
+
+  async rankMoviesForSession(candidates, userProfile, theme) {
+    try {
+      return await DiscoverySessionGenerator.scoreMoviesWithGroq(candidates, userProfile, theme);
+    } catch (error) {
+      console.error('Groq scoring failed:', error);
+      return this.scoreMoviesAlgorithmically(candidates, userProfile);
+    }
+  }
+
+  createFallbackTheme(sessionTemplate, userProfile) {
+    const timeOfDay = this.getTimeOfDay(new Date().getHours());
+    
+    return {
+      name: sessionTemplate.name,
+      description: sessionTemplate.description,
+      explanation: `Movies selected for ${timeOfDay} viewing based on your taste`,
+      moodMatch: `Perfect for ${sessionTemplate.moodTags.join(', ')} mood`,
+      watchPrompt: "Ready to discover something great?"
+    };
+  }
+
+  getTimeOfDay(hour) {
+    if (hour < 6) return 'late night';
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    if (hour < 21) return 'evening';
+    return 'night';
+  }
+
+  getPopularMoviesFallback() {
+    return [
+      { id: 550, title: "Fight Club", vote_average: 8.4, popularity: 63.8, genre_ids: [18, 53] },
+      { id: 13, title: "Forrest Gump", vote_average: 8.5, popularity: 48.3, genre_ids: [18, 10749] },
+      { id: 680, title: "Pulp Fiction", vote_average: 8.5, popularity: 67.4, genre_ids: [80, 18] },
+      { id: 155, title: "The Dark Knight", vote_average: 9.0, popularity: 123.1, genre_ids: [28, 80, 18] },
+      { id: 278, title: "The Shawshank Redemption", vote_average: 8.7, popularity: 88.4, genre_ids: [18, 80] },
+      { id: 238, title: "The Godfather", vote_average: 8.7, popularity: 94.3, genre_ids: [18, 80] },
+      { id: 424, title: "Schindler's List", vote_average: 8.6, popularity: 54.2, genre_ids: [18, 36, 10752] },
+      { id: 129, title: "Spirited Away", vote_average: 8.5, popularity: 81.9, genre_ids: [16, 10751, 14] },
+      { id: 637, title: "Life Is Beautiful", vote_average: 8.4, popularity: 38.9, genre_ids: [35, 18] },
+      { id: 429, title: "The Good, the Bad and the Ugly", vote_average: 8.5, popularity: 67.5, genre_ids: [37] }
+    ];
+  }
+
+  // =============================================================================
   // USER PREFERENCE ANALYSIS - SIMPLIFIED
   // =============================================================================
 
+  // COMMANDMENT 4: Brutally honest - previous analysis was too simplistic
+  // Devil's advocate: We need to understand user personality, not just basic preferences
   analyzeUserPreferences(userMovies) {
     const loved = userMovies.filter(m => m.userRating >= 8);
     const liked = userMovies.filter(m => m.userRating >= 6 && m.userRating < 8);
     const disliked = userMovies.filter(m => m.userRating < 5);
 
-    // Genre analysis with weights
+    // COMMANDMENT 7: Document WHY - Popularity analysis reveals user taste personality
+    const popularityAnalysis = this.analyzePopularityPreference(userMovies);
+    const qualityAnalysis = this.analyzeQualityPreference(userMovies);
+    const personalityProfile = this.buildUserPersonalityProfile(userMovies);
+
+    // Enhanced genre analysis with popularity weighting
     const genreScores = {};
     [...loved, ...liked, ...disliked].forEach(movie => {
-      const weight = movie.userRating >= 8 ? 3 : movie.userRating >= 6 ? 1 : -2;
+      const baseWeight = movie.userRating >= 8 ? 3 : movie.userRating >= 6 ? 1 : -2;
+      // COMMANDMENT 2: Never assume - weight by popularity to understand mainstream vs niche taste
+      const popularityBonus = this.getPopularityWeight(movie);
+      const weight = baseWeight * popularityBonus;
+      
       (movie.genre_ids || []).forEach(genreId => {
         genreScores[genreId] = (genreScores[genreId] || 0) + weight;
       });
@@ -81,17 +253,6 @@ class ImprovedAIRecommendations {
     const averageUserRating = userMovies.reduce((sum, m) => sum + m.userRating, 0) / userMovies.length;
     const averageTMDBRating = userMovies.reduce((sum, m) => sum + (m.vote_average || 7), 0) / userMovies.length;
     
-    // Decade analysis
-    const decadeScores = {};
-    userMovies.forEach(movie => {
-      if (movie.release_date || movie.first_air_date) {
-        const year = parseInt((movie.release_date || movie.first_air_date).substring(0, 4));
-        const decade = Math.floor(year / 10) * 10;
-        const weight = movie.userRating >= 8 ? 2 : movie.userRating >= 6 ? 1 : -1;
-        decadeScores[decade] = (decadeScores[decade] || 0) + weight;
-      }
-    });
-
     return {
       totalRated: userMovies.length,
       averageUserRating,
@@ -103,39 +264,150 @@ class ImprovedAIRecommendations {
       avoidGenres: Object.entries(genreScores)
         .filter(([,score]) => score < -1)
         .map(([genreId]) => parseInt(genreId)),
-      preferredDecades: Object.entries(decadeScores)
-        .filter(([,score]) => score > 0)
-        .sort(([,a], [,b]) => b - a)
-        .map(([decade]) => parseInt(decade)),
-      topMovies: loved.slice(0, 5), // Use for similarity searches
-      isQualityFocused: averageUserRating > 7.5,
-      isGenerousRater: loved.length / userMovies.length > 0.4
+      topMovies: loved.slice(0, 5),
+      
+      // ENHANCED: Rich personality analysis for better recommendations
+      ...popularityAnalysis,
+      ...qualityAnalysis,
+      ...personalityProfile
     };
+  }
+
+  // COMMANDMENT 3: Clear and obvious - analyze if user likes mainstream or niche content
+  analyzePopularityPreference(userMovies) {
+    const popularMovies = userMovies.filter(m => (m.vote_count || 0) > 1000 && (m.popularity || 0) > 20);
+    const nicheMovies = userMovies.filter(m => (m.vote_count || 0) < 500 || (m.popularity || 0) < 10);
+    const loved = userMovies.filter(m => m.userRating >= 8);
+    
+    const popularLoved = popularMovies.filter(m => m.userRating >= 8).length;
+    const nicheLoved = nicheMovies.filter(m => m.userRating >= 8).length;
+    
+    // Calculate mainstream vs niche preference
+    const mainstreamScore = popularMovies.length > 0 ? popularLoved / popularMovies.length : 0;
+    const nicheScore = nicheMovies.length > 0 ? nicheLoved / nicheMovies.length : 0;
+    
+    return {
+      prefersMainstream: mainstreamScore > nicheScore + 0.2,
+      prefersNiche: nicheScore > mainstreamScore + 0.2,
+      mainstreamTolerance: mainstreamScore,
+      averagePopularityOfLoved: loved.length > 0 ? loved.reduce((sum, m) => sum + (m.popularity || 0), 0) / loved.length : 0,
+      averageVoteCountOfLoved: loved.length > 0 ? loved.reduce((sum, m) => sum + (m.vote_count || 0), 0) / loved.length : 0
+    };
+  }
+
+  // COMMANDMENT 4: Brutally honest quality analysis
+  analyzeQualityPreference(userMovies) {
+    const highTMDBRated = userMovies.filter(m => (m.vote_average || 0) >= 7.5);
+    const midTMDBRated = userMovies.filter(m => (m.vote_average || 0) >= 6 && (m.vote_average || 0) < 7.5);
+    const lowTMDBRated = userMovies.filter(m => (m.vote_average || 0) < 6);
+    
+    return {
+      isQualityFocused: highTMDBRated.filter(m => m.userRating >= 8).length / Math.max(highTMDBRated.length, 1) > 0.6,
+      isGenerousRater: userMovies.filter(m => m.userRating >= 8).length / userMovies.length > 0.4,
+      qualityThreshold: this.calculateQualityThreshold(userMovies),
+      toleratesLowQuality: lowTMDBRated.filter(m => m.userRating >= 6).length > 0
+    };
+  }
+
+  // COMMANDMENT 7: Document WHY - personality profiling for targeted recommendations
+  buildUserPersonalityProfile(userMovies) {
+    const loved = userMovies.filter(m => m.userRating >= 8);
+    
+    if (loved.length === 0) {
+      return {
+        trustsPopularOpinion: false,
+        likesBlockbusters: false,
+        discoveryOriented: true,
+        qualityGatekeeper: false,
+        averagePopularity: 0,
+        averageVoteCount: 0,
+        averageTMDBRating: 0,
+        minAcceptableVoteCount: 0,
+        preferredPopularityRange: { min: 0, max: 100 }
+      };
+    }
+    
+    // Analyze what makes user love movies
+    const lovedAnalysis = {
+      averagePopularity: loved.reduce((sum, m) => sum + (m.popularity || 0), 0) / loved.length,
+      averageVoteCount: loved.reduce((sum, m) => sum + (m.vote_count || 0), 0) / loved.length,
+      averageTMDBRating: loved.reduce((sum, m) => sum + (m.vote_average || 0), 0) / loved.length,
+      minAcceptableVoteCount: this.calculatePercentile(loved.map(m => m.vote_count || 0), 25),
+      preferredPopularityRange: this.calculatePreferredRange(loved.map(m => m.popularity || 0))
+    };
+    
+    return {
+      trustsPopularOpinion: lovedAnalysis.averageVoteCount > 5000,
+      likesBlockbusters: lovedAnalysis.averagePopularity > 50,
+      discoveryOriented: lovedAnalysis.averageVoteCount < 2000,
+      qualityGatekeeper: lovedAnalysis.averageTMDBRating > 7.5,
+      ...lovedAnalysis
+    };
+  }
+
+  // Helper method for popularity weighting
+  getPopularityWeight(movie) {
+    const voteCount = movie.vote_count || 0;
+    const popularity = movie.popularity || 0;
+    
+    // Higher weight for popular movies that user likes (indicates mainstream taste)
+    if (voteCount > 1000 && popularity > 20) return 1.2;
+    if (voteCount > 500 && popularity > 10) return 1.1;
+    if (voteCount < 200 && popularity < 5) return 0.8; // Niche content
+    return 1.0;
+  }
+
+  calculateQualityThreshold(userMovies) {
+    const loved = userMovies.filter(m => m.userRating >= 8);
+    const tmdbRatings = loved.map(m => m.vote_average || 0).sort((a, b) => a - b);
+    return tmdbRatings[Math.floor(tmdbRatings.length * 0.25)] || 6.0; // 25th percentile
+  }
+
+  calculatePreferredRange(values) {
+    const sorted = values.sort((a, b) => a - b);
+    const q1 = sorted[Math.floor(sorted.length * 0.25)];
+    const q3 = sorted[Math.floor(sorted.length * 0.75)];
+    return { min: q1, max: q3 };
+  }
+
+  calculatePercentile(values, percentile) {
+    const sorted = values.sort((a, b) => a - b);
+    const index = Math.floor((percentile / 100) * sorted.length);
+    return sorted[Math.max(0, Math.min(index, sorted.length - 1))] || 0;
   }
 
   // =============================================================================
   // TMDB NATIVE RECOMMENDATIONS - MULTIPLE STRATEGIES
   // =============================================================================
 
+  // COMMANDMENT 4: Brutally honest - completely new strategy focused on popular, quality content
   async getTMDBNativeRecommendations(userProfile, mediaType, targetCount) {
+    console.log(`🎯 Using personality-driven recommendation strategies`);
+    
+    // Devil's advocate: User wants popular, high-rated movies - prioritize accordingly
     const strategies = [
-      this.getSimilarMovieRecommendations.bind(this),
-      this.getGenreBasedRecommendations.bind(this),
-      this.getPopularInGenreRecommendations.bind(this),
-      this.getHighRatedRecommendations.bind(this)
+      { fn: this.getPopularQualityRecommendations.bind(this), weight: 0.4 },
+      { fn: this.getPersonalityMatchedRecommendations.bind(this), weight: 0.3 },
+      { fn: this.getTrendingInGenreRecommendations.bind(this), weight: 0.2 },
+      { fn: this.getAudienceFavoriteRecommendations.bind(this), weight: 0.1 }
     ];
 
+    // Execute strategies with personality-based allocation
     const results = await Promise.all(
-      strategies.map(strategy => strategy(userProfile, mediaType, Math.ceil(targetCount / strategies.length)))
+      strategies.map(async ({ fn, weight }) => {
+        const count = Math.ceil(targetCount * weight);
+        return await fn(userProfile, mediaType, count);
+      })
     );
 
-    // Combine and remove duplicates
+    // Combine and score based on user personality
     const combined = results.flat();
     const uniqueResults = combined.filter((item, index, self) => 
       index === self.findIndex(t => t.id === item.id)
     );
 
-    return uniqueResults.slice(0, targetCount);
+    // COMMANDMENT 4: Honest scoring based on actual user preferences
+    return this.rankByPersonalityFit(uniqueResults, userProfile).slice(0, targetCount);
   }
 
   // Strategy 1: Similar to top-rated movies
@@ -237,6 +509,15 @@ class ImprovedAIRecommendations {
     return recommendations.map(item => {
       let score = item.strategyScore || 0.5;
 
+      // ENHANCED: Popular movie weighting boost
+      // COMMANDMENT 4: Brutally honest - users want popular movies
+      if (item.popularity && item.popularity > 50) {
+        score += 0.15; // Significant boost for popular content
+      }
+      if (item.vote_count > 5000) {
+        score += 0.1; // Additional boost for widely watched content
+      }
+
       // Genre matching bonus
       if (item.genre_ids) {
         const genreMatches = item.genre_ids.filter(g => userProfile.topGenres.includes(g)).length;
@@ -253,6 +534,14 @@ class ImprovedAIRecommendations {
       // Vote count reliability
       if (item.vote_count > 100) {
         score += Math.min(item.vote_count / 1000, 0.1);
+      }
+
+      // ENHANCED: Friend score integration
+      // COMMANDMENT 2: Never assume - only use if available
+      if (item.friendsRating && !isNaN(item.friendsRating)) {
+        const friendScore = item.friendsRating / 10; // Normalize to 0-1
+        score += friendScore * 0.2; // 20% weight for friend recommendations
+        console.log(`🤝 Friend score boost: ${item.title} +${(friendScore * 0.2).toFixed(3)}`);
       }
 
       // Recent content slight boost
@@ -387,7 +676,7 @@ class ImprovedAIRecommendations {
 
   // COMMANDMENT 3: Clear workflow execution
   async executeGroqWorkflow(userProfile, mediaType, count) {
-    const groqPrompt = this.buildCodeBibleCompliantPrompt(userProfile, mediaType);
+    const groqPrompt = await this.buildCodeBibleCompliantPrompt(userProfile, mediaType);
     const groqResponse = await this.callGroqAPI(groqPrompt);
     
     if (!groqResponse?.recommendations || !Array.isArray(groqResponse.recommendations)) {
@@ -437,8 +726,8 @@ class ImprovedAIRecommendations {
     });
   }
 
-  // COMMANDMENT 7: Document the WHY - Groq prompt engineering
-  buildCodeBibleCompliantPrompt(userProfile, mediaType) {
+  // COMMANDMENT 7: Document the WHY - Groq prompt engineering with not interested feedback
+  async buildCodeBibleCompliantPrompt(userProfile, mediaType) {
     // Devil's advocate: Previous AI was hallucinating, so we must constrain Groq
     // to only suggest real, verifiable content with specific TMDB criteria
     
@@ -453,6 +742,13 @@ class ImprovedAIRecommendations {
 
     const genreNames = this.mapGenreIdsToNames((userProfile.topGenres || []).slice(0, 3));
     const avoidGenreNames = this.mapGenreIdsToNames(userProfile.avoidGenres || []);
+    
+    // ENHANCED: Get not interested feedback for GROQ learning
+    const notInterestedMovies = await this.getNotInterestedMovies(mediaType);
+    const recentNotInterested = notInterestedMovies
+      .slice(-10) // Last 10 rejections
+      .map(m => `"${m.title}" (${m.genres ? this.mapGenreIdsToNames(m.genres.slice(0, 2)).join(', ') : 'Unknown genres'})`)
+      .join(', ');
 
     return `You are a movie recommendation specialist. Based on this user's viewing profile, suggest 10 specific ${mediaType}s.
 
@@ -462,13 +758,15 @@ USER PROFILE:
 - Avoid genres: ${avoidGenreNames.length > 0 ? avoidGenreNames.join(', ') : 'None'}
 - Average rating given: ${(userProfile.averageUserRating || 5.5).toFixed(1)}/10
 - Quality focused: ${userProfile.isQualityFocused ? 'Yes' : 'No'}
+- Recently rejected: ${recentNotInterested || 'None'}
 
 STRICT REQUIREMENTS:
 1. Only suggest real ${mediaType}s that exist on TMDB
 2. Include exact title and release year for each
-3. Prioritize ${mediaType}s from 2015-2024 with 500+ votes
-4. Avoid obscure or unverifiable content
+3. Prioritize POPULAR ${mediaType}s from 2015-2024 with 1000+ votes
+4. Focus on mainstream, well-known content
 5. Match the user's quality standards (avg rating ${(userProfile.averageTMDBRating || 7.0).toFixed(1)}/10)
+6. AVOID anything similar to recently rejected movies
 
 Format response as JSON:
 {
@@ -846,6 +1144,67 @@ Focus on mainstream, critically acclaimed ${mediaType}s that align with their ta
   clearCache() {
     this.cache.clear();
   }
+
+  // =============================================================================
+  // NOT INTERESTED FUNCTIONALITY - GROQ FEEDBACK INTEGRATION
+  // =============================================================================
+
+  // COMMANDMENT 7: Document the WHY - Feed negative feedback to GROQ for learning
+  async recordNotInterested(movie, userProfile, mediaType) {
+    try {
+      const notInterestedKey = `not_interested_${mediaType}`;
+      const existingData = await AsyncStorage.getItem(notInterestedKey);
+      const notInterestedList = existingData ? JSON.parse(existingData) : [];
+      
+      // Add movie with context for GROQ learning
+      const feedbackEntry = {
+        id: movie.id,
+        title: movie.title || movie.name,
+        genres: movie.genre_ids || [],
+        vote_average: movie.vote_average,
+        popularity: movie.popularity,
+        timestamp: Date.now(),
+        userContext: {
+          userGenres: userProfile.topGenres || [],
+          userRatingAverage: userProfile.averageUserRating || 5.5,
+          totalRatedMovies: userProfile.totalRated || 0
+        }
+      };
+      
+      // Avoid duplicates
+      const existingIndex = notInterestedList.findIndex(item => item.id === movie.id);
+      if (existingIndex >= 0) {
+        notInterestedList[existingIndex] = feedbackEntry;
+      } else {
+        notInterestedList.push(feedbackEntry);
+      }
+      
+      // Keep only last 50 entries to prevent storage bloat
+      if (notInterestedList.length > 50) {
+        notInterestedList.splice(0, notInterestedList.length - 50);
+      }
+      
+      await AsyncStorage.setItem(notInterestedKey, JSON.stringify(notInterestedList));
+      console.log(`🚫 Recorded not interested: ${movie.title} for GROQ learning`);
+      
+      return true;
+    } catch (error) {
+      console.error('Error recording not interested:', error);
+      return false;
+    }
+  }
+
+  // Get not interested movies for filtering
+  async getNotInterestedMovies(mediaType) {
+    try {
+      const notInterestedKey = `not_interested_${mediaType}`;
+      const existingData = await AsyncStorage.getItem(notInterestedKey);
+      return existingData ? JSON.parse(existingData) : [];
+    } catch (error) {
+      console.error('Error loading not interested movies:', error);
+      return [];
+    }
+  }
 }
 
 // =============================================================================
@@ -862,6 +1221,15 @@ export const getImprovedRecommendations = async (userMovies, mediaType = 'movie'
   }
 
   return await improvedAIRecommendations.getRecommendations(userMovies, mediaType, options);
+};
+
+// Export not interested functionality for X button integration
+export const recordNotInterested = async (movie, userProfile, mediaType) => {
+  return await improvedAIRecommendations.recordNotInterested(movie, userProfile, mediaType);
+};
+
+export const getNotInterestedMovies = async (mediaType) => {
+  return await improvedAIRecommendations.getNotInterestedMovies(mediaType);
 };
 
 export default improvedAIRecommendations;

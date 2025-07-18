@@ -36,8 +36,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 // OLD: Complex AI system with poor results
 // import { getAIRecommendations, getEnhancedRecommendations, recordNotInterested, recordUserRating, canRefreshAIRecommendations, refreshAIRecommendations } from '../../utils/AIRecommendations';
 
-// NEW: Simplified, high-quality TMDB-native recommendations
-import { getImprovedRecommendations } from '../../utils/ImprovedAIRecommendations';
+// NEW: Discovery Session System
+// COMMANDMENT 9: Handle bundler cache issues with explicit file extension
+import { getImprovedRecommendations, recordNotInterested } from '../../utils/ImprovedAIRecommendations.js';
+import { useDiscoverySessions } from '../../hooks/useDiscoverySessions';
+import { getCurrentSessionType } from '../../config/discoveryConfig';
 import { RatingModal } from '../../Components/RatingModal';
 import { ActivityIndicator } from 'react-native';
 import { TMDB_API_KEY as API_KEY } from '../../Constants';
@@ -90,6 +93,11 @@ const getDefaultRatingForCategory = (categoryKey) => {
 
 // **DEBUG LOGGING**
 console.log('🏠 HomeScreen: Enhanced Rating System loaded');
+
+// COMMANDMENT 7: Document the WHY - Refresh rate limiting prevents API abuse
+// Devil's advocate: Users will try to spam refresh, so we need strict limits
+const REFRESH_STORAGE_KEY_PREFIX = 'ai_refresh';
+const MAX_DAILY_REFRESHES = 3;
 
 // **SHARED BUTTON STYLES** - Consistent styling with semantic variants
 const getStandardizedButtonStyles = (colors) => ({
@@ -213,6 +221,9 @@ function HomeScreen({
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState({ canRefresh: true, remainingRefreshes: 3, resetTime: null });
   const [isRefreshingAI, setIsRefreshingAI] = useState(false);
+  // COMMANDMENT 2: Never assume - track refresh usage with proper validation
+  const [dailyRefreshCount, setDailyRefreshCount] = useState(0);
+  const [lastRefreshDate, setLastRefreshDate] = useState(null);
   const [movieCredits, setMovieCredits] = useState(null);
   const [movieProviders, setMovieProviders] = useState(null);
   
@@ -235,10 +246,68 @@ function HomeScreen({
   const [emotionModalVisible, setEmotionModalVisible] = useState(false);
   const [finalCalculatedRating, setFinalCalculatedRating] = useState(null);
   
+  // **DISCOVERY SESSION STATE**
+  const userId = 'user_' + (seen.length > 0 ? seen[0].id : 'default');
+  const {
+    currentSession,
+    dailyLimits,
+    loading: sessionLoading,
+    generateSession,
+    canGenerateNewSession,
+    remainingSessions,
+    error: sessionError
+  } = useDiscoverySessions(userId);
+  
+  const [showDiscoverySession, setShowDiscoverySession] = useState(false);
+  const [sessionType, setSessionType] = useState(getCurrentSessionType());
+  const [lastGeneratedSession, setLastGeneratedSession] = useState(null);
+  
   // Debug: Log state changes
   useEffect(() => {
     console.log('📊 finalCalculatedRating changed to:', finalCalculatedRating);
   }, [finalCalculatedRating]);
+  
+  // **DISCOVERY SESSION HANDLERS**
+  const handleGenerateDiscoverySession = useCallback(async (type = null) => {
+    try {
+      console.log('🎪 Generating discovery session...');
+      const session = await generateSession(type || sessionType);
+      
+      if (session) {
+        setLastGeneratedSession(session);
+        setShowDiscoverySession(true);
+        
+        // Update AI recommendations with discovery session movies
+        setAiRecommendations(session.movies || []);
+        
+        console.log('✅ Discovery session generated successfully');
+      }
+    } catch (error) {
+      console.error('❌ Discovery session generation failed:', error);
+      Alert.alert('Discovery Session', 'Failed to generate session. Please try again.');
+    }
+  }, [generateSession, sessionType]);
+  
+  const handleDiscoverySessionClose = useCallback(() => {
+    setShowDiscoverySession(false);
+  }, []);
+  
+  // Auto-detect session type based on time
+  useEffect(() => {
+    const currentType = getCurrentSessionType();
+    if (currentType !== sessionType) {
+      setSessionType(currentType);
+    }
+  }, [sessionType]);
+  
+  // Show discovery session if we have one
+  useEffect(() => {
+    if (currentSession && !showDiscoverySession) {
+      setShowDiscoverySession(true);
+      setLastGeneratedSession(currentSession);
+      setAiRecommendations(currentSession.movies || []);
+    }
+  }, [currentSession, showDiscoverySession]);
 
   // **NEW: COMPREHENSIVE DEBUG LOGGING FOR MODAL STATE**
   useEffect(() => {
@@ -270,6 +339,94 @@ function HomeScreen({
   
   // **CONTENT TYPE HELPERS - ENGINEER TEAM 7**
   const contentType = mediaType === 'movie' ? 'movies' : 'tv';
+
+  // COMMANDMENT 2: Never assume - validate refresh eligibility with proper error handling
+  const checkRefreshEligibility = useCallback(async () => {
+    try {
+      const today = new Date().toDateString();
+      const refreshKey = `${REFRESH_STORAGE_KEY_PREFIX}_${mediaType}_${today}`;
+      const storedData = await AsyncStorage.getItem(refreshKey);
+      
+      if (!storedData) {
+        // First refresh of the day
+        return { canRefresh: true, remainingRefreshes: MAX_DAILY_REFRESHES, count: 0 };
+      }
+      
+      const { count, date } = JSON.parse(storedData);
+      
+      if (date !== today) {
+        // New day, reset counter
+        return { canRefresh: true, remainingRefreshes: MAX_DAILY_REFRESHES, count: 0 };
+      }
+      
+      // Same day, check limits
+      const remaining = Math.max(0, MAX_DAILY_REFRESHES - count);
+      
+      return { 
+        canRefresh: remaining > 0, 
+        remainingRefreshes: remaining,
+        count: count
+      };
+      
+    } catch (error) {
+      console.error('Error checking refresh eligibility:', error);
+      // COMMANDMENT 9: Handle errors explicitly - fail safe with reduced access
+      return { canRefresh: true, remainingRefreshes: 1, count: 2 };
+    }
+  }, [mediaType]);
+
+  // COMMANDMENT 9: Handle errors explicitly with comprehensive error recovery
+  const handleRefreshRecommendations = useCallback(async () => {
+    try {
+      const eligibility = await checkRefreshEligibility();
+      
+      if (!eligibility.canRefresh) {
+        console.log('⏰ Daily refresh limit reached');
+        return false;
+      }
+      
+      setIsRefreshingAI(true);
+      
+      // Update usage counter immediately (pessimistic update)
+      const today = new Date().toDateString();
+      const refreshKey = `${REFRESH_STORAGE_KEY_PREFIX}_${mediaType}_${today}`;
+      const newCount = eligibility.count + 1;
+      
+      await AsyncStorage.setItem(refreshKey, JSON.stringify({
+        count: newCount,
+        date: today
+      }));
+      
+      setDailyRefreshCount(newCount);
+      
+      // COMMANDMENT 4: Brutally honest - clear old recommendations for fresh start
+      setAiRecommendations([]);
+      setDismissedInSession([]);
+      
+      // Force fresh recommendations with Groq enhancement
+      await fetchAIRecommendations();
+      
+      console.log(`🔄 AI recommendations refreshed (${newCount}/${MAX_DAILY_REFRESHES})`);
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Failed to refresh recommendations:', error);
+      // COMMANDMENT 9: Provide meaningful user feedback
+      Alert.alert('Refresh Error', 'Unable to refresh recommendations right now. Please try again in a moment.');
+      return false;
+    } finally {
+      setIsRefreshingAI(false);
+    }
+  }, [checkRefreshEligibility, fetchAIRecommendations, mediaType]);
+
+  // COMMANDMENT 8: Test initialization on component mount
+  useEffect(() => {
+    const initializeRefreshStatus = async () => {
+      const eligibility = await checkRefreshEligibility();
+      setDailyRefreshCount(eligibility.count);
+    };
+    initializeRefreshStatus();
+  }, [checkRefreshEligibility]);
   
   // **DATE UTILITIES - ENGINEER TEAM 8**
   const today = useMemo(() => new Date(), []);
@@ -360,53 +517,6 @@ function HomeScreen({
     }
   }, [mediaType]);
 
-  const handleNotInterested = useCallback(async () => {
-    if (!selectedMovie) return;
-    
-    console.log('🎬 NOT INTERESTED CLICKED for:', selectedMovie.title);
-    
-    try {
-      const movieId = selectedMovie.id;
-      
-      sendNegativeFeedbackToAI(selectedMovie, mediaType);
-      
-      if (addToSkippedMovies) {
-        addToSkippedMovies(movieId);
-      }
-      
-      storePermanentlyNotInterested(movieId, mediaType);
-      
-      // **IMMEDIATE UI UPDATES**
-      setPopularMovies(prev => {
-        const filtered = prev.filter(movie => movie.id !== movieId);
-        console.log(`🗑️ Removed from popularMovies: ${prev.length} -> ${filtered.length}`);
-        return filtered;
-      });
-      
-      setRecentReleases(prev => {
-        const filtered = prev.filter(movie => movie.id !== movieId);
-        console.log(`🗑️ Removed from recentReleases: ${prev.length} -> ${filtered.length}`);
-        return filtered;
-      });
-      
-      setAiRecommendations(prev => {
-        const filtered = prev.filter(movie => movie.id !== movieId);
-        console.log(`🗑️ Removed from aiRecommendations: ${prev.length} -> ${filtered.length}`);
-        return filtered;
-      });
-      
-      if (unseen.some(movie => movie.id === movieId)) {
-        onRemoveFromWatchlist(movieId);
-        console.log(`🗑️ Removed from watchlist`);
-      }
-      
-      console.log(`❌ Movie completely removed from app: ${selectedMovie.title}`);
-      closeDetailModal();
-      
-    } catch (error) {
-      console.error('Failed to handle not interested action:', error);
-    }
-  }, [selectedMovie, mediaType, sendNegativeFeedbackToAI, addToSkippedMovies, storePermanentlyNotInterested, unseen, onRemoveFromWatchlist]);
 
   // ============================================================================
   // **ENHANCED NOT INTERESTED HANDLER - ISSUE #8**
@@ -584,24 +694,51 @@ function HomeScreen({
         setIsRefreshingAI(true);
       }
       
-      const topRatedContent = seen
+      const currentMediaType = contentType === 'movies' ? 'movie' : 'tv';
+      
+      // Filter by current media type first, then by rating
+      const currentMediaContent = seen.filter(item => 
+        (item.mediaType || 'movie') === currentMediaType
+      );
+      
+      const topRatedContent = currentMediaContent
         .filter(item => item.userRating && item.userRating >= 7)
         .sort((a, b) => b.userRating - a.userRating)
         .slice(0, 10);
 
-      if (topRatedContent.length < 3) {
+      // Check if user has any rated content in current media type
+      if (currentMediaContent.length === 0) {
         setAiRecommendations([]);
         return;
       }
-
-      const currentMediaType = contentType === 'movies' ? 'movie' : 'tv';
+      
+      // If user has rated content but not enough highly rated (7+), still try to get recommendations
+      if (topRatedContent.length < 3) {
+        // Use all rated content in current media type as basis for recommendations
+        const allRatedContent = currentMediaContent
+          .filter(item => item.userRating && item.userRating >= 5)
+          .sort((a, b) => b.userRating - a.userRating)
+          .slice(0, 10);
+          
+        if (allRatedContent.length === 0) {
+          setAiRecommendations([]);
+          return;
+        }
+        
+        // Use lower-rated content for recommendations
+        console.log(`🎯 Using ${allRatedContent.length} rated ${currentMediaType}s for recommendations`);
+      }
+      
+      // Use the best available content for recommendations
+      const recommendationBasis = topRatedContent.length >= 3 ? topRatedContent : 
+        currentMediaContent.filter(item => item.userRating && item.userRating >= 5).slice(0, 10);
       
       let recommendations;
       
       // Use improved TMDB-native recommendation system
       console.log(`🎯 Fetching improved recommendations for ${currentMediaType}`);
       recommendations = await getImprovedRecommendations(
-        topRatedContent, 
+        recommendationBasis, 
         currentMediaType,
         {
           count: 20,
@@ -1418,6 +1555,85 @@ function HomeScreen({
     }
   }, [fetchMovieCredits, fetchMovieProviders, mediaType, isProcessingMovieSelect]);
 
+  // COMMANDMENT 4: Brutally honest - user clicked X, they don't want this movie
+  const handleNotInterested = useCallback(async (movie, event) => {
+    // COMMANDMENT 9: Handle errors explicitly - prevent event bubbling
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    
+    try {
+      console.log('🚫 User not interested in:', movie.title);
+      
+      // Get user profile for GROQ learning
+      const userProfile = {
+        topGenres: seen.map(m => m.genre_ids || []).flat(),
+        averageUserRating: seen.reduce((sum, m) => sum + m.userRating, 0) / seen.length,
+        totalRated: seen.length,
+        // Add more context as needed
+      };
+      
+      // Record not interested for GROQ AI learning
+      await recordNotInterested(movie, userProfile, contentType === 'movies' ? 'movie' : 'tv');
+      
+      // Remove from current recommendations
+      setAiRecommendations(prev => prev.filter(item => item.id !== movie.id));
+      setPopularMovies(prev => prev.filter(item => item.id !== movie.id));
+      setRecentReleases(prev => prev.filter(item => item.id !== movie.id));
+      
+      // Add to not interested list for filtering
+      setNotInterestedMovies(prev => [...prev, movie.id]);
+      
+      // Enhanced similarity filtering - reduce similar movies
+      const similarMovies = [];
+      setAiRecommendations(prev => prev.filter(item => {
+        if (item.id === movie.id) return false;
+        
+        // Calculate similarity score based on genres
+        const genreOverlap = movie.genre_ids?.filter(id => 
+          item.genre_ids?.includes(id)
+        ).length || 0;
+        
+        // If movie shares 2+ genres, reduce its likelihood (mark as similar)
+        if (genreOverlap >= 2) {
+          similarMovies.push(item.id);
+          // 70% chance to remove similar movies
+          return Math.random() > 0.7;
+        }
+        
+        return true;
+      }));
+      
+      // Apply same filtering to other recommendation sections
+      [setPopularMovies, setRecentReleases].forEach(setter => {
+        setter(prev => prev.filter(item => {
+          if (item.id === movie.id) return false;
+          
+          const genreOverlap = movie.genre_ids?.filter(id => 
+            item.genre_ids?.includes(id)
+          ).length || 0;
+          
+          if (genreOverlap >= 2) {
+            return Math.random() > 0.7;
+          }
+          
+          return true;
+        }));
+      });
+      
+      if (similarMovies.length > 0) {
+        console.log(`🎯 Reduced likelihood of ${similarMovies.length} similar movies`);
+      }
+      
+      console.log('✅ Movie removed from recommendations and recorded for AI learning');
+      
+    } catch (error) {
+      console.error('❌ Error handling not interested:', error);
+      Alert.alert('Error', 'Failed to record preference. Please try again.');
+    }
+  }, [contentType, seen.length, recordNotInterested]);
+
   const openRatingModal = useCallback(() => {
     // Start fade transition to show sentiment buttons in place
     setShowSentimentButtons(true);
@@ -1874,6 +2090,30 @@ function HomeScreen({
                 </Text>
               </View>
             )}
+            
+            {/* NOT INTERESTED X BUTTON */}
+            <TouchableOpacity
+              style={[
+                styles.notInterestedButton,
+                {
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                  borderRadius: 15,
+                  width: 30,
+                  height: 30,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10
+                }
+              ]}
+              onPress={(event) => handleNotInterested(item, event)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={18} color="white" />
+            </TouchableOpacity>
+            
             <View style={homeStyles.movieInfoBox}>
               <Text
                 style={homeStyles.genreName}
@@ -1923,6 +2163,30 @@ function HomeScreen({
           style={styles.moviePoster}
           resizeMode="cover"
         />
+        
+        {/* NOT INTERESTED X BUTTON */}
+        <TouchableOpacity
+          style={[
+            styles.notInterestedButton,
+            {
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              borderRadius: 15,
+              width: 30,
+              height: 30,
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10
+            }
+          ]}
+          onPress={(event) => handleNotInterested(item, event)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="close" size={18} color="white" />
+        </TouchableOpacity>
+        
         <View style={homeStyles.movieInfoBox}>
           <Text
             style={homeStyles.genreName}
@@ -2004,16 +2268,53 @@ function HomeScreen({
   const renderAIRecommendationsSection = useCallback(() => {
     return (
       <View style={homeStyles.section}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 1, marginTop: -5 }}>
-          <Ionicons 
-            name="sparkles" 
-            size={16} 
-            color={homeStyles.genreScore.color} 
-            style={{ marginRight: 8, marginBottom: 2 }}
-          />
-          <Text style={homeStyles.sectionTitle}>
-            AI Recommendations For You
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 1, marginTop: -5 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons 
+              name="sparkles" 
+              size={16} 
+              color={homeStyles.genreScore.color} 
+              style={{ marginRight: 8, marginBottom: 2 }}
+            />
+            <Text style={homeStyles.sectionTitle}>
+              AI Recommendations For You
+            </Text>
+          </View>
+          
+          {/* COMMANDMENT 3: Clear and obvious refresh button with status */}
+          <View style={{ alignItems: 'center' }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor: dailyRefreshCount >= MAX_DAILY_REFRESHES ? colors.disabled : colors.primary,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                opacity: isRefreshingAI ? 0.6 : 1
+              }}
+              onPress={handleRefreshRecommendations}
+              disabled={dailyRefreshCount >= MAX_DAILY_REFRESHES || isRefreshingAI}
+              activeOpacity={0.7}
+            >
+              {isRefreshingAI ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Ionicons 
+                  name="refresh" 
+                  size={16} 
+                  color={dailyRefreshCount >= MAX_DAILY_REFRESHES ? colors.subText : colors.accent} 
+                />
+              )}
+            </TouchableOpacity>
+            {/* COMMANDMENT 10: Treat user data as sacred - show usage clearly */}
+            <Text style={{
+              fontSize: 10,
+              color: colors.subText,
+              marginTop: 2,
+              fontWeight: '500'
+            }}>
+              {dailyRefreshCount}/{MAX_DAILY_REFRESHES}
+            </Text>
+          </View>
         </View>
         <Text style={homeStyles.swipeInstructions}>
           Based on your top-rated {contentType === 'movies' ? 'movies' : 'TV shows'}
@@ -2028,7 +2329,23 @@ function HomeScreen({
           </View>
         ) : aiRecommendations.filter(item => !dismissedInSession.includes(item.id)).length === 0 ? (
           <Text style={homeStyles.swipeInstructions}>
-            Rate more {contentType === 'movies' ? 'movies' : 'TV shows'} to get AI recommendations
+            {(() => {
+              const currentMediaType = contentType === 'movies' ? 'movie' : 'tv';
+              const currentMediaContent = seen.filter(item => 
+                (item.mediaType || 'movie') === currentMediaType
+              );
+              const highlyRatedContent = currentMediaContent.filter(item => 
+                item.userRating && item.userRating >= 7
+              );
+              
+              if (currentMediaContent.length === 0) {
+                return `Rate some ${contentType} to get AI recommendations`;
+              } else if (highlyRatedContent.length < 3) {
+                return `Rate more ${contentType} highly (7+ stars) for better AI recommendations`;
+              } else {
+                return `No new ${contentType} recommendations available right now`;
+              }
+            })()}
           </Text>
         ) : (
           <Animated.FlatList
@@ -2064,7 +2381,7 @@ function HomeScreen({
                       style={styles.notInterestedButton}
                       onPress={(e) => {
                         e.stopPropagation(); // Prevent card tap
-                        handleSessionDismiss(item);
+                        handleNotInterested(item, e);
                       }}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
@@ -2110,6 +2427,222 @@ function HomeScreen({
       </View>
     );
   }, [aiRecommendations, isLoadingRecommendations, homeStyles, contentType, handleMovieSelect, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, mediaType, getRatingBorderColor]);
+
+  // =============================================================================
+  // DISCOVERY SESSION RENDER FUNCTION
+  // =============================================================================
+  
+  const renderDiscoverySessionSection = useCallback(() => {
+    return (
+      <View style={homeStyles.section}>
+        <View style={homeStyles.sectionHeader}>
+          <Text style={homeStyles.sectionTitle}>
+            🎪 Discovery Session
+          </Text>
+          <Text style={homeStyles.sectionSubtitle}>
+            {sessionType.charAt(0).toUpperCase() + sessionType.slice(1)} • {remainingSessions}/3 left today
+          </Text>
+        </View>
+        
+        {/* Session Status */}
+        {sessionError && (
+          <View style={[homeStyles.errorContainer, { marginBottom: 16 }]}>
+            <Text style={homeStyles.errorText}>{sessionError}</Text>
+          </View>
+        )}
+        
+        {/* Generate Session Button */}
+        {canGenerateNewSession && !currentSession && (
+          <View style={{ marginBottom: 20 }}>
+            <TouchableOpacity
+              style={[
+                standardButtonStyles.baseButton,
+                standardButtonStyles.primaryButton,
+                { marginHorizontal: 16 }
+              ]}
+              onPress={() => handleGenerateDiscoverySession()}
+              disabled={sessionLoading}
+            >
+              <Text style={[standardButtonStyles.baseText, standardButtonStyles.primaryText]}>
+                {sessionLoading ? 'Generating...' : `Generate ${sessionType} Session`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* Current Session Display */}
+        {currentSession && (
+          <View style={{ marginBottom: 20 }}>
+            <View style={[
+              homeStyles.sessionCard,
+              {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: 12,
+                padding: 16,
+                marginHorizontal: 16,
+                marginBottom: 16
+              }
+            ]}>
+              <Text style={[homeStyles.sessionTitle, { color: colors.text, fontSize: 18, fontWeight: 'bold' }]}>
+                {currentSession.theme?.name || 'Your Discovery Session'}
+              </Text>
+              <Text style={[homeStyles.sessionDescription, { color: colors.subText, marginTop: 8 }]}>
+                {currentSession.theme?.description || 'Curated movies for you'}
+              </Text>
+              {currentSession.theme?.explanation && (
+                <Text style={[homeStyles.sessionExplanation, { color: colors.subText, marginTop: 4, fontStyle: 'italic' }]}>
+                  {currentSession.theme.explanation}
+                </Text>
+              )}
+              
+              {/* Session Actions */}
+              <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+                {canGenerateNewSession && (
+                  <TouchableOpacity
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.secondaryButton,
+                      { flex: 1 }
+                    ]}
+                    onPress={() => handleGenerateDiscoverySession()}
+                    disabled={sessionLoading}
+                  >
+                    <Text style={[standardButtonStyles.baseText, standardButtonStyles.secondaryText]}>
+                      New Session
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                
+                <TouchableOpacity
+                  style={[
+                    standardButtonStyles.baseButton,
+                    standardButtonStyles.tertiaryButton,
+                    { flex: 1 }
+                  ]}
+                  onPress={() => setShowDiscoverySession(false)}
+                >
+                  <Text style={[standardButtonStyles.baseText, standardButtonStyles.tertiaryText]}>
+                    Hide Session
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            {/* Session Movies */}
+            {currentSession.movies && currentSession.movies.length > 0 && (
+              <FlatList
+                data={currentSession.movies}
+                renderItem={({ item }) => (
+                  <View style={[
+                    homeStyles.movieCard,
+                    {
+                      width: MOVIE_CARD_WIDTH,
+                      marginHorizontal: 8,
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      borderRadius: 8,
+                      overflow: 'hidden'
+                    }
+                  ]}>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => handleMovieSelect(item)}
+                      activeOpacity={0.8}
+                    >
+                      <Image
+                        source={{
+                          uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
+                        }}
+                        style={{
+                          width: '100%',
+                          height: MOVIE_CARD_WIDTH * 1.5,
+                          borderTopLeftRadius: 8,
+                          borderTopRightRadius: 8
+                        }}
+                        resizeMode="cover"
+                      />
+                      
+                      {/* Discovery Score Badge */}
+                      {item.discoveryScore && (
+                        <View style={[
+                          styles.matchBadge,
+                          {
+                            backgroundColor: 'rgba(76, 175, 80, 0.9)',
+                            top: 8,
+                            left: 8
+                          }
+                        ]}>
+                          <Text style={[styles.matchText, { color: 'white', fontSize: 10 }]}>
+                            {item.discoveryScore.toFixed(1)}★
+                          </Text>
+                        </View>
+                      )}
+                      
+                      <View style={[homeStyles.movieInfoBox, { padding: 8 }]}>
+                        <Text
+                          style={[homeStyles.genreName, { fontSize: 14, lineHeight: 16 }]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {item.title}
+                        </Text>
+                        
+                        <View style={homeStyles.ratingRow}>
+                          <View style={homeStyles.ratingLine}>
+                            <Ionicons name="star" size={10} color={colors.accent} />
+                            <Text style={[homeStyles.tmdbText, { fontSize: 10 }]}>
+                              {item.vote_average ? item.vote_average.toFixed(1) : '?'}
+                            </Text>
+                          </View>
+                          
+                          {item.scoringReason && (
+                            <Text style={[homeStyles.friendsText, { fontSize: 9, fontStyle: 'italic' }]} numberOfLines={1}>
+                              {item.scoringReason}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                keyExtractor={(item) => item.id.toString()}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[homeStyles.carouselContent, { paddingHorizontal: 8 }]}
+              />
+            )}
+          </View>
+        )}
+        
+        {/* Daily Limit Reached */}
+        {!canGenerateNewSession && (
+          <View style={[
+            homeStyles.limitContainer,
+            {
+              backgroundColor: 'rgba(255, 193, 7, 0.1)',
+              borderRadius: 8,
+              padding: 16,
+              marginHorizontal: 16,
+              borderColor: 'rgba(255, 193, 7, 0.3)',
+              borderWidth: 1
+            }
+          ]}>
+            <Text style={[homeStyles.limitTitle, { color: colors.text, fontSize: 16, fontWeight: 'bold' }]}>
+              Daily Discovery Limit Reached
+            </Text>
+            <Text style={[homeStyles.limitText, { color: colors.subText, marginTop: 8 }]}>
+              You've used all 3 discovery sessions today. Sessions reset at midnight!
+            </Text>
+            
+            {currentSession && (
+              <Text style={[homeStyles.limitHint, { color: colors.subText, marginTop: 8, fontStyle: 'italic' }]}>
+                You can still explore your current session above.
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  }, [currentSession, sessionType, remainingSessions, canGenerateNewSession, sessionLoading, sessionError, homeStyles, colors, standardButtonStyles, handleGenerateDiscoverySession, handleMovieSelect]);
 
   const renderPopularMoviesSection = useCallback(() => {
     return (
@@ -2323,6 +2856,30 @@ function HomeScreen({
               <TouchableOpacity 
                 style={[
                   styles.tabButton, 
+                  activeTab === 'discovery' && { 
+                    borderBottomColor: homeStyles.genreScore.color, 
+                    borderBottomWidth: 2 
+                  }
+                ]}
+                onPress={() => setActiveTab('discovery')}
+              >
+                <Text 
+                  style={[
+                    buttonStyles.skipButtonText,
+                    { 
+                      color: activeTab === 'discovery' ? 
+                        homeStyles.genreScore.color : 
+                        homeStyles.movieYear.color
+                    }
+                  ]}
+                >
+                  Discovery {remainingSessions > 0 ? `(${remainingSessions})` : ''}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.tabButton, 
                   activeTab === 'new' && { 
                     borderBottomColor: homeStyles.genreScore.color, 
                     borderBottomWidth: 2 
@@ -2369,6 +2926,16 @@ function HomeScreen({
               </TouchableOpacity>
             </View>
             
+            {activeTab === 'discovery' && (
+              <ScrollView 
+                style={homeStyles.homeContainer}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {renderDiscoverySessionSection()}
+              </ScrollView>
+            )}
+            
             {activeTab === 'new' && (
               <ScrollView 
                 style={homeStyles.homeContainer}
@@ -2403,6 +2970,30 @@ function HomeScreen({
         {contentType === 'tv' && (
           <>
             <View style={[styles.tabContainer, { backgroundColor: '#1C2526' }]}>
+              <TouchableOpacity 
+                style={[
+                  styles.tabButton, 
+                  activeTab === 'discovery' && { 
+                    borderBottomColor: homeStyles.genreScore.color, 
+                    borderBottomWidth: 2 
+                  }
+                ]}
+                onPress={() => setActiveTab('discovery')}
+              >
+                <Text 
+                  style={[
+                    buttonStyles.skipButtonText,
+                    { 
+                      color: activeTab === 'discovery' ? 
+                        homeStyles.genreScore.color : 
+                        homeStyles.movieYear.color
+                    }
+                  ]}
+                >
+                  Discovery {remainingSessions > 0 ? `(${remainingSessions})` : ''}
+                </Text>
+              </TouchableOpacity>
+              
               <TouchableOpacity 
                 style={[
                   styles.tabButton, 
@@ -2451,6 +3042,16 @@ function HomeScreen({
                 </Text>
               </TouchableOpacity>
             </View>
+            
+            {activeTab === 'discovery' && (
+              <ScrollView 
+                style={homeStyles.homeContainer}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {renderDiscoverySessionSection()}
+              </ScrollView>
+            )}
             
             {activeTab === 'new' && (
               <ScrollView 
@@ -3016,6 +3617,16 @@ const styles = StyleSheet.create({
     zIndex: 1,
     minWidth: 24,
     alignItems: 'center',
+  },
+  
+  // **NOT INTERESTED BUTTON STYLES**
+  notInterestedButton: {
+    // Styles are defined inline for better positioning control
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
   },
 
   // **Enhanced Rating System Modal Styles**

@@ -24,7 +24,69 @@ import { getModalStyles } from '../../Styles/modalStyles';
 import { getLayoutStyles } from '../../Styles/layoutStyles';
 import { getHeaderStyles } from '../../Styles/headerStyles';
 import { getListStyles } from '../../Styles/listStyles';
-import { getButtonStyles } from '../../Styles/buttonStyles';
+
+const getStandardizedButtonStyles = (colors) => ({
+  // Base button style - consistent across all variants
+  baseButton: {
+    flex: 1,
+    marginHorizontal: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44, // Accessibility: minimum touch target
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  
+  // Primary button variant - for main actions (Rate)
+  primaryButton: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  
+  // Secondary button variant - for important actions (Watchlist)
+  secondaryButton: {
+    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  
+  // Tertiary button variant - for less prominent actions (Not Interested)
+  tertiaryButton: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  
+  // Base text style - consistent typography with responsive sizing
+  baseText: {
+    fontSize: Math.min(16, width * 0.035), // Responsive font size based on screen width
+    fontWeight: '600',
+    textAlign: 'center',
+    fontFamily: colors.font?.body || 'System',
+    lineHeight: Math.min(20, width * 0.045), // Responsive line height
+  },
+  
+  // Text color variants
+  primaryText: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  
+  secondaryText: {
+    color: colors.accent,
+  },
+  
+  tertiaryText: {
+    color: '#FFFFFF',
+  },
+});
 import { getMovieCardStyles } from '../../Styles/movieCardStyles';
 import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
@@ -37,27 +99,37 @@ import { TMDB_API_KEY, API_TIMEOUT, STREAMING_SERVICES, DECADES } from '../../Co
 const { width } = Dimensions.get('window');
 const POSTER_SIZE = (width - 60) / 3; // 3 columns with spacing
 
-const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdateRating, onAddToSeen, onRemoveFromWatchlist, genres }) => {
+const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdateRating, onAddToSeen, onRemoveFromWatchlist, genres, route }) => {
   const { mediaType } = useMediaType();
-  const { handleLogout } = useAuth();
+  const { handleLogout, userInfo } = useAuth();
   const modalStyles = getModalStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const layoutStyles = getLayoutStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const headerStyles = getHeaderStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const listStyles = getListStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
-  const buttonStyles = getButtonStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const movieCardStyles = getMovieCardStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
+  const standardButtonStyles = getStandardizedButtonStyles(colors);
+  
+  // Detect if viewing friend's profile
+  const friendProfile = route?.params?.user;
+  const isOwnProfile = !friendProfile;
+  const profileUser = friendProfile || userInfo;
   
   // Tab state
   const [selectedTab, setSelectedTab] = useState('toprated');
   
   // Profile UI state
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [movieDetailModalVisible, setMovieDetailModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieCredits, setMovieCredits] = useState(null);
   const [movieProviders, setMovieProviders] = useState(null);
+  
+  // Friend profile ranking state
+  const [selectedRankingType, setSelectedRankingType] = useState('user'); // 'user', 'average', 'imdb'
+  const [showUnwatchedMovies, setShowUnwatchedMovies] = useState(false);
   
   // TopRated functionality state
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -124,11 +196,44 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
 
   // Get top rated content for display
   const topRatedContent = useMemo(() => {
-    return currentSeen
-      .filter(item => item.userRating >= 7)
-      .sort((a, b) => b.userRating - a.userRating)
-      .slice(0, 9);
-  }, [currentSeen]);
+    let sortedContent = [...currentSeen];
+    
+    // For friend profiles, apply different ranking logic
+    if (!isOwnProfile) {
+      switch (selectedRankingType) {
+        case 'user':
+          sortedContent = sortedContent.sort((a, b) => (b.userRating || 0) - (a.userRating || 0));
+          break;
+        case 'average':
+          // Mock average friend rating (in real app, this would be calculated from actual friends)
+          sortedContent = sortedContent.sort((a, b) => {
+            const avgA = ((a.userRating || 0) + (a.vote_average || 0)) / 2;
+            const avgB = ((b.userRating || 0) + (b.vote_average || 0)) / 2;
+            return avgB - avgA;
+          });
+          break;
+        case 'imdb':
+          sortedContent = sortedContent.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+          break;
+      }
+      
+      // Include unwatched movies if enabled
+      if (showUnwatchedMovies) {
+        const unwatchedWithRatings = currentUnseen.map(movie => ({
+          ...movie,
+          isUnwatched: true
+        }));
+        sortedContent = [...sortedContent, ...unwatchedWithRatings];
+      }
+    } else {
+      // Own profile - original logic
+      sortedContent = sortedContent
+        .filter(item => item.userRating >= 7)
+        .sort((a, b) => b.userRating - a.userRating);
+    }
+    
+    return sortedContent.slice(0, 9);
+  }, [currentSeen, currentUnseen, isOwnProfile, selectedRankingType, showUnwatchedMovies]);
 
   // Get recently watched content (latest rated first)
   const recentlyWatchedContent = useMemo(() => {
@@ -176,21 +281,50 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     const safeContent = filterAdultContent(mediaFilteredMovies, mediaType);
     let filtered = [...safeContent];
     
-    if (selectedGenreId !== null) {
-      filtered = filtered.filter(movie => 
-        movie.genre_ids && movie.genre_ids.includes(selectedGenreId)
-      );
+    // Apply friend profile ranking logic for toprated tab
+    if (!isOwnProfile && selectedTab === 'toprated') {
+      switch (selectedRankingType) {
+        case 'user':
+          filtered = filtered.sort((a, b) => (b.userRating || 0) - (a.userRating || 0));
+          break;
+        case 'average':
+          filtered = filtered.sort((a, b) => {
+            const avgA = ((a.userRating || 0) + (a.vote_average || 0)) / 2;
+            const avgB = ((b.userRating || 0) + (b.vote_average || 0)) / 2;
+            return avgB - avgA;
+          });
+          break;
+        case 'imdb':
+          filtered = filtered.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+          break;
+      }
+      
+      // Include unwatched movies if enabled
+      if (showUnwatchedMovies) {
+        const unwatchedWithRatings = currentUnseen.map(movie => ({
+          ...movie,
+          isUnwatched: true
+        }));
+        filtered = [...filtered, ...unwatchedWithRatings];
+      }
+    } else {
+      // Original logic for own profile
+      if (selectedGenreId !== null) {
+        filtered = filtered.filter(movie => 
+          movie.genre_ids && movie.genre_ids.includes(selectedGenreId)
+        );
+      }
+      
+      filtered = filtered.sort((a, b) => {
+        if (a.userRating !== undefined && b.userRating !== undefined) {
+          return b.userRating - a.userRating;
+        }
+        return b.eloRating - a.eloRating;
+      });
     }
     
-    filtered = filtered.sort((a, b) => {
-      if (a.userRating !== undefined && b.userRating !== undefined) {
-        return b.userRating - a.userRating;
-      }
-      return b.eloRating - a.eloRating;
-    });
-    
     return filtered.slice(0, 10);
-  }, [mediaFilteredMovies, selectedGenreId, mediaType]);
+  }, [mediaFilteredMovies, selectedGenreId, mediaType, isOwnProfile, selectedTab, selectedRankingType, showUnwatchedMovies, currentUnseen]);
 
   // Watchlist data processing
   const moviesByMediaType = useMemo(() => {
@@ -388,11 +522,29 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   }, [newRating, selectedMovie, onUpdateRating, closeEditModal, slideAnim]);
 
   const displayRating = useCallback((movie) => {
+    // For friend profiles, show rating based on selected ranking type
+    if (!isOwnProfile) {
+      switch (selectedRankingType) {
+        case 'user':
+          return movie.userRating ? movie.userRating.toFixed(1) : 'N/A';
+        case 'average':
+          if (movie.userRating && movie.vote_average) {
+            return (((movie.userRating + movie.vote_average) / 2)).toFixed(1);
+          }
+          return movie.userRating ? movie.userRating.toFixed(1) : (movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A');
+        case 'imdb':
+          return movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A';
+        default:
+          return movie.userRating ? movie.userRating.toFixed(1) : 'N/A';
+      }
+    }
+    
+    // Own profile - original logic
     if (movie.userRating !== undefined) {
       return movie.userRating.toFixed(1);
     }
     return (movie.eloRating / 100).toFixed(1);
-  }, []);
+  }, [isOwnProfile, selectedRankingType]);
 
   const handleGenreSelect = useCallback((genreId) => {
     setSelectedGenreId(prev => prev === genreId ? null : genreId);
@@ -634,6 +786,121 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         
         return (
           <View style={{ flex: 1, backgroundColor: colors.background }}>
+            {/* Friend Profile Ranking Options */}
+            {!isOwnProfile && (
+              <View style={[
+                profileStyles.filterSection, 
+                { 
+                  borderBottomColor: colors.border.color,
+                  backgroundColor: colors.background
+                }
+              ]}>
+                <View style={profileStyles.filterHeader}>
+                  <Text style={[profileStyles.filterTitle, { color: colors.text }]}>
+                    Rank by
+                  </Text>
+                </View>
+                
+                <View style={profileStyles.rankingOptionsContainer}>
+                  <TouchableOpacity
+                    style={[
+                      profileStyles.rankingOption,
+                      selectedRankingType === 'user' && profileStyles.selectedRankingOption,
+                      { 
+                        backgroundColor: selectedRankingType === 'user' ? colors.primary : colors.card,
+                        borderColor: colors.border.color
+                      }
+                    ]}
+                    onPress={() => setSelectedRankingType('user')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      profileStyles.rankingOptionText,
+                      { 
+                        color: selectedRankingType === 'user' ? colors.accent : colors.text
+                      }
+                    ]}>
+                      {profileUser?.displayName || profileUser?.username || 'Friend'}'s Rating
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      profileStyles.rankingOption,
+                      selectedRankingType === 'average' && profileStyles.selectedRankingOption,
+                      { 
+                        backgroundColor: selectedRankingType === 'average' ? colors.primary : colors.card,
+                        borderColor: colors.border.color
+                      }
+                    ]}
+                    onPress={() => setSelectedRankingType('average')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      profileStyles.rankingOptionText,
+                      { 
+                        color: selectedRankingType === 'average' ? colors.accent : colors.text
+                      }
+                    ]}>
+                      Average Friend Rating
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      profileStyles.rankingOption,
+                      selectedRankingType === 'imdb' && profileStyles.selectedRankingOption,
+                      { 
+                        backgroundColor: selectedRankingType === 'imdb' ? colors.primary : colors.card,
+                        borderColor: colors.border.color
+                      }
+                    ]}
+                    onPress={() => setSelectedRankingType('imdb')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      profileStyles.rankingOptionText,
+                      { 
+                        color: selectedRankingType === 'imdb' ? colors.accent : colors.text
+                      }
+                    ]}>
+                      IMDb Rating
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {/* Unwatched Movies Toggle */}
+                <View style={profileStyles.unwatchedToggleContainer}>
+                  <TouchableOpacity
+                    style={[
+                      profileStyles.unwatchedToggle,
+                      showUnwatchedMovies && profileStyles.selectedUnwatchedToggle,
+                      { 
+                        backgroundColor: showUnwatchedMovies ? colors.primary : colors.card,
+                        borderColor: colors.border.color
+                      }
+                    ]}
+                    onPress={() => setShowUnwatchedMovies(!showUnwatchedMovies)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={showUnwatchedMovies ? "checkmark-circle" : "circle-outline"} 
+                      size={20} 
+                      color={showUnwatchedMovies ? colors.accent : colors.subText} 
+                    />
+                    <Text style={[
+                      profileStyles.unwatchedToggleText,
+                      { 
+                        color: showUnwatchedMovies ? colors.accent : colors.text
+                      }
+                    ]}>
+                      Include Unwatched Movies
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            
             {/* Genre Filter Section */}
             <View style={[
               profileStyles.filterSection, 
@@ -643,9 +910,20 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
               }
             ]}>
               <View style={profileStyles.filterHeader}>
-                <Text style={[profileStyles.filterTitle, { color: colors.text }]}>
-                  Filter by Genre
-                </Text>
+                <TouchableOpacity 
+                  style={profileStyles.filterTitleContainer}
+                  onPress={() => setShowGenreDropdown(!showGenreDropdown)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[profileStyles.filterTitle, { color: colors.text }]}>
+                    Filter by Genre
+                  </Text>
+                  <Ionicons 
+                    name={showGenreDropdown ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={colors.subText} 
+                  />
+                </TouchableOpacity>
                 {selectedGenreId !== null && (
                   <TouchableOpacity 
                     style={profileStyles.clearButton}
@@ -658,14 +936,17 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                 )}
               </View>
               
-              <FlatList
-                data={uniqueGenreIds}
-                renderItem={renderGenreButton}
-                keyExtractor={(item) => item.toString()}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={profileStyles.genreList}
-              />
+              {/* Genre Buttons - Show/Hide with Arrow */}
+              {showGenreDropdown && (
+                <FlatList
+                  data={uniqueGenreIds}
+                  renderItem={renderGenreButton}
+                  keyExtractor={(item) => item.toString()}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={profileStyles.genreList}
+                />
+              )}
               
               {selectedGenreId !== null && (
                 <View style={profileStyles.activeFilterIndicator}>
@@ -680,9 +961,14 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
             {filteredAndRankedMovies.length > 0 ? (
               <ScrollView style={[listStyles.rankingsList, { backgroundColor: colors.background }]}>
                 {filteredAndRankedMovies.map((movie, index) => (
-                  <View
+                  <TouchableOpacity
                     key={movie.id}
                     style={[listStyles.rankingItem, { backgroundColor: colors.card }]}
+                    onPress={() => handleMovieSelect(movie)}
+                    activeOpacity={0.7}
+                    accessibilityLabel={`View details for ${getTitle(movie)}, rated ${displayRating(movie)} out of 10`}
+                    accessibilityRole="button"
+                    accessibilityHint="Double tap to view movie details and edit rating"
                   >
                     <LinearGradient
                       colors={colors.primaryGradient}
@@ -725,22 +1011,20 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                             : 'Unknown'}
                         </Text>
                       </View>
-                      <View style={{ alignItems: 'center', marginHorizontal: 8 }}>
-                        <Text style={[profileStyles.finalScore, { color: colors.accent, fontSize: 16, fontWeight: 'bold' }]}>
+                      <View style={{ alignItems: 'center', justifyContent: 'center', marginHorizontal: 8, flex: 0.3, paddingRight: 4 }}>
+                        <Text style={[profileStyles.finalScore, { color: colors.accent, fontSize: 32, fontWeight: 'bold', textAlign: 'center' }]}>
                           {displayRating(movie)}
                         </Text>
+                        {movie.isUnwatched && (
+                          <View style={[profileStyles.unwatchedIndicator, { backgroundColor: colors.primary }]}>
+                            <Text style={[profileStyles.unwatchedIndicatorText, { color: colors.accent }]}>
+                              Unwatched
+                            </Text>
+                          </View>
+                        )}
                       </View>
-                      <TouchableOpacity
-                        style={[profileStyles.editButton, { backgroundColor: colors.primary, alignSelf: 'center' }]}
-                        onPress={() => openEditModal(movie)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[profileStyles.editButtonText, { color: colors.accent }]}>
-                          Edit
-                        </Text>
-                      </TouchableOpacity>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
             ) : (
@@ -823,14 +1107,70 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                 )}
               </View>
               
-              <FlatList
-                data={uniqueWatchlistGenreIds}
-                renderItem={renderWatchlistGenreButton}
-                keyExtractor={(item) => item.toString()}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={profileStyles.genreList}
-              />
+              {/* Genre Dropdown */}
+              <View style={profileStyles.dropdownContainer}>
+                <TouchableOpacity
+                  style={[
+                    profileStyles.dropdownButton,
+                    { 
+                      backgroundColor: colors.card,
+                      borderColor: colors.border.color
+                    }
+                  ]}
+                  onPress={() => setShowGenreDropdown(!showGenreDropdown)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[profileStyles.dropdownButtonText, { color: colors.text }]}>
+                    {selectedGenreId !== null ? genres[selectedGenreId] || 'Unknown' : 'Select Genre'}
+                  </Text>
+                  <Ionicons 
+                    name={showGenreDropdown ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={colors.subText} 
+                  />
+                </TouchableOpacity>
+                
+                {showGenreDropdown && (
+                  <View style={[
+                    profileStyles.dropdownList,
+                    { 
+                      backgroundColor: colors.card,
+                      borderColor: colors.border.color
+                    }
+                  ]}>
+                    <ScrollView style={profileStyles.dropdownScrollView} nestedScrollEnabled>
+                      {uniqueWatchlistGenreIds.map((genreId) => (
+                        <TouchableOpacity
+                          key={genreId}
+                          style={[
+                            profileStyles.dropdownItem,
+                            selectedGenreId === genreId && {
+                              backgroundColor: colors.primary + '20'
+                            }
+                          ]}
+                          onPress={() => {
+                            handleGenreSelect(genreId);
+                            setShowGenreDropdown(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[
+                            profileStyles.dropdownItemText,
+                            { 
+                              color: selectedGenreId === genreId ? colors.accent : colors.text
+                            }
+                          ]}>
+                            {genres[genreId] || 'Unknown'}
+                          </Text>
+                          {selectedGenreId === genreId && (
+                            <Ionicons name="checkmark" size={18} color={colors.accent} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
               
               {selectedGenreId !== null && (
                 <View style={profileStyles.activeFilterIndicator}>
@@ -872,9 +1212,14 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
             {/* Movie/TV Show List */}
             <ScrollView style={[listStyles.rankingsList, { backgroundColor: colors.background }]}>
               {filteredMovies.map((item, index) => (
-                <View
+                <TouchableOpacity
                   key={item.id}
                   style={[listStyles.rankingItem, { backgroundColor: colors.card }]}
+                  onPress={() => handleMoviePress(item)}
+                  activeOpacity={0.7}
+                  accessibilityLabel={`View details for ${item.title || item.name}, rated ${item.score?.toFixed(1) || item.vote_average?.toFixed(1) || 'N/A'}`}
+                  accessibilityRole="button"
+                  accessibilityHint="Double tap to view movie details and mark as watched"
                 >
                   <LinearGradient
                     colors={colors.primaryGradient}
@@ -917,22 +1262,13 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                           : 'Unknown'}
                       </Text>
                     </View>
-                    <View style={{ alignItems: 'center', marginHorizontal: 8 }}>
-                      <Text style={[profileStyles.finalScore, { color: colors.accent, fontSize: 16, fontWeight: 'bold' }]}>
+                    <View style={{ alignItems: 'center', justifyContent: 'center', marginHorizontal: 8, flex: 0.3, paddingRight: 4 }}>
+                      <Text style={[profileStyles.finalScore, { color: colors.accent, fontSize: 32, fontWeight: 'bold', textAlign: 'center' }]}>
                         {item.score ? item.score.toFixed(1) : item.vote_average ? item.vote_average.toFixed(1) : 'N/A'}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      style={[profileStyles.editButton, { backgroundColor: colors.primary, alignSelf: 'center' }]}
-                      onPress={() => openRatingModal(item)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[profileStyles.editButtonText, { color: colors.accent }]}>
-                        Watch
-                      </Text>
-                    </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
@@ -1085,7 +1421,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         </TouchableOpacity>
       </Modal>
 
-      {/* Movie Detail Modal */}
+      {/* Movie Detail Modal - Exact Copy from Home Screen */}
       <Modal
         visible={movieDetailModalVisible}
         transparent
@@ -1099,46 +1435,110 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
             end={{ x: 1, y: 1 }}
             style={modalStyles.detailModalContent}
           >
-            <View style={modalStyles.detailModalHeader}>
-              <TouchableOpacity 
-                style={modalStyles.detailModalCloseButton}
-                onPress={closeDetailModal}
-              >
-                <Ionicons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            {selectedMovie && (
-              <ScrollView style={modalStyles.detailModalScrollView} showsVerticalScrollIndicator={false}>
-                <View style={modalStyles.detailModalPosterSection}>
-                  <Image
-                    source={{ uri: getPosterUrl(selectedMovie.poster_path || selectedMovie.poster) }}
-                    style={modalStyles.detailModalPoster}
-                    resizeMode="cover"
-                  />
-                  <View style={modalStyles.detailModalInfo}>
-                    <Text style={modalStyles.detailModalTitle}>{selectedMovie.title || selectedMovie.name}</Text>
-                    <Text style={modalStyles.detailModalYear}>
-                      {selectedMovie.release_date ? new Date(selectedMovie.release_date).getFullYear() : 
-                       selectedMovie.first_air_date ? new Date(selectedMovie.first_air_date).getFullYear() : 'N/A'}
-                    </Text>
-                    {selectedMovie.userRating && (
-                      <View style={modalStyles.detailModalRatingContainer}>
-                        <Text style={modalStyles.detailModalRatingLabel}>Your Rating:</Text>
-                        <Text style={modalStyles.detailModalRating}>{selectedMovie.userRating.toFixed(1)}/10</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                {selectedMovie.overview && (
-                  <View style={modalStyles.detailModalOverviewSection}>
-                    <Text style={modalStyles.detailModalSectionTitle}>Overview</Text>
-                    <Text style={modalStyles.detailModalOverview}>{selectedMovie.overview}</Text>
-                  </View>
-                )}
-              </ScrollView>
+            <Image 
+              source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path || selectedMovie?.poster}` }} 
+              style={modalStyles.detailPoster}
+              resizeMode="cover" 
+            />
+            
+            <Text style={modalStyles.detailTitle}>
+              {selectedMovie?.title || selectedMovie?.name}
+            </Text>
+            
+            <Text style={modalStyles.detailYear}>
+              ({selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 
+                selectedMovie?.first_air_date ? new Date(selectedMovie.first_air_date).getFullYear() : 'Unknown'})
+            </Text>
+            
+            <Text style={modalStyles.detailScore}>
+              {selectedMovie?.userRating ? `Your Rating: ${selectedMovie.userRating.toFixed(1)}` : 
+               selectedMovie?.vote_average ? `TMDb: ${selectedMovie.vote_average.toFixed(1)}` : 'N/A'}
+            </Text>
+            
+            {/* Cast Information */}
+            {movieCredits && movieCredits.length > 0 && (
+              <Text style={modalStyles.detailActors}>
+                Actors: {movieCredits.map(actor => actor.name).join(', ')}
+              </Text>
             )}
+            
+            <Text 
+              style={modalStyles.detailPlot}
+              numberOfLines={4}
+              ellipsizeMode="tail"
+            >
+              {selectedMovie?.overview || 'No description available.'}
+            </Text>
+            
+            <View style={modalStyles.streamingRow}>
+              {movieProviders && movieProviders.length > 0 ? (
+                deduplicateProviders(movieProviders)
+                  .filter(provider => provider.logo_path)
+                  .slice(0, 5)
+                  .map((provider) => (
+                    <Image 
+                      key={provider.provider_id}
+                      source={{ uri: getProviderLogoUrl(provider.logo_path) }}
+                      style={modalStyles.platformIcon}
+                      resizeMode="contain"
+                    />
+                  ))
+              ) : null}
+            </View>
+            
+            <View style={modalStyles.buttonRow}>
+              {/* Edit Rating Button - Only for TopRated Tab */}
+              {selectedTab === 'toprated' && (
+                <TouchableOpacity 
+                  style={[
+                    standardButtonStyles.baseButton,
+                    standardButtonStyles.tertiaryButton
+                  ]}
+                  onPress={() => {
+                    closeDetailModal();
+                    openEditModal(selectedMovie);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text 
+                    style={[
+                      standardButtonStyles.baseText,
+                      standardButtonStyles.tertiaryText
+                    ]}
+                  >
+                    Edit Rating
+                  </Text>
+                </TouchableOpacity>
+              )}
+              
+              {/* Mark as Watched Button - Only for Watchlist Tab */}
+              {selectedTab === 'watchlist' && (
+                <TouchableOpacity 
+                  style={[
+                    standardButtonStyles.baseButton,
+                    standardButtonStyles.tertiaryButton
+                  ]}
+                  onPress={() => {
+                    closeDetailModal();
+                    openRatingModal(selectedMovie);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text 
+                    style={[
+                      standardButtonStyles.baseText,
+                      standardButtonStyles.tertiaryText
+                    ]}
+                  >
+                    Mark as Watched
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <TouchableOpacity onPress={closeDetailModal} style={modalStyles.cancelButtonContainer}>
+              <Text style={modalStyles.cancelText}>cancel</Text>
+            </TouchableOpacity>
           </LinearGradient>
         </View>
       </Modal>
@@ -1230,7 +1630,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                 <View style={filterStyles.optionsGrid}>
                   {genres && Object.keys(genres).length > 0 ? (
                     Object.entries(genres)
-                      .filter(([id, name]) => name && name.trim() !== '')
+                      .filter(([, name]) => name && name.trim() !== '')
                       .map(([id, name]) => (
                         <TouchableOpacity
                           key={id}
@@ -1839,6 +2239,72 @@ const profileStyles = StyleSheet.create({
   clearFiltersButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  
+  // Filter title with arrow
+  filterTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  
+  // Friend profile ranking options
+  rankingOptionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginVertical: 8,
+  },
+  rankingOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    minWidth: 120,
+  },
+  selectedRankingOption: {
+    borderWidth: 2,
+  },
+  rankingOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  
+  // Unwatched movies toggle
+  unwatchedToggleContainer: {
+    marginTop: 8,
+  },
+  unwatchedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  selectedUnwatchedToggle: {
+    borderWidth: 2,
+  },
+  unwatchedToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  
+  // Unwatched movie indicator
+  unwatchedIndicator: {
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  unwatchedIndicatorText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 
