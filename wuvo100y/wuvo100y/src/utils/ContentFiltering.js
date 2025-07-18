@@ -154,3 +154,26 @@ export const filterFullSearchResults = (items) => {
     return true;
   });
 };
+
+// Main content filtering function - alias for compatibility
+export const filterAdultContent = (contentArray, mediaType = 'movie') => {
+  if (!contentArray || !Array.isArray(contentArray)) {
+    console.warn('filterAdultContent: Invalid input provided');
+    return [];
+  }
+  return filterFullSearchResults(contentArray);
+};
+
+// Search results filtering function - alias for compatibility  
+export const filterSearchResults = (searchResults, mediaType = 'movie') => {
+  return filterSearchSuggestions(searchResults);
+};
+
+// Content safety check function
+export const isContentSafe = (item, mediaType = 'movie') => {
+  if (!item) return false;
+  
+  // Check if item would pass filtering
+  const passesFilter = filterAdultContent([item], mediaType).length > 0;
+  return passesFilter;
+};

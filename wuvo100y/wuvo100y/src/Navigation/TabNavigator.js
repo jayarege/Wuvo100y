@@ -3,8 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 import HomeScreen from '../Screens/Home';
-import TopRatedScreen from '../Screens/TopRated';
-import WatchlistScreen from '../Screens/Watchlist';
+// Removed TopRated and Watchlist screens
 import AddMovieScreen from '../Screens/AddMovie';
 import ProfileScreen from '../Screens/Profile';
 
@@ -87,12 +86,7 @@ function TabNavigator({
               case 'Home':
                 iconName = focused ? 'home' : 'home-outline';
                 break;
-              case 'TopRated':
-                iconName = focused ? 'trophy' : 'trophy-outline';
-                break;
-              case 'Watchlist':
-                iconName = focused ? 'eye-off' : 'eye-off-outline';
-                break;
+              // Removed TopRated and Watchlist icon cases
               case 'AddMovie':
                 iconName = focused ? 'add-circle' : 'add-circle-outline';
                 break;
@@ -136,30 +130,7 @@ function TabNavigator({
           )}
         </Tab.Screen>
 
-        <Tab.Screen name="TopRated" options={{ title: 'Top 10' }}>
-          {props => (
-            <TopRatedScreen
-              {...props}
-              movies={seen}
-              genres={genres || {}}
-              onUpdateRating={onUpdateRating}
-              isDarkMode={isDarkMode}
-            />
-          )}
-        </Tab.Screen>
-
-        <Tab.Screen name="Watchlist" options={{ title: 'Watchlist' }}>
-          {props => (
-            <WatchlistScreen
-              {...props}
-              movies={unseen}
-              genres={genres}
-              isDarkMode={isDarkMode}
-              onAddToSeen={handleAddToSeen}
-              onRemoveFromWatchlist={handleRemoveFromWatchlist}
-            />
-          )}
-        </Tab.Screen>
+        {/* Removed TopRated and Watchlist tabs - functionality moved to Profile screen */}
 
         <Tab.Screen name="AddMovie" options={{ title: 'Add Movie' }}>
           {props => (
@@ -184,6 +155,10 @@ function TabNavigator({
               seen={seen}
               unseen={unseen}
               isDarkMode={isDarkMode}
+              genres={genres}
+              onUpdateRating={onUpdateRating}
+              onAddToSeen={handleAddToSeen}
+              onRemoveFromWatchlist={handleRemoveFromWatchlist}
             />
           )}
         </Tab.Screen>

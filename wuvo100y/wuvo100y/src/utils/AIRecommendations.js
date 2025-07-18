@@ -13,7 +13,8 @@ class UserPreferenceService {
       VIEWING_HISTORY: 'user_viewing_history', 
       PREFERENCE_WEIGHTS: 'user_preference_weights',
       DEMOGRAPHIC_PROFILE: 'user_demographic_profile',
-      INTERACTION_PATTERNS: 'user_interaction_patterns'
+      INTERACTION_PATTERNS: 'user_interaction_patterns',
+      AI_REFRESH_LIMIT: 'ai_refresh_limit'
     };
   }
 
@@ -183,6 +184,119 @@ class UserPreferenceService {
       .map(([reason, count]) => ({ reason, count }));
   }
 
+  async setDemographicProfile(profile) {
+    try {
+      const demographicProfile = {
+        gender: profile.gender || 'prefer_not_to_say',
+        ageRange: profile.ageRange || 'prefer_not_to_say',
+        timestamp: new Date().toISOString(),
+        isDevMode: profile.isDevMode || false
+      };
+
+      await AsyncStorage.setItem(
+        this.preferenceKeys.DEMOGRAPHIC_PROFILE,
+        JSON.stringify(demographicProfile)
+      );
+
+      console.log('📊 Demographic profile saved:', demographicProfile);
+      return true;
+    } catch (error) {
+      console.error('Error saving demographic profile:', error);
+      return false;
+    }
+  }
+
+  async getDemographicProfile() {
+    try {
+      const stored = await AsyncStorage.getItem(this.preferenceKeys.DEMOGRAPHIC_PROFILE);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+      
+      // Dev mode default for testing
+      const devProfile = {
+        gender: 'female',
+        ageRange: '18-25',
+        timestamp: new Date().toISOString(),
+        isDevMode: true
+      };
+      
+      await this.setDemographicProfile(devProfile);
+      return devProfile;
+    } catch (error) {
+      console.error('Error getting demographic profile:', error);
+      return {
+        gender: 'prefer_not_to_say',
+        ageRange: 'prefer_not_to_say',
+        timestamp: new Date().toISOString(),
+        isDevMode: false
+      };
+    }
+  }
+
+  async canRefreshAIRecommendations() {
+    try {
+      const limitData = await AsyncStorage.getItem(this.preferenceKeys.AI_REFRESH_LIMIT);
+      if (!limitData) {
+        return { canRefresh: true, remainingRefreshes: 3, resetTime: null };
+      }
+
+      const { count, lastReset } = JSON.parse(limitData);
+      const now = new Date();
+      const resetTime = new Date(lastReset);
+      const hoursSinceReset = (now - resetTime) / (1000 * 60 * 60);
+
+      // Reset counter if 24 hours have passed
+      if (hoursSinceReset >= 24) {
+        await AsyncStorage.setItem(this.preferenceKeys.AI_REFRESH_LIMIT, JSON.stringify({
+          count: 0,
+          lastReset: now.toISOString()
+        }));
+        return { canRefresh: true, remainingRefreshes: 3, resetTime: null };
+      }
+
+      const remainingRefreshes = Math.max(0, 3 - count);
+      const nextResetTime = new Date(resetTime.getTime() + (24 * 60 * 60 * 1000));
+      
+      return { 
+        canRefresh: remainingRefreshes > 0, 
+        remainingRefreshes, 
+        resetTime: nextResetTime 
+      };
+    } catch (error) {
+      console.error('Error checking AI refresh limit:', error);
+      return { canRefresh: true, remainingRefreshes: 3, resetTime: null };
+    }
+  }
+
+  async incrementAIRefreshCount() {
+    try {
+      const limitData = await AsyncStorage.getItem(this.preferenceKeys.AI_REFRESH_LIMIT);
+      const now = new Date();
+      
+      if (!limitData) {
+        await AsyncStorage.setItem(this.preferenceKeys.AI_REFRESH_LIMIT, JSON.stringify({
+          count: 1,
+          lastReset: now.toISOString()
+        }));
+        return { success: true, remainingRefreshes: 2 };
+      }
+
+      const { count, lastReset } = JSON.parse(limitData);
+      const newCount = count + 1;
+      
+      await AsyncStorage.setItem(this.preferenceKeys.AI_REFRESH_LIMIT, JSON.stringify({
+        count: newCount,
+        lastReset: lastReset
+      }));
+
+      return { success: true, remainingRefreshes: Math.max(0, 3 - newCount) };
+    } catch (error) {
+      console.error('Error incrementing AI refresh count:', error);
+      return { success: false, remainingRefreshes: 0 };
+    }
+  }
+
   async clearAllPreferences() {
     try {
       const keys = Object.values(this.preferenceKeys);
@@ -197,6 +311,7 @@ class UserPreferenceService {
       });
       
       allKeys.push(this.preferenceKeys.DEMOGRAPHIC_PROFILE);
+      allKeys.push(this.preferenceKeys.AI_REFRESH_LIMIT);
       
       await AsyncStorage.multiRemove(allKeys);
       this.cache.clear();
@@ -268,9 +383,10 @@ class EnhancedRecommendationEngine {
   async buildUserProfile(userMovies, mediaType) {
     try {
       const userPreferenceService = new UserPreferenceService();
-      const [preferenceWeights, notInterestedList] = await Promise.all([
+      const [preferenceWeights, notInterestedList, demographicProfile] = await Promise.all([
         userPreferenceService.getPreferenceWeights(mediaType),
-        userPreferenceService.getNotInterestedList(mediaType)
+        userPreferenceService.getNotInterestedList(mediaType),
+        userPreferenceService.getDemographicProfile()
       ]);
 
       const ratingAnalysis = this.analyzeRatingPatterns(userMovies);
@@ -285,6 +401,7 @@ class EnhancedRecommendationEngine {
         ratingPatterns: ratingAnalysis,
         diversityScore: this.calculateDiversityScore(userMovies),
         notInterestedItems: notInterestedList,
+        demographics: demographicProfile,
         lastUpdated: new Date().toISOString()
       };
 
@@ -758,7 +875,7 @@ class AIRecommendationService {
   // ENHANCED AI PROMPTING
   // =============================================================================
 
-  async getGroqRecommendations(userMovies, mediaType = 'movie') {
+  async getGroqRecommendations(userMovies, mediaType = 'movie', forceRefresh = false) {
     try {
       const { apiRateLimitManager } = await import('./APIRateLimit');
       
@@ -767,6 +884,20 @@ class AIRecommendationService {
         const remaining = await apiRateLimitManager.getAllRemainingCalls();
         console.log(`🚫 Rate limit exceeded for ${mediaType}. Remaining: Movies(${remaining.movie}), TV(${remaining.tv}), Total(${remaining.total})`);
         throw new Error(`Daily API limit reached for ${mediaType}. Please try again tomorrow.`);
+      }
+
+      // Check AI refresh limit if this is a forced refresh
+      if (forceRefresh) {
+        const userPreferenceService = new UserPreferenceService();
+        const refreshStatus = await userPreferenceService.canRefreshAIRecommendations();
+        
+        if (!refreshStatus.canRefresh) {
+          const resetTime = refreshStatus.resetTime;
+          const hoursUntilReset = Math.ceil((resetTime - new Date()) / (1000 * 60 * 60));
+          throw new Error(`AI refresh limit reached. You can refresh again in ${hoursUntilReset} hours. (${refreshStatus.remainingRefreshes}/3 remaining)`);
+        }
+        
+        console.log(`🔄 AI Refresh requested. Remaining: ${refreshStatus.remainingRefreshes}/3`);
       }
 
       // Rate limiting
@@ -838,6 +969,13 @@ class AIRecommendationService {
       await apiRateLimitManager.incrementCallCount(mediaType);
       console.log(`✅ Groq API call successful for ${mediaType}. Call count incremented.`);
       
+      // Increment AI refresh counter if this was a forced refresh
+      if (forceRefresh) {
+        const userPreferenceService = new UserPreferenceService();
+        const refreshResult = await userPreferenceService.incrementAIRefreshCount();
+        console.log(`🔄 AI Refresh counter updated. Remaining: ${refreshResult.remainingRefreshes}/3`);
+      }
+      
       // Cache results for 2 hours (longer due to enhanced processing)
       setTimeout(() => this.cache.delete(cacheKey), 2 * 60 * 60 * 1000);
       this.cache.set(cacheKey, recommendations);
@@ -871,6 +1009,10 @@ class AIRecommendationService {
       .map(([genre]) => genre)
       .join(', ');
 
+    // Build demographic context
+    const demographics = userProfile.demographics || {};
+    const demographicContext = this.buildDemographicContext(demographics, mediaType);
+
     // Negative feedback context
     let negativeContext = '';
     if (negativeFeedback.length > 0) {
@@ -882,6 +1024,9 @@ class AIRecommendationService {
     }
 
     const prompt = `RECOMMENDATION REQUEST for ${userProfile.tastePersona}
+
+DEMOGRAPHIC CONTEXT:
+${demographicContext}
 
 LOVED (Rated 8-10):
 ${lovedMovies.slice(0, 8).map(m => `• ${m.title} (User: ${m.userRating}/10, TMDB: ${m.vote_average?.toFixed(1) || '?'})`).join('\n')}
@@ -899,9 +1044,42 @@ ${avoidGenres ? `• Avoid: ${avoidGenres}` : ''}
 • TMDB alignment: ${userProfile.scoreAlignment.alignedPercentage > 0.6 ? 'Mainstream taste' : 'Unique taste'}
 ${negativeContext}
 
-Recommend 20 ${contentType} this user would rate 8+ based on their specific taste profile. Focus on hidden gems and perfect matches rather than obvious popular choices.`;
+Recommend 20 ${contentType} this user would rate 8+ based on their specific taste profile and demographic preferences. Focus on content that resonates with their demographic while respecting their individual taste preferences.`;
 
     return prompt;
+  }
+
+  buildDemographicContext(demographics, mediaType) {
+    const { gender, ageRange } = demographics;
+    
+    if (gender === 'prefer_not_to_say' && ageRange === 'prefer_not_to_say') {
+      return '• No demographic preferences specified';
+    }
+
+    const contentType = mediaType === 'movie' ? 'movies' : 'TV shows';
+    let context = [];
+
+    // Gender-based preferences
+    if (gender === 'female') {
+      context.push(`• Female viewer: Consider ${contentType} with strong female characters, romance elements, character-driven stories, and female-directed content`);
+    } else if (gender === 'male') {
+      context.push(`• Male viewer: Consider ${contentType} with action sequences, male leads, adventure themes, and male-oriented storytelling`);
+    } else if (gender === 'non_binary') {
+      context.push(`• Non-binary viewer: Consider ${contentType} with diverse representation, inclusive themes, and non-traditional storytelling`);
+    }
+
+    // Age-based preferences
+    if (ageRange === '18-25') {
+      context.push(`• Young adult (18-25): Consider contemporary ${contentType}, coming-of-age stories, social media themes, current pop culture references, and modern storytelling techniques`);
+    } else if (ageRange === '26-35') {
+      context.push(`• Young professional (26-35): Consider career-focused ${contentType}, relationship dynamics, urban settings, and sophisticated narratives`);
+    } else if (ageRange === '36-45') {
+      context.push(`• Mid-career adult (36-45): Consider family-oriented ${contentType}, mature themes, professional settings, and established franchises`);
+    } else if (ageRange === '46+') {
+      context.push(`• Mature adult (46+): Consider classic ${contentType}, sophisticated plots, established actors, and timeless themes`);
+    }
+
+    return context.join('\n');
   }
 
   async getNegativeFeedback(mediaType) {
@@ -1286,5 +1464,25 @@ export const recordNotInterested = aiRecommendationService.recordNotInterested.b
 export const recordUserRating = aiRecommendationService.recordUserRating.bind(aiRecommendationService);
 export const getUserPreferenceInsights = aiRecommendationService.getUserPreferenceInsights.bind(aiRecommendationService);
 export const clearUserPreferences = aiRecommendationService.clearUserPreferences.bind(aiRecommendationService);
+
+// New demographic and refresh limit functions
+export const setDemographicProfile = async (profile) => {
+  const userPreferenceService = new UserPreferenceService();
+  return await userPreferenceService.setDemographicProfile(profile);
+};
+
+export const getDemographicProfile = async () => {
+  const userPreferenceService = new UserPreferenceService();
+  return await userPreferenceService.getDemographicProfile();
+};
+
+export const canRefreshAIRecommendations = async () => {
+  const userPreferenceService = new UserPreferenceService();
+  return await userPreferenceService.canRefreshAIRecommendations();
+};
+
+export const refreshAIRecommendations = async (userMovies, mediaType = 'movie') => {
+  return await aiRecommendationService.getGroqRecommendations(userMovies, mediaType, true);
+};
 
 export default aiRecommendationService;

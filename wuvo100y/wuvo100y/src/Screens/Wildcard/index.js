@@ -44,7 +44,7 @@ import {
   STREAMING_CACHE_KEY, 
   API_TIMEOUT 
 } from '../../Constants';
-import { filterAdultContent, filterSearchResults } from '../../utils/ContentFilter';
+import { filterAdultContent, filterSearchResults } from '../../utils/ContentFiltering';
 
 const API_KEY = TMDB_API_KEY;
 import stateStyles from '../../Styles/StateStyles';

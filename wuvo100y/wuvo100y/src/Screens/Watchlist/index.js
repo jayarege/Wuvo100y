@@ -30,7 +30,7 @@ import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RatingModal } from '../../Components/RatingModal';
-import { filterAdultContent } from '../../utils/ContentFilter';
+import { filterAdultContent } from '../../utils/ContentFiltering';
  
 
 // Import constants
@@ -479,12 +479,22 @@ const moviesByMediaType = useMemo(() => {
       key={item.id}
       style={[listStyles.rankingItem, { backgroundColor: colors.card }]}
     >
+      <LinearGradient
+        colors={colors.primaryGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={listStyles.rankingContainer}
+      >
+        <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 12 }]}>
+          {index + 1}
+        </Text>
+      </LinearGradient>
       <Image
         source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
         style={listStyles.resultPoster}
         resizeMode="cover"
       />
-    <View style={[listStyles.movieDetails, { backgroundColor: colors.card }]}>
+      <View style={[listStyles.movieDetails, { backgroundColor: colors.card }]}>
         <Text
           style={[listStyles.resultTitle, { color: colors.text }]}
           numberOfLines={1}
@@ -511,21 +521,11 @@ const moviesByMediaType = useMemo(() => {
           onPress={() => openRatingModal(item)}
           activeOpacity={0.7}
         >
-          <Text style={[styles.editButtonText, { color: colors.accent }]}>
+          <Text style={[styles.editButtonText, { color: colors.accent }]}
             Watched
           </Text>
         </TouchableOpacity>
       </View>
-      <LinearGradient
-        colors={colors.primaryGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={listStyles.rankingContainer}
-      >
-        <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 30 }]}>
-          {index + 1}
-        </Text>
-      </LinearGradient>
     </View>
   ))}
 </ScrollView>

@@ -19,8 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { EnhancedRatingButton } from '../../Components/EnhancedRatingSystem';
-import { calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
+import { EnhancedRatingButton, SentimentRatingModal, calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
 import { adjustRatingWildcard } from '../../utils/ELOCalculations';
 import { 
   isObfuscatedAdultContent, 
@@ -536,88 +535,20 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
         
       </View>
 
-      {/* **EMOTION SELECTION MODAL - EXACT COPY FROM HOME SCREEN** */}
-      <Modal visible={emotionModalVisible} transparent animationType="fade">
-        <View style={[styles.modalOverlay, { zIndex: 9999 }]}>
-          <LinearGradient
-            colors={colors.primaryGradient || ['#667eea', '#764ba2']}
-            style={[styles.sentimentModalContent]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              How did you feel about this {mediaType === 'movie' ? 'movie' : 'show'}?
-            </Text>
-            
-            <View style={styles.emotionButtonsContainer}>
-              <View style={styles.emotionButtonWrapper}>
-                <LinearGradient
-                  colors={colors.primaryGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.emotionGradientBorder}
-                />
-                <TouchableOpacity 
-                  style={[styles.emotionButton]}
-                  onPress={() => handleEmotionSelected('LOVED')}
-                >
-                  <Text style={styles.emotionButtonText}>LOVED</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.emotionButtonWrapper}>
-                <LinearGradient
-                  colors={colors.primaryGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.emotionGradientBorder}
-                />
-                <TouchableOpacity 
-                  style={[styles.emotionButton]}
-                  onPress={() => handleEmotionSelected('LIKED')}
-                >
-                  <Text style={styles.emotionButtonText}>LIKED</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.emotionButtonWrapper}>
-                <LinearGradient
-                  colors={colors.primaryGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.emotionGradientBorder}
-                />
-                <TouchableOpacity 
-                  style={[styles.emotionButton]}
-                  onPress={() => handleEmotionSelected('AVERAGE')}
-                >
-                  <Text style={styles.emotionButtonText}>AVERAGE</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.emotionButtonWrapper}>
-                <LinearGradient
-                  colors={colors.primaryGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.emotionGradientBorder}
-                />
-                <TouchableOpacity 
-                  style={[styles.emotionButton]}
-                  onPress={() => handleEmotionSelected('DISLIKED')}
-                >
-                  <Text style={styles.emotionButtonText}>DISLIKED</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            
-            <TouchableOpacity 
-              style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
-              onPress={() => setEmotionModalVisible(false)}
-            >
-              <Text style={[styles.cancelButtonText, { color: colors.subText }]}>Cancel</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </Modal>
+      {/* **EMOTION SELECTION MODAL - Using Reusable Component** */}
+      <SentimentRatingModal
+        visible={emotionModalVisible}
+        movie={selectedMovieForRating}
+        onClose={() => setEmotionModalVisible(false)}
+        onRatingSelect={(movieWithRating, categoryKey, rating) => {
+          console.log('🎭 Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
+          setSelectedCategory(categoryKey);
+          // Wire to existing handleEmotionSelected logic
+          handleEmotionSelected(categoryKey);
+        }}
+        colors={colors}
+        userMovies={seen}
+      />
 
       {/* **WILDCARD COMPARISON MODAL - EXACT COPY FROM HOME SCREEN** */}
       <Modal visible={comparisonModalVisible} transparent animationType="slide">
@@ -713,10 +644,41 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
                     if (currentComparison < 2) {
                       setCurrentComparison(currentComparison + 1);
                     } else {
-                      // Give a neutral rating based on the selected emotion category
-                      const neutralRating = currentMovieRating || 5.0; // Use current rating or default neutral
-                      console.log('🤷 Too tough to decide - assigning neutral rating:', neutralRating);
+                      // Calculate average rating between current movie and opponent for "too tough to decide"
+                      const currentComparisonMovie = comparisonMovies[currentComparison];
+                      const currentRating = currentMovieRating || 5.0;
+                      const opponentRating = currentComparisonMovie?.userRating || 5.0;
+                      const averageRating = (currentRating + opponentRating) / 2;
+                      
+                      // Assign very close ratings (like Wildcard screen)
+                      const neutralRating = Math.min(10, Math.max(1, averageRating + 0.05));
+                      const opponentNewRating = Math.min(10, Math.max(1, averageRating - 0.05));
+                      
+                      console.log('🤷 Too tough to decide - current:', currentRating, 'opponent:', opponentRating, 'average:', averageRating);
                       console.log('🎯 SETTING finalCalculatedRating BEFORE completion screen (neutral):', neutralRating);
+                      
+                      // Update opponent's rating too (similar to Wildcard logic)
+                      if (currentComparisonMovie) {
+                        currentComparisonMovie.userRating = opponentNewRating;
+                        // Save updated opponent rating to storage
+                        const updateOpponentRating = async () => {
+                          try {
+                            const storedMovies = await AsyncStorage.getItem(STORAGE_KEY_MOVIES);
+                            if (storedMovies) {
+                              const movies = JSON.parse(storedMovies);
+                              const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
+                              if (movieIndex !== -1) {
+                                movies[movieIndex].userRating = opponentNewRating;
+                                await AsyncStorage.setItem(STORAGE_KEY_MOVIES, JSON.stringify(movies));
+                              }
+                            }
+                          } catch (error) {
+                            console.error('Error updating opponent rating:', error);
+                          }
+                        };
+                        updateOpponentRating();
+                      }
+                      
                       setFinalCalculatedRating(neutralRating);
                       setIsComparisonComplete(true);
                       setTimeout(() => {
@@ -748,6 +710,14 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
                 {/* Movie Year */}
                 <Text style={styles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
                   ({selectedMovieForRating?.release_date ? new Date(selectedMovieForRating.release_date).getFullYear() : selectedMovieForRating?.first_air_date ? new Date(selectedMovieForRating.first_air_date).getFullYear() : 'N/A'})
+                </Text>
+                
+                {/* Emotion Text */}
+                <Text style={[styles.finalRatingEmotion, { color: colors.text }]}>
+                  {selectedEmotion === 'LOVED' ? 'Love' : 
+                   selectedEmotion === 'LIKED' ? 'Like' : 
+                   selectedEmotion === 'AVERAGE' ? 'Okay' : 
+                   selectedEmotion === 'DISLIKED' ? 'Dislike' : selectedEmotion}
                 </Text>
                 
                 {/* Final Score */}
@@ -785,41 +755,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sentimentModalContent: {
-    width: '90%',
-    maxWidth: 400,
-    padding: 24,
-    borderRadius: 16,
-  },
-  emotionButtonsContainer: {
-    marginVertical: 20,
-  },
-  emotionButton: {
-    padding: 16,
-    borderRadius: 11,
-    alignItems: 'center',
-    flex: 1,
-  },
-  emotionButtonWrapper: {
-    position: 'relative',
-    borderRadius: 12,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-  },
-  emotionGradientBorder: {
-    position: 'absolute',
-    top: 1,
-    left: 1,
-    right: 1,
-    bottom: 1,
-    borderRadius: 11,
-  },
-  emotionButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  // Removed unused emotion modal styles - now using SentimentRatingModal component
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -934,6 +870,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 20,
+  },
+  finalRatingEmotion: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 15,
   },
   finalRatingScore: {
     fontSize: 28,

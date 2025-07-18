@@ -12,46 +12,47 @@ const getListStyles = (mediaType = 'movie', mode = 'light', theme) => {
     rankingItem: {
       flexDirection: 'row',
       marginHorizontal: 16,
-      marginVertical: 8,
-      borderRadius: 12,
+      marginVertical: 4,
+      borderRadius: 8,
       backgroundColor: colors.card,
       overflow: 'hidden',
       borderWidth: .5,
       borderColor: colors.primaryGradient[1],
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
+      shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-      // New: Ensure consistent height for alignment
-      minHeight: 150,
+      shadowRadius: 2,
+      elevation: 2,
+      // CODE_BIBLE #3: Clear 50% size reduction for mobile optimization
+      minHeight: 75,
     },
     resultPoster: {
-      width: 100,
-      height: 150,
-      // Remove any overlay positioning since ranking badge is moved
+      width: 50,
+      height: 75,
+      // CODE_BIBLE #3: 50% size reduction maintains 2:3 aspect ratio
     },
     movieDetails: {
       flex: 1,
-      padding: 12,
-      height: 150,
-      justifyContent: 'space-between',
+      padding: 6,
+      height: 75,
+      flexDirection: 'row',
+      alignItems: 'center',
       backgroundColor: colors.card,
       overflow: 'hidden',
-      // New: Add spacing from right ranking area
-      paddingRight: 8,
+      // CODE_BIBLE #3: Horizontal layout for content + action button
+      paddingRight: 4,
     },
     resultTitle: {
-      fontSize: 16,
+      fontSize: 12,
       fontWeight: 'bold',
-      marginBottom: 4,
+      marginBottom: 2,
       color: colors.text,
       fontFamily: colors.font.header,
-      minHeight: 20,
-      maxHeight: 38,
+      minHeight: 14,
+      maxHeight: 28,
       textAlignVertical: 'top',
-      // New: Ensure title doesn't overlap with ranking
-      paddingRight: 4,
+      // CODE_BIBLE #3: Compact title sizing for mobile
+      paddingRight: 2,
     },
     resultYear: {
       fontSize: 13,
@@ -77,31 +78,31 @@ const getListStyles = (mediaType = 'movie', mode = 'light', theme) => {
     
     // UPDATED: Right-side ranking container
     rankingContainer: {
-      width: 60, // Fixed width for consistency
-      height: 150,
+      width: 30, // CODE_BIBLE #3: 50% width reduction for mobile
+      height: 75,
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: colors.primary,
-      // Optional: Add subtle gradient or pattern
+      // Devil's Advocate: Smaller but still prominent
     },
     
     // UPDATED: Larger, more prominent ranking badge
     rankBadge: {
-      width: 50,
-      height: 50,
-      borderRadius: 25,
+      width: 25,
+      height: 25,
+      borderRadius: 12.5,
       backgroundColor: 'rgba(255, 255, 255, 0.15)', // Subtle overlay
       alignItems: 'center',
       justifyContent: 'center',
-      // Remove absolute positioning
-      borderWidth: 2,
+      // CODE_BIBLE #3: 50% badge size reduction
+      borderWidth: 1,
       borderColor: colors.accent,
     },
     
     // UPDATED: Much larger ranking number
     rankNumber: {
       fontWeight: 'bold',
-      fontSize: 24, // Increased from 16 for prominence
+      fontSize: 12, // CODE_BIBLE #3: 50% size reduction, still readable
       color: colors.accent,
       fontFamily: colors.font.header,
       textAlign: 'center',
@@ -114,29 +115,33 @@ const getListStyles = (mediaType = 'movie', mode = 'light', theme) => {
       justifyContent: 'center',
     },
     finalScore: {
-      fontSize: 18,
+      fontSize: 14,
       fontWeight: 'bold',
-      marginBottom: 4,
+      marginBottom: 2,
       color: colors.accent,
+      // CODE_BIBLE #3: Compact score display
     },
     genresText: {
-      fontSize: 11,
+      fontSize: 9,
       color: colors.subText,
       numberOfLines: 1,
       ellipsizeMode: 'tail',
-      marginBottom: 4,
+      marginBottom: 2,
+      // CODE_BIBLE #3: Smaller genre text for compact design
     },
     editButton: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 6,
+      paddingVertical: 3,
+      paddingHorizontal: 6,
+      borderRadius: 4,
       alignSelf: 'flex-start',
       backgroundColor: colors.primary,
+      // CODE_BIBLE #3: Compact button for mobile UX
     },
     editButtonText: {
-      fontSize: 13,
+      fontSize: 10,
       fontWeight: '600',
       color: colors.accent,
+      // CODE_BIBLE #3: Smaller button text for compact design
     },
   });
 };

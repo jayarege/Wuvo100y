@@ -372,6 +372,16 @@ return (
         key={movie.id}
         style={[listStyles.rankingItem, { backgroundColor: colors.card }]}
       >
+        <LinearGradient
+          colors={colors.primaryGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={listStyles.rankingContainer}
+        >
+          <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 12 }]}>
+            {index + 1}
+          </Text>
+        </LinearGradient>
         <Image
           source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
           style={listStyles.resultPoster}
@@ -409,16 +419,6 @@ return (
             </Text>
           </TouchableOpacity>
         </View>
-        <LinearGradient
-          colors={colors.primaryGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={listStyles.rankingContainer}
-        >
-          <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 30 }]}>
-            {index + 1}
-          </Text>
-        </LinearGradient>
       </View>
     ))}
   </ScrollView>
