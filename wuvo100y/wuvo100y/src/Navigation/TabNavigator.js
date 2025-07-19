@@ -6,8 +6,8 @@ import HomeScreen from '../Screens/Home';
 // Removed TopRated and Watchlist screens
 import AddMovieScreen from '../Screens/AddMovie';
 import ProfileScreen from '../Screens/Profile';
-// TEMPORARY: Firebase test screen for Phase 1 development
-import FirebaseTestScreen from '../Screens/FirebaseTestScreen';
+// REMOVED: Firebase test screen (Phase 1 complete)
+// import FirebaseTestScreen from '../Screens/FirebaseTestScreen';
 
 // Create context for media type
 const MediaTypeContext = createContext();
@@ -95,9 +95,7 @@ function TabNavigator({
               case 'Profile':
                 iconName = focused ? 'person' : 'person-outline';
                 break;
-              case 'Firebase':
-                iconName = focused ? 'flame' : 'flame-outline';
-                break;
+              // Removed Firebase test tab
               default:
                 iconName = 'ellipse';
             }
@@ -168,15 +166,7 @@ function TabNavigator({
           )}
         </Tab.Screen>
 
-        {/* TEMPORARY: Firebase test screen for Phase 1 development */}
-        <Tab.Screen name="Firebase" options={{ title: 'Firebase Test' }}>
-          {props => (
-            <FirebaseTestScreen
-              {...props}
-              isDarkMode={isDarkMode}
-            />
-          )}
-        </Tab.Screen>
+        {/* Firebase test tab removed - Phase 1 complete */}
       </Tab.Navigator>
     </MediaTypeContext.Provider>
   );

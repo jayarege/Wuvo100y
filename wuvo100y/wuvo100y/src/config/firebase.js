@@ -1,18 +1,9 @@
 // =============================================================================
-// FIREBASE CONFIGURATION - SOCIAL FEATURES BACKEND
+// FIREBASE V8 CONFIGURATION - EXPO SNACK COMPATIBLE
 // =============================================================================
-// CODE_BIBLE Commandment #3: "Write code that's clear and obvious"
-// CODE_BIBLE Commandment #9: "Handle errors explicitly"
+import firebase from 'firebase';
 
-import { initializeApp } from 'firebase/app';
-import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// =============================================================================
-// FIREBASE PROJECT CONFIGURATION
-// =============================================================================
-// ✅ Your actual Firebase configuration 
+// Your Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBoUnBWZWZ2fPclNR3LxZZV98GFVbtaVyE",
   authDomain: "wuvo100y-social.firebaseapp.com",
@@ -24,58 +15,23 @@ const firebaseConfig = {
   measurementId: "G-KF1VVYG0HV"
 };
 
-// =============================================================================
-// FIREBASE INITIALIZATION
-// =============================================================================
-
+// Initialize Firebase (v8 style)
 let app;
-let auth;
-let firestore;
-
-try {
-  // Initialize Firebase app
-  app = initializeApp(firebaseConfig);
-  console.log('✅ Firebase app initialized successfully');
-
-  // Initialize Auth with AsyncStorage persistence
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
-  });
-  console.log('✅ Firebase Auth initialized with persistence');
-
-  // Initialize Firestore
-  firestore = getFirestore(app);
-  console.log('✅ Firestore initialized successfully');
-
-  // Connect to Firestore emulator in development (optional)
-  if (__DEV__ && !firestore._settings?.host?.includes('localhost')) {
-    try {
-      connectFirestoreEmulator(firestore, 'localhost', 8080);
-      console.log('🔧 Connected to Firestore emulator');
-    } catch (error) {
-      console.log('📡 Using production Firestore (emulator not available)');
-    }
-  }
-
-} catch (error) {
-  console.error('❌ Firebase initialization failed:', error);
-  
-  // CODE_BIBLE Commandment #9: "Handle errors explicitly"
-  // Provide fallback or graceful degradation
-  throw new Error(`Firebase initialization failed: ${error.message}`);
+if (!firebase.apps.length) {
+  app = firebase.initializeApp(firebaseConfig);
+} else {
+  app = firebase.app();
 }
 
-// =============================================================================
-// FIREBASE SERVICES EXPORT
-// =============================================================================
+// Initialize services (v8 style)
+const auth = firebase.auth();
+const firestore = firebase.firestore();
 
+// Firebase v8 compatible exports
 export { auth, firestore };
 export default app;
 
-// =============================================================================
-// DEVELOPMENT HELPERS
-// =============================================================================
-
+// Utility functions
 export const isFirebaseConfigured = () => {
   return firebaseConfig.apiKey !== "your-api-key-here";
 };
@@ -83,14 +39,9 @@ export const isFirebaseConfigured = () => {
 export const getFirebaseConfig = () => {
   return {
     ...firebaseConfig,
-    // Don't expose sensitive keys in logs
     apiKey: firebaseConfig.apiKey.substring(0, 10) + '...'
   };
 };
-
-// =============================================================================
-// ERROR HANDLING UTILITIES
-// =============================================================================
 
 export const handleFirebaseError = (error) => {
   const errorMessages = {

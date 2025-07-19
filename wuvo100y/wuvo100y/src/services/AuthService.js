@@ -1,30 +1,6 @@
 // =============================================================================
-// FIREBASE AUTHENTICATION SERVICE
+// FIREBASE V8 AUTHENTICATION SERVICE - EXPO SNACK COMPATIBLE
 // =============================================================================
-// CODE_BIBLE Commandment #3: "Write code that's clear and obvious"
-// CODE_BIBLE Commandment #9: "Handle errors explicitly"
-// CODE_BIBLE Commandment #10: "Treat user data as sacred"
-
-import { 
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile,
-  GoogleAuthProvider,
-  signInWithCredential
-} from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
-  serverTimestamp,
-  collection,
-  query,
-  where,
-  getDocs
-} from 'firebase/firestore';
 import { auth, firestore, handleFirebaseError } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -33,21 +9,21 @@ class AuthService {
     this.currentUser = null;
     this.authStateListeners = [];
     
-    // Listen for auth state changes
-    onAuthStateChanged(auth, (user) => {
+    // Listen for auth state changes (v8 style)
+    auth.onAuthStateChanged((user) => {
       this.currentUser = user;
       this.notifyAuthStateListeners(user);
     });
   }
 
   // =============================================================================
-  // AUTHENTICATION METHODS
+  // AUTHENTICATION METHODS (FIREBASE V8)
   // =============================================================================
 
   async signInWithEmail(email, password) {
     try {
       console.log('🔐 Attempting email sign-in...');
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await auth.signInWithEmailAndPassword(email, password);
       const user = userCredential.user;
       
       // Get or create user profile
@@ -66,14 +42,11 @@ class AuthService {
     try {
       console.log('📝 Creating new account...');
       
-      // Check if username is available (we'll add this later)
-      // const isUsernameAvailable = await this.checkUsernameAvailability(username);
-      
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await auth.createUserWithEmailAndPassword(email, password);
       const user = userCredential.user;
       
-      // Update user profile
-      await updateProfile(user, {
+      // Update user profile (v8 style)
+      await user.updateProfile({
         displayName: displayName
       });
       
@@ -92,35 +65,10 @@ class AuthService {
     }
   }
 
-  async signInWithGoogle(googleCredential) {
-    try {
-      console.log('🔐 Attempting Google sign-in...');
-      
-      // Create credential from Google auth response
-      const credential = GoogleAuthProvider.credential(
-        googleCredential.idToken,
-        googleCredential.accessToken
-      );
-      
-      const userCredential = await signInWithCredential(auth, credential);
-      const user = userCredential.user;
-      
-      // Get or create user profile
-      const userProfile = await this.getOrCreateUserProfile(user);
-      
-      console.log('✅ Google sign-in successful:', user.uid);
-      return { user, profile: userProfile };
-      
-    } catch (error) {
-      console.error('❌ Google sign-in failed:', error);
-      throw new Error(handleFirebaseError(error));
-    }
-  }
-
   async signOut() {
     try {
       console.log('👋 Signing out...');
-      await signOut(auth);
+      await auth.signOut();
       
       // Clear local data if needed
       await this.clearLocalUserData();
@@ -133,14 +81,14 @@ class AuthService {
   }
 
   // =============================================================================
-  // USER PROFILE MANAGEMENT
+  // USER PROFILE MANAGEMENT (FIREBASE V8)
   // =============================================================================
 
   async getOrCreateUserProfile(user) {
     try {
-      const userDoc = await getDoc(doc(firestore, 'users', user.uid));
+      const userDoc = await firestore.collection('users').doc(user.uid).get();
       
-      if (userDoc.exists()) {
+      if (userDoc.exists) {
         console.log('📄 User profile found');
         return userDoc.data();
       } else {
@@ -167,8 +115,8 @@ class AuthService {
         followingCount: 0,
         totalRatings: 0,
         averageRating: 0,
-        joinDate: serverTimestamp(),
-        lastActive: serverTimestamp(),
+        joinDate: new Date(),
+        lastActive: new Date(),
         preferences: {
           darkMode: true,
           discoverySessions: true,
@@ -188,7 +136,7 @@ class AuthService {
         ...additionalData
       };
 
-      await setDoc(doc(firestore, 'users', user.uid), userProfile);
+      await firestore.collection('users').doc(user.uid).set(userProfile);
       console.log('✅ User profile created successfully');
       
       return userProfile;
@@ -204,9 +152,9 @@ class AuthService {
         throw new Error('No authenticated user');
       }
 
-      await updateDoc(doc(firestore, 'users', this.currentUser.uid), {
+      await firestore.collection('users').doc(this.currentUser.uid).update({
         ...updates,
-        lastActive: serverTimestamp()
+        lastActive: new Date()
       });
 
       console.log('✅ User profile updated successfully');
@@ -218,18 +166,17 @@ class AuthService {
   }
 
   // =============================================================================
-  // USERNAME MANAGEMENT (Phase 2)
+  // USERNAME MANAGEMENT
   // =============================================================================
 
   async checkUsernameAvailability(username) {
     try {
-      const usernameQuery = query(
-        collection(firestore, 'users'),
-        where('username', '==', username.toLowerCase())
-      );
+      const usernameQuery = await firestore
+        .collection('users')
+        .where('username', '==', username.toLowerCase())
+        .get();
       
-      const querySnapshot = await getDocs(usernameQuery);
-      return querySnapshot.empty;
+      return usernameQuery.empty;
     } catch (error) {
       console.error('❌ Error checking username availability:', error);
       return false;
@@ -315,7 +262,7 @@ class AuthService {
       
       const migrationData = {
         hasMigratedData: true,
-        migrationDate: serverTimestamp(),
+        migrationDate: new Date(),
         localDataFound: {
           movies: !!localMovies,
           watchlist: !!localWatchlist,
@@ -323,7 +270,6 @@ class AuthService {
         }
       };
 
-      // We'll implement the actual data migration in Phase 1.5
       await this.updateUserProfile(migrationData);
       
       console.log('✅ Data migration metadata saved');
