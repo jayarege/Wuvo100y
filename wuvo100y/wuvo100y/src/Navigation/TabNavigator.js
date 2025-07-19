@@ -7,7 +7,7 @@ import HomeScreen from '../Screens/Home';
 import AddMovieScreen from '../Screens/AddMovie';
 import ProfileScreen from '../Screens/Profile';
 // TEMPORARY: Firebase test screen for Phase 1 development
-import FirebaseTestScreen from '../screens/FirebaseTestScreen';
+import FirebaseTestScreen from '../Screens/FirebaseTestScreen';
 
 // Create context for media type
 const MediaTypeContext = createContext();
