@@ -6,9 +6,11 @@ import {
   TouchableOpacity, 
   TextInput, 
   SafeAreaView,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AuthService from '../services/AuthService';
 
 // Import these when ready to implement real Google Sign-In
 // import * as WebBrowser from 'expo-web-browser';
@@ -24,7 +26,9 @@ const WEB_CLIENT_ID = '258138577739-bomfeo1vd1egsktp6m2dqkj7qmb7oc16.apps.google
 function AuthScreen({ onAuthenticate, isDarkMode }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
 
   // ------------------------------------------------------------------------
   // REAL GOOGLE AUTHENTICATION CODE (Uncomment when ready to deploy)
@@ -95,44 +99,82 @@ function AuthScreen({ onAuthenticate, isDarkMode }) {
   // END OF REAL GOOGLE AUTHENTICATION CODE
   // ------------------------------------------------------------------------
 
-  // Simple email login for demo
-  const handleLogin = () => {
-    if (!email) {
-      Alert.alert("Error", "Please enter your email");
+  // Real Firebase authentication
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Error", "Please enter both email and password");
       return;
     }
     
     setIsLoading(true);
     
-    // Simulate authentication process
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      console.log('🔐 Starting Firebase sign-in...');
+      const { user, profile } = await AuthService.signInWithEmail(email, password);
+      
+      console.log('✅ Firebase sign-in successful:', user.uid);
+      
+      // Pass Firebase user data to app
       onAuthenticate({
-        id: 'user-' + Math.random().toString(36).substring(2, 9),
-        email: email,
-        name: email.split('@')[0]
+        id: user.uid,
+        email: user.email,
+        name: user.displayName || profile.displayName || email.split('@')[0],
+        provider: 'firebase',
+        profile: profile
       });
-    }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Firebase sign-in failed:', error);
+      Alert.alert("Sign In Failed", error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
-
-  // Simulation of Google Sign-In for Snack environment
-  const handleGoogleSignIn = () => {
+  
+  // Firebase sign up
+  const handleSignUp = async () => {
+    if (!email || !password || !displayName) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+    
+    if (password.length < 6) {
+      Alert.alert("Error", "Password must be at least 6 characters");
+      return;
+    }
+    
     setIsLoading(true);
     
-    // Simulate Google authentication process
-    setTimeout(() => {
+    try {
+      console.log('📝 Starting Firebase sign-up...');
+      const { user, profile } = await AuthService.signUpWithEmail(email, password, displayName);
+      
+      console.log('✅ Firebase sign-up successful:', user.uid);
+      
+      // Pass Firebase user data to app
+      onAuthenticate({
+        id: user.uid,
+        email: user.email,
+        name: user.displayName || profile.displayName,
+        provider: 'firebase',
+        profile: profile,
+        isNewUser: true
+      });
+      
+    } catch (error) {
+      console.error('❌ Firebase sign-up failed:', error);
+      Alert.alert("Sign Up Failed", error.message);
+    } finally {
       setIsLoading(false);
-      
-      // Simulate getting user data from Google
-      const googleUserData = {
-        id: 'google-' + Math.random().toString(36).substring(2, 9),
-        email: 'user@gmail.com',
-        name: 'Google User',
-        provider: 'google'
-      };
-      
-      onAuthenticate(googleUserData);
-    }, 1500);
+    }
+  };
+
+  // Google Sign-In (placeholder for future implementation)
+  const handleGoogleSignIn = () => {
+    Alert.alert(
+      "Google Sign-In", 
+      "Google authentication will be implemented in a future update. Please use email sign-in for now."
+    );
   };
 
   return (
@@ -148,6 +190,24 @@ function AuthScreen({ onAuthenticate, isDarkMode }) {
         </View>
         
         <View style={styles.formContainer}>
+          {isSignUp && (
+            <TextInput
+              style={[
+                styles.input,
+                { 
+                  backgroundColor: isDarkMode ? '#4B0082' : '#F5F5F5',
+                  color: isDarkMode ? '#F5F5F5' : '#333',
+                  borderColor: isDarkMode ? '#8A2BE2' : '#E0E0E0' 
+                }
+              ]}
+              placeholder="Display Name"
+              placeholderTextColor={isDarkMode ? '#A9A9A9' : '#999'}
+              value={displayName}
+              onChangeText={setDisplayName}
+              autoCapitalize="words"
+            />
+          )}
+          
           <TextInput
             style={[
               styles.input,
@@ -186,14 +246,36 @@ function AuthScreen({ onAuthenticate, isDarkMode }) {
               styles.loginButton,
               { backgroundColor: isDarkMode ? '#FFD700' : '#4B0082' }
             ]}
-            onPress={handleLogin}
+            onPress={isSignUp ? handleSignUp : handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color={isDarkMode ? '#1C2526' : '#FFFFFF'} />
+            ) : (
+              <Text style={[
+                styles.loginButtonText,
+                { color: isDarkMode ? '#1C2526' : '#FFFFFF' }
+              ]}>
+                {isSignUp ? 'Create Account' : 'Sign In'}
+              </Text>
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.switchModeButton}
+            onPress={() => {
+              setIsSignUp(!isSignUp);
+              setDisplayName('');
+              setEmail('');
+              setPassword('');
+            }}
             disabled={isLoading}
           >
             <Text style={[
-              styles.loginButtonText,
-              { color: isDarkMode ? '#1C2526' : '#FFFFFF' }
+              styles.switchModeText,
+              { color: isDarkMode ? '#FFD700' : '#4B0082' }
             ]}>
-              {isLoading ? 'Logging in...' : 'Log In with Email'}
+              {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
             </Text>
           </TouchableOpacity>
           
@@ -221,7 +303,7 @@ function AuthScreen({ onAuthenticate, isDarkMode }) {
           </Text>
           
           <Text style={[styles.footerSubtext, { color: isDarkMode ? '#A9A9A9' : '#999' }]}>
-            Real authentication enabled
+            Firebase authentication enabled
           </Text>
         </View>
       </View>
@@ -299,6 +381,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  switchModeButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  switchModeText: {
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });
 

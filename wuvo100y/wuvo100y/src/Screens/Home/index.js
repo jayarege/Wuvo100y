@@ -231,6 +231,7 @@ function HomeScreen({
   const [isLoadingMovieDetails, setIsLoadingMovieDetails] = useState(false);
   const [isProcessingMovieSelect, setIsProcessingMovieSelect] = useState(false);
   const [notInterestedMovies, setNotInterestedMovies] = useState([]);
+  const [aiErrorShown, setAiErrorShown] = useState(false); // Prevent multiple error alerts
   
   // **ENHANCED RATING SYSTEM STATE**
   // const [sentimentModalVisible, setSentimentModalVisible] = useState(false); // REMOVED: Now using in-place sentiment buttons
@@ -759,13 +760,16 @@ function HomeScreen({
     } catch (error) {
       console.error('Failed to fetch AI recommendations:', error);
       
-      // Show user-friendly error message
-      if (error.message.includes('AI refresh limit reached')) {
-        Alert.alert('Refresh Limit Reached', error.message);
-      } else if (error.message.includes('Daily API limit reached')) {
-        Alert.alert('Daily Limit Reached', error.message);
-      } else {
-        Alert.alert('Error', 'Failed to fetch AI recommendations. Please try again.');
+      // Show user-friendly error message (only once per session)
+      if (!aiErrorShown) {
+        setAiErrorShown(true);
+        if (error.message.includes('AI refresh limit reached')) {
+          Alert.alert('Refresh Limit Reached', error.message);
+        } else if (error.message.includes('Daily API limit reached')) {
+          Alert.alert('Daily Limit Reached', error.message);
+        } else {
+          Alert.alert('Error', 'AI recommendations temporarily unavailable. Using basic recommendations instead.');
+        }
       }
       
       setAiRecommendations([]);

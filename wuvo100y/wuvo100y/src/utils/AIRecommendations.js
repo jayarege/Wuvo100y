@@ -187,18 +187,9 @@ class AIRecommendations {
   async createRecommendationsWithFallbacks(userProfile, mediaType, sessionType, count, filters) {
     const sessionTemplate = this.sessionTypes[sessionType] || this.sessionTypes.evening;
     
-    // Layer 1: Try session-aware TMDB recommendations
-    try {
-      if (userProfile.ratingsCount >= 5) {
-        const sessionAwareRecs = await this.createSessionAwareRecommendations(userProfile, sessionTemplate, mediaType, count);
-        if (sessionAwareRecs && sessionAwareRecs.length > 0) {
-          console.log('✨ Created session-aware recommendations');
-          return sessionAwareRecs;
-        }
-      }
-    } catch (sessionError) {
-      console.log('⚠️ Session-aware recommendations failed, using multi-strategy fallback');
-    }
+    // Layer 1: Session-aware recommendations (temporarily disabled - function not implemented)
+    // TODO: Implement createSessionAwareRecommendations for enhanced session-based filtering
+    console.log('ℹ️ Skipping session-aware recommendations (not implemented), using multi-strategy approach');
 
     // Layer 2: Multi-strategy TMDB approach
     try {
