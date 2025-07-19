@@ -36,9 +36,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 // OLD: Complex AI system with poor results
 // import { getAIRecommendations, getEnhancedRecommendations, recordNotInterested, recordUserRating, canRefreshAIRecommendations, refreshAIRecommendations } from '../../utils/AIRecommendations';
 
-// NEW: Discovery Session System
+// NEW: Simple & Effective AI Recommendations
 // COMMANDMENT 9: Handle bundler cache issues with explicit file extension
-import { getImprovedRecommendations, recordNotInterested } from '../../utils/ImprovedAIRecommendations.js';
+import { getImprovedRecommendations, recordNotInterested } from '../../utils/AIRecommendations.js';
 import { useDiscoverySessions } from '../../hooks/useDiscoverySessions';
 import { getCurrentSessionType } from '../../config/discoveryConfig';
 import { RatingModal } from '../../Components/RatingModal';
@@ -712,6 +712,8 @@ function HomeScreen({
         return;
       }
       
+      // Enhanced AI recommendations now include discovery session logic internally
+      
       // If user has rated content but not enough highly rated (7+), still try to get recommendations
       if (topRatedContent.length < 3) {
         // Use all rated content in current media type as basis for recommendations
@@ -735,8 +737,8 @@ function HomeScreen({
       
       let recommendations;
       
-      // Use improved TMDB-native recommendation system
-      console.log(`🎯 Fetching improved recommendations for ${currentMediaType}`);
+      // Enhanced AI recommendations with discovery session logic
+      console.log(`🎯 Fetching enhanced AI recommendations with discovery session logic for ${currentMediaType}`);
       recommendations = await getImprovedRecommendations(
         recommendationBasis, 
         currentMediaType,
@@ -744,7 +746,11 @@ function HomeScreen({
           count: 20,
           seen: seen,
           unseen: unseen,
-          skipped: skippedMovies
+          skipped: skippedMovies,
+          useDiscoverySession: true, // Enable discovery session logic
+          sessionType: getCurrentSessionType(), // Pass current session type for time-based theming
+          userId: userId, // Pass user ID for session tracking
+          useGroq: true // Enable GROQ for enhanced themes
         }
       );
       
@@ -767,7 +773,7 @@ function HomeScreen({
       setIsLoadingRecommendations(false);
       setIsRefreshingAI(false);
     }
-  }, [seen, unseen, contentType, skippedMovies, notInterestedMovies, mediaType]);
+  }, [seen, unseen, contentType, skippedMovies, notInterestedMovies, mediaType, canGenerateNewSession, currentSession, generateSession]);
 
   const handleRefreshAI = useCallback(async () => {
     try {
@@ -2271,13 +2277,22 @@ function HomeScreen({
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 1, marginTop: -5 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons 
-              name="sparkles" 
+              name={(() => {
+                const firstRecommendation = aiRecommendations[0];
+                if (firstRecommendation?.discoverySession || currentSession) return "telescope";
+                return "sparkles";
+              })()} 
               size={16} 
               color={homeStyles.genreScore.color} 
               style={{ marginRight: 8, marginBottom: 2 }}
             />
             <Text style={homeStyles.sectionTitle}>
-              AI Recommendations For You
+              {(() => {
+                const firstRecommendation = aiRecommendations[0];
+                if (firstRecommendation?.discoverySession) return 'Enhanced AI Recommendations';
+                if (currentSession) return 'Discovery Session';
+                return 'AI Recommendations For You';
+              })()}
             </Text>
           </View>
           
@@ -2291,7 +2306,7 @@ function HomeScreen({
                 borderRadius: 8,
                 opacity: isRefreshingAI ? 0.6 : 1
               }}
-              onPress={handleRefreshRecommendations}
+              onPress={currentSession ? generateSession : handleRefreshRecommendations}
               disabled={dailyRefreshCount >= MAX_DAILY_REFRESHES || isRefreshingAI}
               activeOpacity={0.7}
             >
@@ -2317,7 +2332,18 @@ function HomeScreen({
           </View>
         </View>
         <Text style={homeStyles.swipeInstructions}>
-          Based on your top-rated {contentType === 'movies' ? 'movies' : 'TV shows'}
+          {(() => {
+            // Check for discovery session themes in AI recommendations
+            const firstRecommendation = aiRecommendations[0];
+            if (firstRecommendation?.sessionTheme) {
+              return `${firstRecommendation.sessionTheme.name} - ${firstRecommendation.sessionTheme.description}`;
+            }
+            // Fallback to current session or basic description
+            if (currentSession) {
+              return `${currentSession.theme?.title || currentSession.type || 'Personalized'} - ${currentSession.theme?.description || 'Curated for you'}`;
+            }
+            return `Based on your top-rated ${contentType === 'movies' ? 'movies' : 'TV shows'}`;
+          })()}
         </Text>
         
         {isLoadingRecommendations ? (
@@ -2372,8 +2398,17 @@ function HomeScreen({
                   <View
                     style={[homeStyles.enhancedCard, { width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }]}
                   >
-                    <View style={[styles.aiRecommendationBadge, { backgroundColor: '#4CAF50', top: 12 }]}>
-                      <Text style={styles.rankingNumber}>AI</Text>
+                    <View style={[styles.aiRecommendationBadge, { 
+                      backgroundColor: (item.discoverySession || currentSession) ? '#FF6B6B' : '#4CAF50', 
+                      top: 12 
+                    }]}>
+                      <Text style={styles.rankingNumber}>
+                        {(() => {
+                          if (item.discoveryScore) return Math.round(item.discoveryScore);
+                          if (item.discoverySession || currentSession) return 'DS';
+                          return 'AI';
+                        })()}
+                      </Text>
                     </View>
                     
                     {/* Enhanced Not Interested Button */}
@@ -2426,223 +2461,11 @@ function HomeScreen({
         )}
       </View>
     );
-  }, [aiRecommendations, isLoadingRecommendations, homeStyles, contentType, handleMovieSelect, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, mediaType, getRatingBorderColor]);
+  }, [aiRecommendations, isLoadingRecommendations, homeStyles, contentType, handleMovieSelect, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, mediaType, getRatingBorderColor, currentSession, generateSession, handleRefreshRecommendations, dailyRefreshCount, isRefreshingAI]);
 
   // =============================================================================
-  // DISCOVERY SESSION RENDER FUNCTION
+  // DISCOVERY SESSION LOGIC NOW INTEGRATED INTO AI RECOMMENDATIONS
   // =============================================================================
-  
-  const renderDiscoverySessionSection = useCallback(() => {
-    return (
-      <View style={homeStyles.section}>
-        <View style={homeStyles.sectionHeader}>
-          <Text style={homeStyles.sectionTitle}>
-            🎪 Discovery Session
-          </Text>
-          <Text style={homeStyles.sectionSubtitle}>
-            {sessionType.charAt(0).toUpperCase() + sessionType.slice(1)} • {remainingSessions}/3 left today
-          </Text>
-        </View>
-        
-        {/* Session Status */}
-        {sessionError && (
-          <View style={[homeStyles.errorContainer, { marginBottom: 16 }]}>
-            <Text style={homeStyles.errorText}>{sessionError}</Text>
-          </View>
-        )}
-        
-        {/* Generate Session Button */}
-        {canGenerateNewSession && !currentSession && (
-          <View style={{ marginBottom: 20 }}>
-            <TouchableOpacity
-              style={[
-                standardButtonStyles.baseButton,
-                standardButtonStyles.primaryButton,
-                { marginHorizontal: 16 }
-              ]}
-              onPress={() => handleGenerateDiscoverySession()}
-              disabled={sessionLoading}
-            >
-              <Text style={[standardButtonStyles.baseText, standardButtonStyles.primaryText]}>
-                {sessionLoading ? 'Generating...' : `Generate ${sessionType} Session`}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        {/* Current Session Display */}
-        {currentSession && (
-          <View style={{ marginBottom: 20 }}>
-            <View style={[
-              homeStyles.sessionCard,
-              {
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: 12,
-                padding: 16,
-                marginHorizontal: 16,
-                marginBottom: 16
-              }
-            ]}>
-              <Text style={[homeStyles.sessionTitle, { color: colors.text, fontSize: 18, fontWeight: 'bold' }]}>
-                {currentSession.theme?.name || 'Your Discovery Session'}
-              </Text>
-              <Text style={[homeStyles.sessionDescription, { color: colors.subText, marginTop: 8 }]}>
-                {currentSession.theme?.description || 'Curated movies for you'}
-              </Text>
-              {currentSession.theme?.explanation && (
-                <Text style={[homeStyles.sessionExplanation, { color: colors.subText, marginTop: 4, fontStyle: 'italic' }]}>
-                  {currentSession.theme.explanation}
-                </Text>
-              )}
-              
-              {/* Session Actions */}
-              <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
-                {canGenerateNewSession && (
-                  <TouchableOpacity
-                    style={[
-                      standardButtonStyles.baseButton,
-                      standardButtonStyles.secondaryButton,
-                      { flex: 1 }
-                    ]}
-                    onPress={() => handleGenerateDiscoverySession()}
-                    disabled={sessionLoading}
-                  >
-                    <Text style={[standardButtonStyles.baseText, standardButtonStyles.secondaryText]}>
-                      New Session
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                
-                <TouchableOpacity
-                  style={[
-                    standardButtonStyles.baseButton,
-                    standardButtonStyles.tertiaryButton,
-                    { flex: 1 }
-                  ]}
-                  onPress={() => setShowDiscoverySession(false)}
-                >
-                  <Text style={[standardButtonStyles.baseText, standardButtonStyles.tertiaryText]}>
-                    Hide Session
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            
-            {/* Session Movies */}
-            {currentSession.movies && currentSession.movies.length > 0 && (
-              <FlatList
-                data={currentSession.movies}
-                renderItem={({ item }) => (
-                  <View style={[
-                    homeStyles.movieCard,
-                    {
-                      width: MOVIE_CARD_WIDTH,
-                      marginHorizontal: 8,
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                      borderRadius: 8,
-                      overflow: 'hidden'
-                    }
-                  ]}>
-                    <TouchableOpacity
-                      style={{ flex: 1 }}
-                      onPress={() => handleMovieSelect(item)}
-                      activeOpacity={0.8}
-                    >
-                      <Image
-                        source={{
-                          uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
-                        }}
-                        style={{
-                          width: '100%',
-                          height: MOVIE_CARD_WIDTH * 1.5,
-                          borderTopLeftRadius: 8,
-                          borderTopRightRadius: 8
-                        }}
-                        resizeMode="cover"
-                      />
-                      
-                      {/* Discovery Score Badge */}
-                      {item.discoveryScore && (
-                        <View style={[
-                          styles.matchBadge,
-                          {
-                            backgroundColor: 'rgba(76, 175, 80, 0.9)',
-                            top: 8,
-                            left: 8
-                          }
-                        ]}>
-                          <Text style={[styles.matchText, { color: 'white', fontSize: 10 }]}>
-                            {item.discoveryScore.toFixed(1)}★
-                          </Text>
-                        </View>
-                      )}
-                      
-                      <View style={[homeStyles.movieInfoBox, { padding: 8 }]}>
-                        <Text
-                          style={[homeStyles.genreName, { fontSize: 14, lineHeight: 16 }]}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {item.title}
-                        </Text>
-                        
-                        <View style={homeStyles.ratingRow}>
-                          <View style={homeStyles.ratingLine}>
-                            <Ionicons name="star" size={10} color={colors.accent} />
-                            <Text style={[homeStyles.tmdbText, { fontSize: 10 }]}>
-                              {item.vote_average ? item.vote_average.toFixed(1) : '?'}
-                            </Text>
-                          </View>
-                          
-                          {item.scoringReason && (
-                            <Text style={[homeStyles.friendsText, { fontSize: 9, fontStyle: 'italic' }]} numberOfLines={1}>
-                              {item.scoringReason}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                keyExtractor={(item) => item.id.toString()}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[homeStyles.carouselContent, { paddingHorizontal: 8 }]}
-              />
-            )}
-          </View>
-        )}
-        
-        {/* Daily Limit Reached */}
-        {!canGenerateNewSession && (
-          <View style={[
-            homeStyles.limitContainer,
-            {
-              backgroundColor: 'rgba(255, 193, 7, 0.1)',
-              borderRadius: 8,
-              padding: 16,
-              marginHorizontal: 16,
-              borderColor: 'rgba(255, 193, 7, 0.3)',
-              borderWidth: 1
-            }
-          ]}>
-            <Text style={[homeStyles.limitTitle, { color: colors.text, fontSize: 16, fontWeight: 'bold' }]}>
-              Daily Discovery Limit Reached
-            </Text>
-            <Text style={[homeStyles.limitText, { color: colors.subText, marginTop: 8 }]}>
-              You've used all 3 discovery sessions today. Sessions reset at midnight!
-            </Text>
-            
-            {currentSession && (
-              <Text style={[homeStyles.limitHint, { color: colors.subText, marginTop: 8, fontStyle: 'italic' }]}>
-                You can still explore your current session above.
-              </Text>
-            )}
-          </View>
-        )}
-      </View>
-    );
-  }, [currentSession, sessionType, remainingSessions, canGenerateNewSession, sessionLoading, sessionError, homeStyles, colors, standardButtonStyles, handleGenerateDiscoverySession, handleMovieSelect]);
 
   const renderPopularMoviesSection = useCallback(() => {
     return (
@@ -2856,30 +2679,6 @@ function HomeScreen({
               <TouchableOpacity 
                 style={[
                   styles.tabButton, 
-                  activeTab === 'discovery' && { 
-                    borderBottomColor: homeStyles.genreScore.color, 
-                    borderBottomWidth: 2 
-                  }
-                ]}
-                onPress={() => setActiveTab('discovery')}
-              >
-                <Text 
-                  style={[
-                    buttonStyles.skipButtonText,
-                    { 
-                      color: activeTab === 'discovery' ? 
-                        homeStyles.genreScore.color : 
-                        homeStyles.movieYear.color
-                    }
-                  ]}
-                >
-                  Discovery {remainingSessions > 0 ? `(${remainingSessions})` : ''}
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[
-                  styles.tabButton, 
                   activeTab === 'new' && { 
                     borderBottomColor: homeStyles.genreScore.color, 
                     borderBottomWidth: 2 
@@ -2926,15 +2725,6 @@ function HomeScreen({
               </TouchableOpacity>
             </View>
             
-            {activeTab === 'discovery' && (
-              <ScrollView 
-                style={homeStyles.homeContainer}
-                contentContainerStyle={{ paddingBottom: 100 }}
-                showsVerticalScrollIndicator={false}
-              >
-                {renderDiscoverySessionSection()}
-              </ScrollView>
-            )}
             
             {activeTab === 'new' && (
               <ScrollView 
@@ -2970,30 +2760,6 @@ function HomeScreen({
         {contentType === 'tv' && (
           <>
             <View style={[styles.tabContainer, { backgroundColor: '#1C2526' }]}>
-              <TouchableOpacity 
-                style={[
-                  styles.tabButton, 
-                  activeTab === 'discovery' && { 
-                    borderBottomColor: homeStyles.genreScore.color, 
-                    borderBottomWidth: 2 
-                  }
-                ]}
-                onPress={() => setActiveTab('discovery')}
-              >
-                <Text 
-                  style={[
-                    buttonStyles.skipButtonText,
-                    { 
-                      color: activeTab === 'discovery' ? 
-                        homeStyles.genreScore.color : 
-                        homeStyles.movieYear.color
-                    }
-                  ]}
-                >
-                  Discovery {remainingSessions > 0 ? `(${remainingSessions})` : ''}
-                </Text>
-              </TouchableOpacity>
-              
               <TouchableOpacity 
                 style={[
                   styles.tabButton, 
@@ -3043,15 +2809,6 @@ function HomeScreen({
               </TouchableOpacity>
             </View>
             
-            {activeTab === 'discovery' && (
-              <ScrollView 
-                style={homeStyles.homeContainer}
-                contentContainerStyle={{ paddingBottom: 100 }}
-                showsVerticalScrollIndicator={false}
-              >
-                {renderDiscoverySessionSection()}
-              </ScrollView>
-            )}
             
             {activeTab === 'new' && (
               <ScrollView 

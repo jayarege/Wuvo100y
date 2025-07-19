@@ -521,7 +521,7 @@ const moviesByMediaType = useMemo(() => {
           onPress={() => openRatingModal(item)}
           activeOpacity={0.7}
         >
-          <Text style={[styles.editButtonText, { color: colors.accent }]}
+          <Text style={[styles.editButtonText, { color: colors.accent }]}>
             Watched
           </Text>
         </TouchableOpacity>
