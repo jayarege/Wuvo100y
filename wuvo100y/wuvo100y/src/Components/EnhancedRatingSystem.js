@@ -136,7 +136,7 @@ const getRatingRangeFromPercentile = (userMovies, percentile) => {
 };
 
 // **DYNAMIC PERCENTILE-BASED RATING CATEGORIES**
-const calculateDynamicRatingCategories = (userMovies) => {
+const calculateDynamicRatingCategories = (userMovies, mediaType = 'movie') => {
   if (!userMovies || userMovies.length === 0) {
     // Fallback to default percentiles if no user data
     return {
@@ -171,8 +171,12 @@ const calculateDynamicRatingCategories = (userMovies) => {
     };
   }
 
-  // Sort user ratings to calculate percentiles
-  const sortedRatings = userMovies
+  // Sort user ratings to calculate percentiles, filtered by media type
+  const filteredMovies = userMovies.filter(movie => 
+    (movie.mediaType || 'movie') === mediaType
+  );
+  
+  const sortedRatings = filteredMovies
     .map(m => m.userRating || (m.eloRating / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
     .filter(rating => rating && !isNaN(rating))
     .sort((a, b) => a - b);
@@ -232,13 +236,14 @@ const calculateDynamicRatingCategories = (userMovies) => {
  * Select movie from percentile range based on sentiment category
  * Adapted from UnifiedRatingEngine to use dynamic percentiles
  */
-const selectOpponentFromPercentile = (percentileRange, seenMovies, excludeMovieId = null) => {
+const selectOpponentFromPercentile = (percentileRange, seenMovies, excludeMovieId = null, mediaType = 'movie') => {
   if (!seenMovies || seenMovies.length === 0) return null;
   if (!percentileRange) return null;
   
-  // Get movies sorted by rating
+  // Get movies sorted by rating, filtered by media type
   const sortedMovies = seenMovies
     .filter(movie => movie.userRating && movie.id !== excludeMovieId)
+    .filter(movie => (movie.mediaType || 'movie') === mediaType)
     .sort((a, b) => b.userRating - a.userRating);
   
   if (sortedMovies.length === 0) return null;
@@ -260,11 +265,12 @@ const selectOpponentFromPercentile = (percentileRange, seenMovies, excludeMovieI
  * Select random opponent from seen movies
  * Used for rounds 2 and 3 of comparison flow
  */
-const selectRandomOpponent = (seenMovies, excludeMovieIds = []) => {
+const selectRandomOpponent = (seenMovies, excludeMovieIds = [], mediaType = 'movie') => {
   if (!seenMovies || seenMovies.length === 0) return null;
   
   const availableMovies = seenMovies.filter(movie => 
-    movie.userRating && !excludeMovieIds.includes(movie.id)
+    movie.userRating && !excludeMovieIds.includes(movie.id) &&
+    (movie.mediaType || 'movie') === mediaType
   );
   
   if (availableMovies.length === 0) return null;
@@ -451,12 +457,12 @@ const processUnifiedRatingFlow = async (config) => {
     console.log(`🎭 User sentiment: ${selectedCategory}`);
 
     // Get dynamic categories and percentile for selected sentiment
-    const categories = calculateDynamicRatingCategories(seenMovies);
+    const categories = calculateDynamicRatingCategories(seenMovies, mediaType);
     const selectedCategoryData = categories[selectedCategory];
     const percentileRange = selectedCategoryData.percentile;
 
     // Round 1: Unknown vs Known (sentiment-based opponent using dynamic percentiles)
-    const round1Opponent = selectOpponentFromPercentile(percentileRange, seenMovies, newMovie.id);
+    const round1Opponent = selectOpponentFromPercentile(percentileRange, seenMovies, newMovie.id, mediaType);
     if (!round1Opponent) {
       throw new Error('No suitable opponent found for sentiment-based comparison');
     }
@@ -484,7 +490,7 @@ const processUnifiedRatingFlow = async (config) => {
         opponent = round1Opponent;
       } else {
         // Rounds 2-3: Random opponents (original Wildcard logic)
-        opponent = selectRandomOpponent(seenMovies, [...usedOpponentIds, newMovie.id]);
+        opponent = selectRandomOpponent(seenMovies, [...usedOpponentIds, newMovie.id], mediaType);
         if (!opponent) {
           console.log(`⚠️ No more opponents available for round ${round}`);
           break;

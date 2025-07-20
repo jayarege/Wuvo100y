@@ -125,26 +125,30 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
     setSelectedEmotion(emotion);
     setEmotionModalVisible(false);
     
-    // Select first opponent from percentile
-    const firstOpponent = selectMovieFromPercentile(seen, emotion);
+    // Filter seen movies by current media type before opponent selection
+    const currentMediaMovies = seen.filter(item => (item.mediaType || 'movie') === mediaType);
+    console.log('🎭 FILTERED MOVIES COUNT:', currentMediaMovies.length);
+    
+    // Select first opponent from percentile (same media type only)
+    const firstOpponent = selectMovieFromPercentile(currentMediaMovies, emotion);
     if (!firstOpponent) {
       console.log('❌ NO FIRST OPPONENT FOUND');
       Alert.alert(
         '🎬 Need More Ratings', 
-        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
+        `You need at least 3 rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentMediaMovies.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
         [{ text: "OK", style: "default" }]
       );
       return;
     }
     
-    // Select second and third opponents randomly from all seen movies (for known vs known)
-    const remainingMovies = seen.filter(movie => movie.id !== firstOpponent.id);
+    // Select second and third opponents randomly from same media type movies (for known vs known)
+    const remainingMovies = currentMediaMovies.filter(movie => movie.id !== firstOpponent.id);
     
     if (remainingMovies.length < 2) {
       console.log('❌ NOT ENOUGH REMAINING MOVIES');
       Alert.alert(
         '🎬 Need More Ratings', 
-        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
+        `You need at least 3 rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentMediaMovies.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
         [{ text: "OK", style: "default" }]
       );
       return;
@@ -547,7 +551,7 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
           handleEmotionSelected(categoryKey);
         }}
         colors={colors}
-        userMovies={seen}
+        userMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
       />
 
       {/* **WILDCARD COMPARISON MODAL - EXACT COPY FROM HOME SCREEN** */}

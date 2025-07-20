@@ -11,16 +11,12 @@ import {
   Animated,
   PanResponder,
   Modal,
-  TextInput,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedHeader } from '../../Styles/headerStyles';
-import { ThemedButton } from '../../Styles/buttonStyles';
 
 // Import theme system and styles
 import { useMediaType } from '../../Navigation/TabNavigator';
@@ -44,7 +40,7 @@ import { getCurrentSessionType } from '../../config/discoveryConfig';
 import { RatingModal } from '../../Components/RatingModal';
 import { ActivityIndicator } from 'react-native';
 import { TMDB_API_KEY as API_KEY } from '../../Constants';
-import { filterAdultContent, filterSearchResults, isContentSafe } from '../../utils/ContentFiltering';
+import { filterAdultContent, isContentSafe } from '../../utils/ContentFiltering';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import storage keys to match the main data hook
@@ -54,8 +50,7 @@ import { STORAGE_KEYS } from '../../config/storageConfig';
 const getStorageKey = (mediaType) => mediaType === 'movie' ? STORAGE_KEYS.MOVIES.SEEN : STORAGE_KEYS.TV_SHOWS.SEEN;
 
 // **ENHANCED RATING SYSTEM IMPORT**
-import { getRatingCategory, calculateDynamicRatingCategories, SentimentRatingModal, calculatePairwiseRating, ComparisonResults } from '../../Components/EnhancedRatingSystem';
-import { adjustRatingWildcard } from '../../utils/ELOCalculations';
+import { calculateDynamicRatingCategories, SentimentRatingModal, calculatePairwiseRating, ComparisonResults } from '../../Components/EnhancedRatingSystem';
 import InitialRatingFlow from '../InitialRatingFlow';
 
 // Helper functions for calculating range from percentile (moved from component)
@@ -175,12 +170,9 @@ function HomeScreen({
   setSeen, 
   setUnseen, 
   genres, 
-  newReleases, 
   isDarkMode, 
-  toggleTheme, 
   onAddToSeen, 
   onAddToUnseen, 
-  onRemoveFromWatchlist, 
   onUpdateRating, // ✅ REQUIRED PROP FOR ENHANCED RATING
   skippedMovies, 
   addToSkippedMovies, 
@@ -760,9 +752,9 @@ function HomeScreen({
         }
       );
       
-      // Filter out movies user marked as "Not Interested" to prevent them from reappearing
+      // Filter out movies user marked as "Not Interested" and watchlist movies to prevent them from reappearing
       const filteredRecommendations = recommendations.filter(movie => 
-        !notInterestedMovies.includes(movie.id)
+        !notInterestedMovies.includes(movie.id) && !unseen.some(u => u.id === movie.id)
       );
       setAiRecommendations(filteredRecommendations);
       
@@ -909,6 +901,7 @@ function HomeScreen({
         .filter(item => !skippedMovies.includes(item.id))
         .filter(item => !notInterestedMovies.includes(item.id))
         .filter(item => !seen.some(m => m.id === item.id)) // Remove already rated movies
+        .filter(item => !unseen.some(m => m.id === item.id)) // Remove watchlist movies
         .map(item => ({
           id: item.id,
           title: contentType === 'movies' ? item.title : item.name,
@@ -987,13 +980,14 @@ function HomeScreen({
       useNativeDriver: true,
     }).start();
     
-    // Calculate dynamic categories based on user's rating history
-    const RATING_CATEGORIES = calculateDynamicRatingCategories(seen);
+    // Calculate dynamic categories based on user's rating history filtered by media type
+    const currentMediaMovies = seen.filter(item => (item.mediaType || 'movie') === mediaType);
+    const RATING_CATEGORIES = calculateDynamicRatingCategories(currentMediaMovies, mediaType);
     const categoryInfo = RATING_CATEGORIES[categoryKey];
     
-    // Find movies in the same percentile range for comparison
+    // Find movies in the same percentile range for comparison (filtered by media type)
     const categoryMovies = getMoviesInPercentileRange(
-      seen,
+      currentMediaMovies,
       categoryInfo.percentile,
       selectedMovie.id
     );
@@ -1404,6 +1398,15 @@ function HomeScreen({
       console.error('Failed to record rating for preference learning:', error);
     });
     
+    // Immediately remove rated movie from all recommendation lists
+    const movieId = ratedMovie.id;
+    setAiRecommendations(prev => prev.filter(movie => movie.id !== movieId));
+    setPopularMovies(prev => prev.filter(movie => movie.id !== movieId));
+    setRecentReleases(prev => prev.filter(movie => movie.id !== movieId));
+    
+    // Close the detail modal
+    closeDetailModal();
+    
     // Refresh home screen data
     fetchRecentReleases();
     fetchPopularMovies();
@@ -1416,14 +1419,15 @@ function HomeScreen({
     setComparisonResults([]);
     setIsComparisonComplete(false);
     
-    const RATING_CATEGORIES = calculateDynamicRatingCategories(seen);
+    const currentMediaMovies = seen.filter(item => (item.mediaType || 'movie') === mediaType);
+    const RATING_CATEGORIES = calculateDynamicRatingCategories(currentMediaMovies, mediaType);
     
     Alert.alert(
       "Rating Added!", 
       `You ${RATING_CATEGORIES[selectedCategory]?.label?.toLowerCase()} "${selectedMovie.title}" (${finalRating.toFixed(1)}/10)`,
       [{ text: "OK" }]
     );
-  }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, fetchAIRecommendations, setFinalCalculatedRating]);
+  }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, fetchAIRecommendations, setFinalCalculatedRating, setAiRecommendations, setPopularMovies, setRecentReleases, closeDetailModal]);
 
   const handleCloseEnhancedModals = useCallback(() => {
     setComparisonModalVisible(false);
@@ -1567,8 +1571,26 @@ function HomeScreen({
       setPopularMovies(prev => prev.filter(item => item.id !== movie.id));
       setRecentReleases(prev => prev.filter(item => item.id !== movie.id));
       
-      // Add to not interested list for filtering
+      // Add to permanent not interested list - never show again
       setNotInterestedMovies(prev => [...prev, movie.id]);
+      
+      // Persist to AsyncStorage so it survives app restarts and AI refreshes
+      const storePermanentNotInterested = async () => {
+        try {
+          const notInterestedKey = `not_interested_${mediaType}`;
+          const existingNotInterested = await AsyncStorage.getItem(notInterestedKey);
+          let notInterestedList = existingNotInterested ? JSON.parse(existingNotInterested) : [];
+          
+          if (!notInterestedList.includes(movie.id)) {
+            notInterestedList.push(movie.id);
+            await AsyncStorage.setItem(notInterestedKey, JSON.stringify(notInterestedList));
+            console.log(`💾 Permanently stored "Not Interested" for movie ${movie.id}`);
+          }
+        } catch (error) {
+          console.error('Failed to store not interested movie to AsyncStorage:', error);
+        }
+      };
+      storePermanentNotInterested();
       
       // Enhanced similarity filtering - reduce similar movies
       const similarMovies = [];
@@ -1613,11 +1635,16 @@ function HomeScreen({
       
       console.log('✅ Movie removed from recommendations and recorded for AI learning');
       
+      // Close the detail modal if it's open
+      if (selectedMovie && selectedMovie.id === movie.id) {
+        closeDetailModal();
+      }
+      
     } catch (error) {
       console.error('❌ Error handling not interested:', error);
       console.log('🔇 Not interested error (popup disabled):', error.message);
     }
-  }, [contentType, seen.length, recordNotInterested, setAiRecommendations, setPopularMovies, setRecentReleases, setNotInterestedMovies]);
+  }, [contentType, mediaType, seen.length, recordNotInterested, setAiRecommendations, setPopularMovies, setRecentReleases, setNotInterestedMovies, selectedMovie, closeDetailModal]);
 
   const openRatingModal = useCallback(() => {
     // Start fade transition to show sentiment buttons in place
@@ -2636,6 +2663,14 @@ function HomeScreen({
     }
   }, [skippedMovies, fetchPopularMovies, fetchRecentReleases, fetchAIRecommendations]);
 
+  useEffect(() => {
+    console.log('🔄 watchlist (unseen) updated:', unseen.length);
+    console.log('🔄 Re-fetching data due to watchlist change');
+    fetchPopularMovies();
+    fetchRecentReleases();
+    fetchAIRecommendations();
+  }, [unseen.length, fetchPopularMovies, fetchRecentReleases, fetchAIRecommendations]);
+
   // ============================================================================
   // **MAIN RENDER - COLLABORATIVE UI MASTERPIECE**
   // ============================================================================
@@ -2995,7 +3030,7 @@ function HomeScreen({
                       }
                     ]}
                   >
-                    {Object.entries(calculateDynamicRatingCategories(seen)).map(([categoryKey, category]) => (
+                    {Object.entries(calculateDynamicRatingCategories(seen.filter(item => (item.mediaType || 'movie') === mediaType), mediaType)).map(([categoryKey, category]) => (
                       <TouchableOpacity
                         key={categoryKey}
                         style={[
@@ -3074,7 +3109,7 @@ function HomeScreen({
             handleEmotionSelected(categoryKey);
           }}
           colors={colors}
-          userMovies={seen}
+          userMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
         />
 
         {/* **WILDCARD COMPARISON MODAL** */}
@@ -3236,7 +3271,7 @@ function HomeScreen({
         <InitialRatingFlow
           visible={initialRatingFlowVisible}
           movie={selectedMovie}
-          seenMovies={seen}
+          seenMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
           onClose={closeInitialRatingFlow}
           onComplete={handleInitialRatingComplete}
           isDarkMode={isDarkMode}
