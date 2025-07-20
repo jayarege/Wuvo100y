@@ -8,26 +8,6 @@ const DEV_CONFIG = {
   // Pre-selected movies that will be automatically added to seen list
   DEV_MOVIES: [
     {
-      id: 414906,
-      title: "Sicario",
-      userRating: 9.8,
-      eloRating: 980,
-      score: 7.6,
-      voteCount: 790000,
-      poster_path: "/ceszCkKF6V3wEqPZaWdYpKQTObs.jpg",
-      poster: "/ceszCkKF6V3wEqPZaWdYpKQTObs.jpg",
-      release_date: "2015-09-11",
-      release_year: 2015,
-      genre_ids: [28, 80, 18, 53], // Action, Crime, Drama, Thriller
-      overview: "An idealistic FBI agent is enlisted by a government task force to aid in the escalating war against drugs at the border area between the U.S. and Mexico.",
-      comparisonHistory: [],
-      comparisonWins: 12,
-      gamesPlayed: 12,
-      adult: false,
-      isOnboarded: true,
-      mediaType: 'movie'
-    },
-    {
       id: 155,
       title: "The Dark Knight",
       userRating: 9.7,
@@ -143,26 +123,6 @@ const DEV_CONFIG = {
       comparisonHistory: [],
       comparisonWins: 6,
       gamesPlayed: 7,
-      adult: false,
-      isOnboarded: true,
-      mediaType: 'movie'
-    },
-    {
-      id: 10090,
-      title: "No Country for Old Men",
-      userRating: 8.8,
-      eloRating: 880,
-      score: 8.1,
-      voteCount: 980000,
-      poster_path: "/bj1v6YKF8yHqA489VFfnQvpRYG0.jpg",
-      poster: "/bj1v6YKF8yHqA489VFfnQvpRYG0.jpg",
-      release_date: "2007-11-21",
-      release_year: 2007,
-      genre_ids: [80, 18, 53], // Crime, Drama, Thriller
-      overview: "Llewelyn Moss stumbles upon dead bodies, $2 million and a hoard of heroin in a Texas desert, but methodical killer Anton Chigurh comes looking for it, with local sheriff Ed Tom Bell hot on his trail.",
-      comparisonHistory: [],
-      comparisonWins: 5,
-      gamesPlayed: 6,
       adult: false,
       isOnboarded: true,
       mediaType: 'movie'
