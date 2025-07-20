@@ -760,7 +760,11 @@ function HomeScreen({
         }
       );
       
-      setAiRecommendations(recommendations);
+      // Filter out movies user marked as "Not Interested" to prevent them from reappearing
+      const filteredRecommendations = recommendations.filter(movie => 
+        !notInterestedMovies.includes(movie.id)
+      );
+      setAiRecommendations(filteredRecommendations);
       
     } catch (error) {
       console.error('Failed to fetch AI recommendations:', error);
