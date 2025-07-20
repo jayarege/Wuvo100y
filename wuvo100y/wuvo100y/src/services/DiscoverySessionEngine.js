@@ -6,7 +6,7 @@
 
 import { TMDB_API_KEY, GROQ_API_KEY } from '../Constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getImprovedRecommendations } from '../utils/ImprovedAIRecommendations.js';
+import { getImprovedRecommendations } from '../utils/AIRecommendations.js';
 
 class DiscoverySessionEngine {
   constructor() {
@@ -172,7 +172,7 @@ class DiscoverySessionEngine {
 
   async getUserProfile(userId) {
     try {
-      const userMovies = await AsyncStorage.getItem('userMovies') || '[]';
+      const userMovies = await AsyncStorage.getItem('wuvo_user_seen_movies') || '[]';
       const movies = JSON.parse(userMovies);
       
       // COMMANDMENT 2: "Never assume" - validate data

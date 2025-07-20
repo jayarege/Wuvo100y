@@ -12,7 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { useAsyncStorage } from '../hooks/useAsyncStorage';
-import { getUserPreferenceInsights, clearUserPreferences } from '../utils/AIRecommendations';
+// TODO: Add user preference insights functionality if needed
+// import { getUserPreferenceInsights, clearUserPreferences } from '../utils/AIRecommendations';
 
 const SettingsScreen = ({ navigation, isDarkMode }) => {
   const { handleLogout, userInfo } = useAuth();
@@ -29,8 +30,10 @@ const SettingsScreen = ({ navigation, isDarkMode }) => {
   React.useEffect(() => {
     const loadInsights = async () => {
       try {
-        const insights = await getUserPreferenceInsights('movie');
-        setPreferenceInsights(insights);
+        // TODO: Implement getUserPreferenceInsights function
+        // const insights = await getUserPreferenceInsights('movie');
+        // setPreferenceInsights(insights);
+        console.log('Preference insights loading disabled - function not implemented');
       } catch (error) {
         console.error('Failed to load preference insights:', error);
       }
@@ -95,10 +98,12 @@ const SettingsScreen = ({ navigation, isDarkMode }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const success = await clearUserPreferences();
+              // TODO: Implement clearUserPreferences function
+              // const success = await clearUserPreferences();
+              const success = true; // Placeholder
               if (success) {
                 setPreferenceInsights(null);
-                Alert.alert('Success', 'All preferences have been cleared. Recommendations will reset.');
+                Alert.alert('Success', 'Preference clearing not implemented yet.');
               } else {
                 Alert.alert('Error', 'Failed to clear preferences. Please try again.');
               }

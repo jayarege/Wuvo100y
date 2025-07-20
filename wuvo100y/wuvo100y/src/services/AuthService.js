@@ -256,7 +256,7 @@ class AuthService {
       console.log('📦 Starting local data migration...');
       
       // Get existing local data
-      const localMovies = await AsyncStorage.getItem('userMovies');
+      const localMovies = await AsyncStorage.getItem('wuvo_user_seen_movies');
       const localWatchlist = await AsyncStorage.getItem('userWatchlist');
       const localPreferences = await AsyncStorage.getItem('userPreferences');
       

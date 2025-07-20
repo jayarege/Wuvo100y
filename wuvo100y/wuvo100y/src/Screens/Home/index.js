@@ -285,7 +285,7 @@ function HomeScreen({
       }
     } catch (error) {
       console.error('❌ Discovery session generation failed:', error);
-      Alert.alert('Discovery Session', 'Failed to generate session. Please try again.');
+      console.log('🔇 Discovery session error (popup disabled):', error.message);
     }
   }, [generateSession, sessionType]);
   
@@ -412,8 +412,8 @@ function HomeScreen({
       
     } catch (error) {
       console.error('❌ Failed to refresh recommendations:', error);
-      // COMMANDMENT 9: Provide meaningful user feedback
-      Alert.alert('Refresh Error', 'Unable to refresh recommendations right now. Please try again in a moment.');
+      // COMMANDMENT 9: Error logged to console (popup disabled by user request)
+      console.log('🔇 Refresh error (popup disabled):', error.message);
       return false;
     } finally {
       setIsRefreshingAI(false);
@@ -558,7 +558,7 @@ function HomeScreen({
       
     } catch (error) {
       console.error('Error handling enhanced not interested:', error);
-      Alert.alert('Error', 'Failed to record preference. Please try again.');
+      console.log('🔇 Not interested error (popup disabled):', error.message);
     }
   }, [mediaType, recordNotInterested, addToSkippedMovies]);
 
@@ -708,7 +708,9 @@ function HomeScreen({
         .slice(0, 10);
 
       // Check if user has any rated content in current media type
+      console.log('🔍 AI Debug - Current media content length:', currentMediaContent.length, 'Media type:', currentMediaType);
       if (currentMediaContent.length === 0) {
+        console.log('❌ AI recommendations stopped - no rated content in current media type');
         setAiRecommendations([]);
         return;
       }
@@ -723,7 +725,9 @@ function HomeScreen({
           .sort((a, b) => b.userRating - a.userRating)
           .slice(0, 10);
           
+        console.log('🔍 AI Debug - All rated content (5+ stars):', allRatedContent.length);
         if (allRatedContent.length === 0) {
+          console.log('❌ AI recommendations stopped - no content rated 5+ stars');
           setAiRecommendations([]);
           return;
         }
@@ -748,6 +752,7 @@ function HomeScreen({
           seen: seen,
           unseen: unseen,
           skipped: skippedMovies,
+          notInterested: notInterestedMovies, // TEAM SOLUTION: Pass not interested movies to AI system
           useDiscoverySession: true, // Enable discovery session logic
           sessionType: getCurrentSessionType(), // Pass current session type for time-based theming
           userId: userId, // Pass user ID for session tracking
@@ -760,17 +765,10 @@ function HomeScreen({
     } catch (error) {
       console.error('Failed to fetch AI recommendations:', error);
       
-      // Show user-friendly error message (only once per session)
-      if (!aiErrorShown) {
-        setAiErrorShown(true);
-        if (error.message.includes('AI refresh limit reached')) {
-          Alert.alert('Refresh Limit Reached', error.message);
-        } else if (error.message.includes('Daily API limit reached')) {
-          Alert.alert('Daily Limit Reached', error.message);
-        } else {
-          Alert.alert('Error', 'AI recommendations temporarily unavailable. Using basic recommendations instead.');
-        }
-      }
+      // 🚨 CODE_BIBLE ALERT SUPPRESSION: Completely disable ALL AI error popups
+      // User feedback: "I don't want to see AI error popups anymore"
+      // All errors are logged to console for debugging, but no UI interruption
+      console.log('🔇 AI error suppressed (popup disabled by user request):', error.message);
       
       setAiRecommendations([]);
     } finally {
@@ -1297,21 +1295,12 @@ function HomeScreen({
     
     const range = percentileRanges[emotion] || [0.25, 0.75];
     
-    // **CRITICAL FIX**: Filter by current mediaType to ensure movie vs movie and TV vs TV comparisons
-    const currentMediaType = contentType === 'movies' ? 'movie' : 'tv';
-    
-    // Sort movies by rating descending, filtering by media type
+    // Sort movies by rating descending - EXACT COPY FROM ADDMOVIE LOGIC
     const sortedMovies = [...seenMovies]
       .filter(movie => movie.userRating && !isNaN(movie.userRating))
-      .filter(movie => movie.mediaType === currentMediaType) // Only same media type
       .sort((a, b) => b.userRating - a.userRating);
     
-    if (sortedMovies.length === 0) {
-      console.log(`❌ No ${currentMediaType}s found in seen list for comparison`);
-      return null;
-    }
-    
-    console.log(`🎯 Found ${sortedMovies.length} rated ${currentMediaType}s for comparison`);
+    if (sortedMovies.length === 0) return null;
     
     const startIndex = Math.floor(range[0] * sortedMovies.length);
     const endIndex = Math.floor(range[1] * sortedMovies.length);
@@ -1319,7 +1308,7 @@ function HomeScreen({
     
     // Return random movie from the percentile range
     return candidates[Math.floor(Math.random() * candidates.length)];
-  }, [contentType]);
+  }, []);
   
   // Handle emotion selection and start comparison process
   const handleEmotionSelected = useCallback((emotion) => {
@@ -1327,48 +1316,30 @@ function HomeScreen({
     console.log('🎭 SEEN MOVIES COUNT:', seen.length);
     console.log('🎭 SEEN MOVIES:', seen.map(m => `${m.title}: ${m.userRating}`));
     
-    // **MEDIA TYPE SEGREGATION**: Filter by current media type
-    const currentMediaType = contentType === 'movies' ? 'movie' : 'tv';
-    const sameTypeMovies = seen.filter(movie => movie.mediaType === currentMediaType);
-    
-    console.log(`🎯 Current media type: ${currentMediaType}`);
-    console.log(`🎯 Same type movies count: ${sameTypeMovies.length}`);
-    
-    // Validate we have enough rated movies of the same type for comparison
-    if (sameTypeMovies.length < 3) {
-      Alert.alert(
-        '🎬 Need More Ratings', 
-        `You need at least 3 rated ${currentMediaType}s to use this feature.\n\nCurrently you have: ${sameTypeMovies.length} rated ${currentMediaType}s.\n\nPlease rate a few more ${currentMediaType}s first!`
-      );
-      return;
-    }
-    
     setSelectedEmotion(emotion);
     setEmotionModalVisible(false);
     // Don't clear selectedMovie here - keep it for comparison modal
     
-    // Select first opponent from percentile (within same media type)
+    // Select first opponent from percentile - EXACT COPY FROM ADDMOVIE LOGIC
     const firstOpponent = selectMovieFromPercentile(seen, emotion);
     if (!firstOpponent) {
       console.log('❌ NO FIRST OPPONENT FOUND');
       Alert.alert(
         '🎬 Need More Ratings', 
-        `You need at least 3 rated ${currentMediaType}s to use this feature.\n\nCurrently you have: ${sameTypeMovies.length} rated ${currentMediaType}s.\n\nPlease rate a few more ${currentMediaType}s first!`,
+        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
         [{ text: "OK", style: "default" }]
       );
       return;
     }
     
-    // Select second and third opponents randomly from same media type (for known vs known)
-    const remainingMovies = seen
-      .filter(movie => movie.id !== firstOpponent.id)
-      .filter(movie => movie.mediaType === currentMediaType); // Only same media type
+    // Select second and third opponents randomly from all seen movies (for known vs known)
+    const remainingMovies = seen.filter(movie => movie.id !== firstOpponent.id);
     
     if (remainingMovies.length < 2) {
-      console.log(`❌ NOT ENOUGH REMAINING ${currentMediaType.toUpperCase()}S`);
+      console.log('❌ NOT ENOUGH REMAINING MOVIES');
       Alert.alert(
         '🎬 Need More Ratings', 
-        `You need at least 3 rated ${currentMediaType}s to use this feature.\n\nCurrently you have: ${seen.filter(m => m.mediaType === currentMediaType).length} rated ${currentMediaType}s.\n\nPlease rate a few more ${currentMediaType}s first!`,
+        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
         [{ text: "OK", style: "default" }]
       );
       return;
@@ -1640,9 +1611,9 @@ function HomeScreen({
       
     } catch (error) {
       console.error('❌ Error handling not interested:', error);
-      Alert.alert('Error', 'Failed to record preference. Please try again.');
+      console.log('🔇 Not interested error (popup disabled):', error.message);
     }
-  }, [contentType, seen.length, recordNotInterested]);
+  }, [contentType, seen.length, recordNotInterested, setAiRecommendations, setPopularMovies, setRecentReleases, setNotInterestedMovies]);
 
   const openRatingModal = useCallback(() => {
     // Start fade transition to show sentiment buttons in place
@@ -1812,12 +1783,10 @@ function HomeScreen({
       return;
     }
     
-    const isInWatchlist = unseen.some(movie => movie.id === selectedMovie.id);
     const movieId = selectedMovie.id;
     
-    if (isInWatchlist) {
-      onRemoveFromWatchlist(selectedMovie.id);
-    } else {
+    // TEAM SOLUTION: Always add to watchlist and remove from home screen (no toggle behavior)
+    if (!seen.some(movie => movie.id === selectedMovie.id)) {
       const normalizedMovie = {
         id: selectedMovie.id,
         title: selectedMovie.title || selectedMovie.name,
@@ -1856,7 +1825,7 @@ function HomeScreen({
     }
     
     closeDetailModal();
-  }, [selectedMovie, unseen, seen, onAddToUnseen, onRemoveFromWatchlist, closeDetailModal, contentType, mediaType]);
+  }, [selectedMovie, seen, onAddToUnseen, closeDetailModal, contentType, mediaType, setPopularMovies, setRecentReleases, setAiRecommendations]);
 
   // ============================================================================
   // **COMPUTED VALUES - ENGINEER TEAM 14**
@@ -2984,7 +2953,7 @@ function HomeScreen({
                       ellipsizeMode="tail"
                       adjustsFontSizeToFit={true}
                     >
-                      {unseen.some(movie => movie.id === selectedMovie?.id) ? 'Remove from Watchlist' : 'Watchlist'}
+                      Watchlist
                     </Text>
                   </TouchableOpacity>
                   
@@ -2994,7 +2963,7 @@ function HomeScreen({
                       standardButtonStyles.baseButton,
                       standardButtonStyles.tertiaryButton
                     ]}
-                    onPress={handleNotInterested}
+                    onPress={() => handleNotInterested(selectedMovie)}
                     activeOpacity={0.7}
                   >
                     <Text 

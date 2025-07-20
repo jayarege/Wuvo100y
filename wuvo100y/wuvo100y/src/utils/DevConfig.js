@@ -24,7 +24,8 @@ const DEV_CONFIG = {
       comparisonWins: 12,
       gamesPlayed: 12,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 155,
@@ -43,7 +44,8 @@ const DEV_CONFIG = {
       comparisonWins: 11,
       gamesPlayed: 12,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 10497,
@@ -62,7 +64,8 @@ const DEV_CONFIG = {
       comparisonWins: 10,
       gamesPlayed: 11,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 37165,
@@ -81,7 +84,8 @@ const DEV_CONFIG = {
       comparisonWins: 9,
       gamesPlayed: 10,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 807,
@@ -100,7 +104,8 @@ const DEV_CONFIG = {
       comparisonWins: 8,
       gamesPlayed: 9,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 244786,
@@ -119,7 +124,8 @@ const DEV_CONFIG = {
       comparisonWins: 7,
       gamesPlayed: 8,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 242582,
@@ -138,7 +144,8 @@ const DEV_CONFIG = {
       comparisonWins: 6,
       gamesPlayed: 7,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 10090,
@@ -157,7 +164,8 @@ const DEV_CONFIG = {
       comparisonWins: 5,
       gamesPlayed: 6,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 77,
@@ -176,7 +184,8 @@ const DEV_CONFIG = {
       comparisonWins: 2,
       gamesPlayed: 5,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     },
     {
       id: 115,
@@ -195,7 +204,8 @@ const DEV_CONFIG = {
       comparisonWins: 1,
       gamesPlayed: 4,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'movie'
     }
   ],
 
@@ -219,7 +229,8 @@ const DEV_CONFIG = {
       comparisonWins: 8,
       gamesPlayed: 10,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1396,
@@ -239,7 +250,8 @@ const DEV_CONFIG = {
       comparisonWins: 12,
       gamesPlayed: 15,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 87108,
@@ -259,7 +271,8 @@ const DEV_CONFIG = {
       comparisonWins: 6,
       gamesPlayed: 7,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1399,
@@ -279,7 +292,8 @@ const DEV_CONFIG = {
       comparisonWins: 7,
       gamesPlayed: 9,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 60625,
@@ -299,7 +313,8 @@ const DEV_CONFIG = {
       comparisonWins: 6,
       gamesPlayed: 8,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1418,
@@ -319,7 +334,8 @@ const DEV_CONFIG = {
       comparisonWins: 5,
       gamesPlayed: 7,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1402,
@@ -339,7 +355,8 @@ const DEV_CONFIG = {
       comparisonWins: 4,
       gamesPlayed: 6,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1408,
@@ -359,7 +376,8 @@ const DEV_CONFIG = {
       comparisonWins: 3,
       gamesPlayed: 5,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1390,
@@ -379,7 +397,8 @@ const DEV_CONFIG = {
       comparisonWins: 2,
       gamesPlayed: 4,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1403,
@@ -399,7 +418,8 @@ const DEV_CONFIG = {
       comparisonWins: 1,
       gamesPlayed: 3,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1425,
@@ -419,7 +439,8 @@ const DEV_CONFIG = {
       comparisonWins: 0,
       gamesPlayed: 2,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     },
     {
       id: 1429,
@@ -439,7 +460,8 @@ const DEV_CONFIG = {
       comparisonWins: 0,
       gamesPlayed: 1,
       adult: false,
-      isOnboarded: true
+      isOnboarded: true,
+      mediaType: 'tv'
     }
   ],
   

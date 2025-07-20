@@ -1064,25 +1064,6 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         
         return (
           <View style={{ flex: 1, backgroundColor: colors.background }}>
-            {/* Filter Button Header */}
-            <View style={[profileStyles.filterSection, { borderBottomColor: colors.border.color, backgroundColor: colors.background }]}>
-              <View style={profileStyles.filterHeader}>
-                <Text style={[profileStyles.filterTitle, { color: colors.text }]}>
-                  Filter Options
-                </Text>
-                <TouchableOpacity
-                  style={profileStyles.filterButton}
-                  onPress={openFilterModal}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="filter" size={24} color={colors.text} />
-                  {hasActiveFilters && (
-                    <View style={profileStyles.filterBadge} />
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-            
             {/* Genre Filter Section */}
             <View style={[
               profileStyles.filterSection, 
@@ -1092,9 +1073,20 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
               }
             ]}>
               <View style={profileStyles.filterHeader}>
-                <Text style={[profileStyles.filterTitle, { color: colors.text }]}>
-                  Filter by Genre
-                </Text>
+                <TouchableOpacity 
+                  style={profileStyles.filterTitleContainer}
+                  onPress={() => setShowGenreDropdown(!showGenreDropdown)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[profileStyles.filterTitle, { color: colors.text }]}>
+                    Filter by Genre
+                  </Text>
+                  <Ionicons 
+                    name={showGenreDropdown ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={colors.subText} 
+                  />
+                </TouchableOpacity>
                 {selectedGenreId !== null && (
                   <TouchableOpacity 
                     style={profileStyles.clearButton}
@@ -1107,70 +1099,17 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                 )}
               </View>
               
-              {/* Genre Dropdown */}
-              <View style={profileStyles.dropdownContainer}>
-                <TouchableOpacity
-                  style={[
-                    profileStyles.dropdownButton,
-                    { 
-                      backgroundColor: colors.card,
-                      borderColor: colors.border.color
-                    }
-                  ]}
-                  onPress={() => setShowGenreDropdown(!showGenreDropdown)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[profileStyles.dropdownButtonText, { color: colors.text }]}>
-                    {selectedGenreId !== null ? genres[selectedGenreId] || 'Unknown' : 'Select Genre'}
-                  </Text>
-                  <Ionicons 
-                    name={showGenreDropdown ? "chevron-up" : "chevron-down"} 
-                    size={20} 
-                    color={colors.subText} 
-                  />
-                </TouchableOpacity>
-                
-                {showGenreDropdown && (
-                  <View style={[
-                    profileStyles.dropdownList,
-                    { 
-                      backgroundColor: colors.card,
-                      borderColor: colors.border.color
-                    }
-                  ]}>
-                    <ScrollView style={profileStyles.dropdownScrollView} nestedScrollEnabled>
-                      {uniqueWatchlistGenreIds.map((genreId) => (
-                        <TouchableOpacity
-                          key={genreId}
-                          style={[
-                            profileStyles.dropdownItem,
-                            selectedGenreId === genreId && {
-                              backgroundColor: colors.primary + '20'
-                            }
-                          ]}
-                          onPress={() => {
-                            handleGenreSelect(genreId);
-                            setShowGenreDropdown(false);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[
-                            profileStyles.dropdownItemText,
-                            { 
-                              color: selectedGenreId === genreId ? colors.accent : colors.text
-                            }
-                          ]}>
-                            {genres[genreId] || 'Unknown'}
-                          </Text>
-                          {selectedGenreId === genreId && (
-                            <Ionicons name="checkmark" size={18} color={colors.accent} />
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
+              {/* Genre Buttons - Show/Hide with Arrow */}
+              {showGenreDropdown && (
+                <FlatList
+                  data={uniqueWatchlistGenreIds}
+                  renderItem={renderWatchlistGenreButton}
+                  keyExtractor={(item) => item.toString()}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={profileStyles.genreList}
+                />
+              )}
               
               {selectedGenreId !== null && (
                 <View style={profileStyles.activeFilterIndicator}>
@@ -1181,33 +1120,6 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
               )}
             </View>
             
-            {/* Active Filters Display */}
-            {hasActiveFilters && (
-              <View style={[profileStyles.activeFiltersSection, { backgroundColor: 'transparent' }]}>
-                <Text style={[profileStyles.activeFiltersTitle, { color: colors.text }]}>
-                  Active Filters ({filteredMovies.length} {mediaType === 'movie' ? 'movies' : 'TV shows'})
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={profileStyles.activeFiltersContainer}>
-                  {selectedGenres.map(genreId => (
-                    <View key={`genre-${genreId}`} style={[profileStyles.activeFilterChip, { backgroundColor: colors.primary }]}>
-                      <Text style={profileStyles.activeFilterText}>{genres[genreId] || 'Unknown'}</Text>
-                    </View>
-                  ))}
-                  {selectedDecades.map(decade => (
-                    <View key={`decade-${decade}`} style={[profileStyles.activeFilterChip, { backgroundColor: colors.primary }]}>
-                      <Text style={profileStyles.activeFilterText}>{DECADES.find(d => d.value === decade)?.label}</Text>
-                    </View>
-                  ))}
-                  {selectedStreamingServices.map(serviceId => (
-                    <View key={`streaming-${serviceId}`} style={[profileStyles.activeFilterChip, { backgroundColor: colors.primary }]}>
-                      <Text style={profileStyles.activeFilterText}>
-                        {streamingProviders.find(s => s.id.toString() === serviceId)?.name || 'Service'}
-                      </Text>
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
             
             {/* Movie/TV Show List */}
             <ScrollView style={[listStyles.rankingsList, { backgroundColor: colors.background }]}>
@@ -1379,7 +1291,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
             onPress={() => setSelectedTab('watchlist')}
           >
             <Ionicons 
-              name="list" 
+              name="glasses" 
               size={24} 
               color={selectedTab === 'watchlist' ? '#fff' : '#666'} 
             />
