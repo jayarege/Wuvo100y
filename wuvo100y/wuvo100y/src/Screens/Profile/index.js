@@ -1310,7 +1310,10 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.iconButton}
-              onPress={() => setSearchModalVisible(true)}
+              onPress={() => {
+                console.log('🔍 Navigating to user search');
+                navigation.navigate('UserSearch');
+              }}
             >
               <Ionicons name="search" size={24} color="#fff" />
             </TouchableOpacity>

@@ -14,6 +14,9 @@ import OnboardingScreen from './src/Screens/OnboardingScreen';
 import TabNavigator from './src/Navigation/TabNavigator';
 import MovieDetailScreen from './src/Screens/MovieDetailScreen';
 import SettingsScreen from './src/Screens/SettingsScreen';
+// Phase 3: User Search and Discovery
+import UserSearchScreen from './src/Screens/UserSearchScreen';
+import PublicProfileScreen from './src/Screens/PublicProfileScreen';
 
 // Import development configuration
 import { isDevModeEnabled, getDevMovies, getDevTVShows, getDevUser } from './src/utils/DevConfig';
@@ -263,6 +266,25 @@ export default function App() {
                   <SettingsScreen
                     {...props}
                     isDarkMode={isDarkMode}
+                  />
+                )}
+              </Stack.Screen>
+              {/* Phase 3: User Search and Discovery Screens */}
+              <Stack.Screen name="UserSearch">
+                {props => (
+                  <UserSearchScreen
+                    {...props}
+                    isDarkMode={isDarkMode}
+                    currentUser={userInfo}
+                  />
+                )}
+              </Stack.Screen>
+              <Stack.Screen name="PublicProfile">
+                {props => (
+                  <PublicProfileScreen
+                    {...props}
+                    isDarkMode={isDarkMode}
+                    currentUser={userInfo}
                   />
                 )}
               </Stack.Screen>
