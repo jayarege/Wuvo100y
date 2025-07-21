@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import ActivityFeedService from '../services/ActivityFeedService';
+import CommentModal from '../Components/CommentModal';
 
 function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
   const [activities, setActivities] = useState([]);
@@ -22,6 +23,8 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [lastDoc, setLastDoc] = useState(null);
   const [likedActivities, setLikedActivities] = useState(new Set());
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState(null);
 
   const colors = {
     background: isDarkMode ? '#1C2526' : '#FFFFFF',
@@ -135,6 +138,18 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
     if (isLoadingMore || !lastDoc) return;
     setIsLoadingMore(true);
     loadFeed(false);
+  };
+
+  const handleCommentPress = (activity) => {
+    setSelectedActivity(activity);
+    setCommentModalVisible(true);
+  };
+
+  const closeCommentModal = () => {
+    setCommentModalVisible(false);
+    setSelectedActivity(null);
+    // Refresh feed to show updated comment counts
+    loadFeed(true);
   };
 
   useEffect(() => {
@@ -323,7 +338,10 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => handleCommentPress(activity)}
+        >
           <Ionicons name="chatbubble-outline" size={20} color={colors.subtext} />
           <Text style={[styles.actionText, { color: colors.subtext }]}>
             {activity.comments || 0}
@@ -410,6 +428,15 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
           ]}
         />
       )}
+
+      {/* Comment Modal */}
+      <CommentModal
+        visible={commentModalVisible}
+        onClose={closeCommentModal}
+        activity={selectedActivity}
+        currentUser={currentUser}
+        isDarkMode={isDarkMode}
+      />
     </SafeAreaView>
   );
 }

@@ -35,6 +35,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 // NEW: Simple & Effective AI Recommendations
 // COMMANDMENT 9: Handle bundler cache issues with explicit file extension
 import { getImprovedRecommendations, recordNotInterested } from '../../utils/AIRecommendations.js';
+import SocialRecommendationService from '../../services/SocialRecommendationService';
+import SocialRecommendationsSection from '../../Components/SocialRecommendationsSection';
 import { useDiscoverySessions } from '../../hooks/useDiscoverySessions';
 import { getCurrentSessionType } from '../../config/discoveryConfig';
 import { RatingModal } from '../../Components/RatingModal';
@@ -211,6 +213,8 @@ function HomeScreen({
   const [dismissedInSession, setDismissedInSession] = useState([]);
   const [aiRecommendations, setAiRecommendations] = useState([]);
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  const [socialRecommendations, setSocialRecommendations] = useState([]);
+  const [isLoadingSocialRecs, setIsLoadingSocialRecs] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState({ canRefresh: true, remainingRefreshes: 3, resetTime: null });
   const [isRefreshingAI, setIsRefreshingAI] = useState(false);
   // COMMANDMENT 2: Never assume - track refresh usage with proper validation
@@ -772,6 +776,37 @@ function HomeScreen({
       setIsRefreshingAI(false);
     }
   }, [seen, unseen, contentType, skippedMovies, notInterestedMovies, mediaType, canGenerateNewSession, currentSession, generateSession]);
+
+  // Social recommendations function
+  const fetchSocialRecommendations = useCallback(async () => {
+    if (!currentUser?.id) return;
+    
+    try {
+      setIsLoadingSocialRecs(true);
+      console.log('🤝 Fetching social recommendations...');
+      
+      const currentMediaType = contentType === 'movies' ? 'movie' : 'tv';
+      const socialRecs = await SocialRecommendationService.getSocialRecommendations(
+        currentUser.id,
+        seen,
+        {
+          mediaType: currentMediaType,
+          count: 5,
+          includeReasons: true,
+          excludeSeenMovies: true
+        }
+      );
+      
+      setSocialRecommendations(socialRecs);
+      console.log(`✅ Got ${socialRecs.length} social recommendations`);
+      
+    } catch (error) {
+      console.error('❌ Error fetching social recommendations:', error);
+      setSocialRecommendations([]);
+    } finally {
+      setIsLoadingSocialRecs(false);
+    }
+  }, [currentUser?.id, contentType, seen]);
 
   const handleRefreshAI = useCallback(async () => {
     try {
@@ -2641,8 +2676,10 @@ function HomeScreen({
     if (seen.length >= 3) {
       console.log('🤖 Fetching AI recommendations - user has', seen.length, 'rated items');
       fetchAIRecommendations();
+      // Also fetch social recommendations when user data changes
+      fetchSocialRecommendations();
     }
-  }, [seen.length, contentType, fetchAIRecommendations]);
+  }, [seen.length, contentType, fetchAIRecommendations, fetchSocialRecommendations]);
 
   useEffect(() => {
     const loadNotInterested = async () => {
@@ -2744,6 +2781,13 @@ function HomeScreen({
                 contentContainerStyle={{ paddingBottom: 100 }}
                 showsVerticalScrollIndicator={false}
               >
+                <SocialRecommendationsSection
+                  socialRecommendations={socialRecommendations}
+                  isLoading={isLoadingSocialRecs}
+                  onMoviePress={handleMovieSelect}
+                  isDarkMode={isDarkMode}
+                  homeStyles={homeStyles}
+                />
                 {renderAIRecommendationsSection()}
                 {renderPopularMoviesSection()}
                 {renderWhatsOutNowSection()}
@@ -2828,6 +2872,13 @@ function HomeScreen({
                 contentContainerStyle={{ paddingBottom: 100 }}
                 showsVerticalScrollIndicator={false}
               >
+                <SocialRecommendationsSection
+                  socialRecommendations={socialRecommendations}
+                  isLoading={isLoadingSocialRecs}
+                  onMoviePress={handleMovieSelect}
+                  isDarkMode={isDarkMode}
+                  homeStyles={homeStyles}
+                />
                 {renderAIRecommendationsSection()}
                 {renderPopularMoviesSection()}
               </ScrollView>
