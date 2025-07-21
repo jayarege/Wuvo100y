@@ -1868,6 +1868,13 @@ function WildcardScreen({
  // Main UI
  return (
    <View style={[{ flex: 1, backgroundColor: colors.background }]}>
+     {/* ThemedHeader - identical format to other tabs */}
+     <ThemedHeader mediaType={mediaType} isDarkMode={isDarkMode} theme={theme}>
+       <Text style={headerStyles.screenTitle}>
+         {mediaType === 'movie' ? 'Movie' : 'TV Show'} Comparison
+       </Text>
+     </ThemedHeader>
+
      {/* Action buttons section */}
      <View style={[styles.actionRow, { backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 4, justifyContent: 'flex-end' }]}>
        {lastAction && lastAction.mediaType === mediaType && (

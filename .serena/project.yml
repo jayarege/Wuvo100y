@@ -1,0 +1,33 @@
+name: "Wuvo100y Movie Recommendation App"
+description: "React Native movie/TV show recommendation app with AI-powered personalized suggestions"
+version: "1.0.0"
+type: "react-native"
+
+# Project structure
+directories:
+  src: "/workspaces/Wuvo100y/wuvo100y/wuvo100y/src"
+  config: "/workspaces/Wuvo100y/wuvo100y/wuvo100y/src/config"
+  components: "/workspaces/Wuvo100y/wuvo100y/wuvo100y/src/Components"
+  screens: "/workspaces/Wuvo100y/wuvo100y/wuvo100y/src/Screens"
+  utils: "/workspaces/Wuvo100y/wuvo100y/wuvo100y/src/utils"
+  services: "/workspaces/Wuvo100y/wuvo100y/wuvo100y/src/services"
+
+# Key files to track
+important_files:
+  - "/workspaces/Wuvo100y/CLAUDE.md"
+  - "/workspaces/Wuvo100y/CODE_BIBLE.md"
+  - "/workspaces/Wuvo100y/wuvo100y/wuvo100y/src/Screens/Home/index.js"
+  - "/workspaces/Wuvo100y/wuvo100y/wuvo100y/src/utils/DevConfig.js"
+  - "/workspaces/Wuvo100y/wuvo100y/wuvo100y/package.json"
+
+# Development context
+tech_stack:
+  - "React Native"
+  - "Expo"
+  - "Firebase"
+  - "TMDB API"
+  - "GROQ AI"
+  - "AsyncStorage"
+
+# Current development phase
+current_phase: "Social Features & Firebase Backend Integration"

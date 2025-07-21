@@ -39,6 +39,7 @@ import SocialRecommendationService from '../../services/SocialRecommendationServ
 import SocialRecommendationsSection from '../../Components/SocialRecommendationsSection';
 import { useDiscoverySessions } from '../../hooks/useDiscoverySessions';
 import { getCurrentSessionType } from '../../config/discoveryConfig';
+import { useAuth } from '../../hooks/useAuth';
 import { RatingModal } from '../../Components/RatingModal';
 import { ActivityIndicator } from 'react-native';
 import { TMDB_API_KEY as API_KEY } from '../../Constants';
@@ -184,6 +185,9 @@ function HomeScreen({
 
   // Use media type context
   const { mediaType, setMediaType } = useMediaType();
+
+  // Use authentication context
+  const { userInfo: currentUser } = useAuth();
 
   // Get all themed styles
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
