@@ -8,6 +8,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Import screens
 import LoadingScreen from './src/Screens/LoadingScreen';
 import AuthScreen from './src/Screens/AuthScreen';
+import UsernameSelectionScreen from './src/Screens/UsernameSelectionScreen';
+import ProfileSetupScreen from './src/Screens/ProfileSetupScreen';
 import OnboardingScreen from './src/Screens/OnboardingScreen';
 import TabNavigator from './src/Navigation/TabNavigator';
 import MovieDetailScreen from './src/Screens/MovieDetailScreen';
@@ -149,16 +151,52 @@ export default function App() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!isAuthenticated ? (
-            // Auth flow
-            <Stack.Screen name="Auth">
-              {props => (
-                <AuthScreen
-                  {...props}
-                  isDarkMode={isDarkMode}
-                  onAuthenticate={handleAuthentication}
-                />
-              )}
-            </Stack.Screen>
+            // Auth flow - Phase 2: Firebase Auth → Username → Profile → Home
+            <>
+              <Stack.Screen name="Auth">
+                {props => (
+                  <AuthScreen
+                    {...props}
+                    isDarkMode={isDarkMode}
+                    onAuthenticate={handleAuthentication}
+                    navigation={props.navigation}
+                  />
+                )}
+              </Stack.Screen>
+              <Stack.Screen name="UsernameSelection">
+                {props => (
+                  <UsernameSelectionScreen
+                    {...props}
+                    isDarkMode={isDarkMode}
+                    onUsernameSelected={(usernameData) => {
+                      console.log('✅ Username selected:', usernameData);
+                      props.navigation.navigate('ProfileSetup', {
+                        ...props.route.params,
+                        username: usernameData.username
+                      });
+                    }}
+                    onSkip={() => {
+                      props.navigation.navigate('ProfileSetup', {
+                        ...props.route.params,
+                        username: null
+                      });
+                    }}
+                  />
+                )}
+              </Stack.Screen>
+              <Stack.Screen name="ProfileSetup">
+                {props => (
+                  <ProfileSetupScreen
+                    {...props}
+                    isDarkMode={isDarkMode}
+                    onProfileComplete={(userData) => {
+                      console.log('✅ Profile setup completed:', userData);
+                      handleAuthentication(userData);
+                    }}
+                  />
+                )}
+              </Stack.Screen>
+            </>
           ) : checkingOnboarding ? (
             // Checking onboarding
             <Stack.Screen name="CheckingOnboarding">

@@ -244,6 +244,33 @@ class AuthService {
   }
 
   // =============================================================================
+  // ADDITIONAL PROFILE METHODS FOR PHASE 2
+  // =============================================================================
+
+  async updateProfile(updates) {
+    return this.updateUserProfile(updates);
+  }
+
+  async confirmUsername(username, userId) {
+    try {
+      console.log('✅ Confirming username:', username, 'for user:', userId);
+      
+      // Update user profile with confirmed username
+      await firestore.collection('users').doc(userId).update({
+        username: username.toLowerCase(),
+        usernameConfirmedAt: new Date(),
+        lastActive: new Date()
+      });
+
+      console.log('✅ Username confirmed successfully');
+      return { success: true, username: username.toLowerCase() };
+    } catch (error) {
+      console.error('❌ Error confirming username:', error);
+      throw new Error(handleFirebaseError(error));
+    }
+  }
+
+  // =============================================================================
   // DATA MIGRATION HELPERS
   // =============================================================================
 

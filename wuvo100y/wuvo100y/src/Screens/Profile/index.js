@@ -1012,20 +1012,20 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                         </Text>
                       </View>
                       <View style={{ 
-                        alignItems: 'center', 
+                        alignItems: 'flex-start', 
                         justifyContent: 'center', 
-                        marginHorizontal: 4, 
-                        flex: 0.35, 
-                        paddingHorizontal: 2 
+                        marginHorizontal: 0, 
+                        flex: 0.4, 
+                        paddingLeft: 4
                       }}>
                         <View style={{ 
                           flexDirection: 'row', 
                           alignItems: 'center', 
-                          justifyContent: 'space-evenly', 
+                          justifyContent: 'flex-start', 
                           width: '100%',
-                          paddingHorizontal: 2
+                          paddingHorizontal: 0
                         }}>
-                          <View style={{ alignItems: 'center', minWidth: Math.max(40, width * 0.08) }}>
+                          <View style={{ alignItems: 'center', minWidth: Math.max(32, width * 0.06), marginRight: Math.max(8, width * 0.02) }}>
                             <Text style={[profileStyles.ratingLabel, { 
                               color: colors.subText, 
                               fontSize: Math.max(9, width * 0.025), 
@@ -1037,14 +1037,14 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                             </Text>
                             <Text style={[profileStyles.finalScore, { 
                               color: colors.accent, 
-                              fontSize: Math.max(14, width * 0.035), 
+                              fontSize: Math.max(15, width * 0.039), 
                               fontWeight: 'bold', 
                               textAlign: 'center' 
                             }]}>
                               {displayRating(movie)}
                             </Text>
                           </View>
-                          <View style={{ alignItems: 'center', minWidth: Math.max(40, width * 0.08) }}>
+                          <View style={{ alignItems: 'center', minWidth: Math.max(32, width * 0.06), marginRight: Math.max(12, width * 0.03) }}>
                             <Text style={[profileStyles.ratingLabel, { 
                               color: '#4CAF50', 
                               fontSize: Math.max(9, width * 0.025), 
@@ -1056,7 +1056,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                             </Text>
                             <Text style={[profileStyles.finalScore, { 
                               color: '#4CAF50', 
-                              fontSize: Math.max(14, width * 0.035), 
+                              fontSize: Math.max(15, width * 0.039), 
                               fontWeight: 'bold', 
                               textAlign: 'center' 
                             }]}>
@@ -1224,42 +1224,23 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                       </Text>
                     </View>
                     <View style={{ 
-                      alignItems: 'center', 
+                      alignItems: 'flex-start', 
                       justifyContent: 'center', 
-                      marginHorizontal: 4, 
-                      flex: 0.35, 
-                      paddingHorizontal: 2 
+                      marginHorizontal: 0, 
+                      flex: 0.4, 
+                      paddingLeft: 4
                     }}>
                       <View style={{ 
                         flexDirection: 'row', 
                         alignItems: 'center', 
-                        justifyContent: 'space-evenly', 
+                        justifyContent: 'flex-start', 
                         width: '100%',
-                        paddingHorizontal: 1
+                        paddingHorizontal: 0
                       }}>
-                        <View style={{ alignItems: 'center', minWidth: Math.max(30, width * 0.06) }}>
+                        <View style={{ alignItems: 'center', minWidth: Math.max(32, width * 0.06), marginRight: Math.max(8, width * 0.02) }}>
                           <Text style={[profileStyles.ratingLabel, { 
                             color: colors.subText, 
-                            fontSize: Math.max(8, width * 0.02), 
-                            fontWeight: '600', 
-                            textAlign: 'center',
-                            numberOfLines: 1
-                          }]}>
-                            USER
-                          </Text>
-                          <Text style={[profileStyles.finalScore, { 
-                            color: colors.accent, 
-                            fontSize: Math.max(12, width * 0.03), 
-                            fontWeight: 'bold', 
-                            textAlign: 'center' 
-                          }]}>
-                            {item.userRating ? item.userRating.toFixed(1) : 'N/A'}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'center', minWidth: Math.max(30, width * 0.06) }}>
-                          <Text style={[profileStyles.ratingLabel, { 
-                            color: colors.subText, 
-                            fontSize: Math.max(8, width * 0.02), 
+                            fontSize: Math.max(9, width * 0.025), 
                             fontWeight: '600', 
                             textAlign: 'center',
                             numberOfLines: 1
@@ -1268,17 +1249,17 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                           </Text>
                           <Text style={[profileStyles.finalScore, { 
                             color: colors.accent, 
-                            fontSize: Math.max(12, width * 0.03), 
+                            fontSize: Math.max(15, width * 0.039), 
                             fontWeight: 'bold', 
                             textAlign: 'center' 
                           }]}>
                             {item.vote_average ? item.vote_average.toFixed(1) : 'N/A'}
                           </Text>
                         </View>
-                        <View style={{ alignItems: 'center', minWidth: Math.max(30, width * 0.06) }}>
+                        <View style={{ alignItems: 'center', minWidth: Math.max(32, width * 0.06), marginRight: Math.max(12, width * 0.03) }}>
                           <Text style={[profileStyles.ratingLabel, { 
                             color: '#4CAF50', 
-                            fontSize: Math.max(8, width * 0.02), 
+                            fontSize: Math.max(9, width * 0.025), 
                             fontWeight: '600', 
                             textAlign: 'center',
                             numberOfLines: 1
@@ -1287,7 +1268,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                           </Text>
                           <Text style={[profileStyles.finalScore, { 
                             color: '#4CAF50', 
-                            fontSize: Math.max(12, width * 0.03), 
+                            fontSize: Math.max(15, width * 0.039), 
                             fontWeight: 'bold', 
                             textAlign: 'center' 
                           }]}>

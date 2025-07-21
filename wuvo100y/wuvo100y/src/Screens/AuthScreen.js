@@ -23,7 +23,7 @@ import AuthService from '../services/AuthService';
 const IOS_CLIENT_ID = '258138577739-bomfeo1vd1egsktp6m2dqkj7qmb7oc16.apps.googleusercontent.com';
 const WEB_CLIENT_ID = '258138577739-bomfeo1vd1egsktp6m2dqkj7qmb7oc16.apps.googleusercontent.com';
 
-function AuthScreen({ onAuthenticate, isDarkMode }) {
+function AuthScreen({ onAuthenticate, isDarkMode, navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -114,14 +114,29 @@ function AuthScreen({ onAuthenticate, isDarkMode }) {
       
       console.log('✅ Firebase sign-in successful:', user.uid);
       
-      // Pass Firebase user data to app
-      onAuthenticate({
-        id: user.uid,
-        email: user.email,
-        name: user.displayName || profile.displayName || email.split('@')[0],
-        provider: 'firebase',
-        profile: profile
-      });
+      // Check if user needs onboarding (new users or missing username)
+      if (profile.isNewUser || !profile.username || !profile.onboardingComplete) {
+        console.log('🚀 Navigating to username selection for onboarding');
+        navigation.navigate('UsernameSelection', {
+          user: {
+            id: user.uid,
+            email: user.email,
+            name: user.displayName || profile.displayName || email.split('@')[0],
+            provider: 'firebase',
+            profile: profile
+          }
+        });
+      } else {
+        // Existing user with complete profile
+        console.log('✅ Existing user, proceeding to main app');
+        onAuthenticate({
+          id: user.uid,
+          email: user.email,
+          name: user.displayName || profile.displayName || email.split('@')[0],
+          provider: 'firebase',
+          profile: profile
+        });
+      }
       
     } catch (error) {
       console.error('❌ Firebase sign-in failed:', error);
@@ -151,14 +166,16 @@ function AuthScreen({ onAuthenticate, isDarkMode }) {
       
       console.log('✅ Firebase sign-up successful:', user.uid);
       
-      // Pass Firebase user data to app
-      onAuthenticate({
-        id: user.uid,
-        email: user.email,
-        name: user.displayName || profile.displayName,
-        provider: 'firebase',
-        profile: profile,
-        isNewUser: true
+      // New users always need onboarding
+      console.log('🚀 New user, navigating to username selection');
+      navigation.navigate('UsernameSelection', {
+        user: {
+          id: user.uid,
+          email: user.email,
+          name: user.displayName || profile.displayName,
+          provider: 'firebase',
+          profile: { ...profile, isNewUser: true }
+        }
       });
       
     } catch (error) {
