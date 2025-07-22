@@ -393,8 +393,8 @@ class SocialRecommendationService {
       console.log('🔄 Using fallback recommendations (no social data)');
       
       // Use existing AI recommendation system as fallback
-      const AIRecommendations = require('../utils/AIRecommendations').default;
-      return await AIRecommendations.getRecommendations(userMovies, mediaType, { count });
+      const AIRecommendations = await import('../utils/AIRecommendations');
+      return await AIRecommendations.default.getImprovedRecommendations(userMovies, mediaType, count);
       
     } catch (error) {
       console.error('❌ Fallback recommendations failed:', error);

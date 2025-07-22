@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import { ENV } from '../config/environment';
 
 export default function MovieDetailScreen() {
   const { params: { movieId, movieTitle } } = useRoute();
@@ -8,7 +9,7 @@ export default function MovieDetailScreen() {
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    fetch(`https://api.themoviedb.org/3/movie/${movieId}?api_key=${API_KEY}&language=en-US`)
+    fetch(`https://api.themoviedb.org/3/movie/${movieId}?api_key=${ENV.TMDB_API_KEY}&language=en-US`)
       .then(r => r.json())
       .then(data => setDetails(data))
       .catch(console.error)

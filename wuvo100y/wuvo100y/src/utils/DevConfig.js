@@ -5,6 +5,9 @@ const DEV_CONFIG = {
   // Set to true to skip auth and onboarding during development
   ENABLE_DEV_MODE: true, // Enabled for Snack demo
   
+  // Set to true to automatically seed fake dev users to Firebase
+  SEED_FAKE_USERS: true, // Seeds Alice Cooper, Bob Smith, etc. to Firebase
+  
   // Pre-selected movies that will be automatically added to seen list
   DEV_MOVIES: [
     {
@@ -449,6 +452,36 @@ export const getDevTVShows = () => {
 
 export const getDevUser = () => {
   return DEV_CONFIG.DEV_USER;
+};
+
+export const shouldSeedFakeUsers = () => {
+  return DEV_CONFIG.SEED_FAKE_USERS;
+};
+
+// Initialize Firebase seeding if enabled
+export const initializeDevEnvironment = async () => {
+  if (isDevModeEnabled() && shouldSeedFakeUsers()) {
+    try {
+      console.log('🌱 Dev mode detected - initializing Firebase seeding...');
+      
+      // Dynamically import to avoid loading Firebase seeder in production
+      const FirebaseSeeder = (await import('./FirebaseSeeder')).default;
+      
+      // Check if users are already seeded
+      const existingCount = await FirebaseSeeder.getSeededUserCount();
+      
+      if (existingCount === 0) {
+        console.log('📝 No fake dev users found - seeding Firebase...');
+        await FirebaseSeeder.seedFakeUsers();
+      } else {
+        console.log(`✅ Found ${existingCount} fake dev users already in Firebase`);
+      }
+      
+    } catch (error) {
+      console.error('⚠️ Firebase seeding failed:', error.message);
+      console.log('ℹ️ App will continue with fallback fake users in UserSearchService');
+    }
+  }
 };
 
 export default DEV_CONFIG;

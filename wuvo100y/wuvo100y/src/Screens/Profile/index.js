@@ -25,6 +25,8 @@ import { getLayoutStyles } from '../../Styles/layoutStyles';
 import { getHeaderStyles } from '../../Styles/headerStyles';
 import { getListStyles } from '../../Styles/listStyles';
 
+const { width } = Dimensions.get('window');
+
 const getStandardizedButtonStyles = (colors) => ({
   // Base button style - consistent across all variants
   baseButton: {
@@ -93,10 +95,11 @@ import theme from '../../utils/Theme';
 import UserSearchModal from '../../Components/UserSearchModal';
 import { useAuth } from '../../hooks/useAuth';
 import { RatingModal } from '../../Components/RatingModal';
+import { SentimentRatingModal, calculateDynamicRatingCategories, calculatePairwiseRating, ComparisonResults } from '../../Components/EnhancedRatingSystem';
 import { filterAdultContent } from '../../utils/ContentFiltering';
 import { TMDB_API_KEY, API_TIMEOUT, STREAMING_SERVICES, DECADES } from '../../Constants';
+import { ENV } from '../../config/environment';
 
-const { width } = Dimensions.get('window');
 const POSTER_SIZE = (width - 60) / 3; // 3 columns with spacing
 
 const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdateRating, onAddToSeen, onRemoveFromWatchlist, genres, route }) => {
@@ -126,6 +129,8 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieCredits, setMovieCredits] = useState(null);
   const [movieProviders, setMovieProviders] = useState(null);
+  const [isLoadingMovieDetails, setIsLoadingMovieDetails] = useState(false);
+  const [movieContext, setMovieContext] = useState(null); // Track where the movie was selected from
   
   // Friend profile ranking state
   const [selectedRankingType, setSelectedRankingType] = useState('user'); // 'user', 'average', 'imdb'
@@ -148,11 +153,24 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const [tempStreamingServices, setTempStreamingServices] = useState([]);
   const [streamingProviders, setStreamingProviders] = useState([]);
   
+  // Enhanced rating modal state
+  const [emotionModalVisible, setEmotionModalVisible] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  
+  // Comparison modal state
+  const [comparisonModalVisible, setComparisonModalVisible] = useState(false);
+  const [comparisonMovies, setComparisonMovies] = useState([]);
+  const [currentComparison, setCurrentComparison] = useState(0);
+  const [comparisonResults, setComparisonResults] = useState([]);
+  const [isComparisonComplete, setIsComparisonComplete] = useState(false);
+  const [currentMovieRating, setCurrentMovieRating] = useState(null);
+  const [selectedEmotion, setSelectedEmotion] = useState(null);
+  
   // Animation refs
   const slideAnim = useRef(new Animated.Value(300)).current;
   
-  // TODO: Replace with actual current user ID from Firebase Auth
-  const currentUserId = 'demo-user-123';
+  // Get actual current user ID from Firebase Auth
+  const currentUserId = userInfo?.uid || userInfo?.userId || 'demo-user-123';
   
   const API_KEY = TMDB_API_KEY;
 
@@ -466,14 +484,36 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     return `https://image.tmdb.org/t/p/w342${path}`;
   };
 
-  // TopRated handlers
-  const handleMovieSelect = useCallback(async (movie) => {
-    navigation.navigate('MovieDetail', {
-      movieId: movie.id,
-      movieTitle: movie.title || movie.name,
-      mediaType: mediaType
-    });
-  }, [navigation, mediaType]);
+  // Universal movie selection handler with context
+  const handleMovieSelect = useCallback(async (movie, context = 'general') => {
+    console.log('🎬 Movie selected:', movie.title || movie.name, 'Context:', context);
+    setSelectedMovie(movie);
+    setMovieContext(context);
+    setIsLoadingMovieDetails(true);
+    setMovieDetailModalVisible(true);
+    
+    try {
+      // Fetch movie credits
+      const creditsResponse = await fetch(
+        `https://api.themoviedb.org/3/${mediaType}/${movie.id}/credits?api_key=${ENV.TMDB_API_KEY}`
+      );
+      const creditsData = await creditsResponse.json();
+      const cast = creditsData.cast?.slice(0, 5) || [];
+      setMovieCredits(cast);
+      
+      // Fetch streaming providers
+      const providersResponse = await fetch(
+        `https://api.themoviedb.org/3/${mediaType}/${movie.id}/watch/providers?api_key=${ENV.TMDB_API_KEY}`
+      );
+      const providersData = await providersResponse.json();
+      const usProviders = providersData.results?.US?.flatrate || [];
+      setMovieProviders(usProviders);
+    } catch (error) {
+      console.error('Error fetching movie details:', error);
+    } finally {
+      setIsLoadingMovieDetails(false);
+    }
+  }, [mediaType]);
 
   const openEditModal = useCallback((movie) => {
     setSelectedMovie(movie);
@@ -654,20 +694,225 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     setTempStreamingServices([]);
   }, []);
 
-  const handleMoviePress = (movie) => {
-    navigation.navigate('MovieDetail', {
-      movieId: movie.id,
-      movieTitle: movie.title || movie.name,
-      mediaType: mediaType
-    });
-  };
-
-  const closeDetailModal = useCallback(() => {
+  const closeDetailModal = useCallback((preserveForRating = false) => {
     setMovieDetailModalVisible(false);
-    setSelectedMovie(null);
-    setMovieCredits(null);
-    setMovieProviders(null);
+    if (!preserveForRating) {
+      setSelectedMovie(null);
+      setMovieCredits(null);
+      setMovieProviders(null);
+      setIsLoadingMovieDetails(false);
+      setMovieContext(null);
+    }
+    console.log('🔓 Profile modal closed, preserveForRating:', preserveForRating);
   }, []);
+  
+  // Enhanced rating functions
+  const handleWatchlistToggle = useCallback(() => {
+    if (!selectedMovie) return;
+    
+    const isInWatchlist = unseen.some(movie => movie.id === selectedMovie.id);
+    if (isInWatchlist) {
+      onRemoveFromWatchlist(selectedMovie.id);
+    }
+    closeDetailModal();
+  }, [selectedMovie, unseen, onRemoveFromWatchlist, closeDetailModal]);
+  
+  const handleNotInterested = useCallback((movie) => {
+    // Add to skipped movies if function exists
+    closeDetailModal();
+  }, [closeDetailModal]);
+  
+  // Select movie from percentile based on emotion (from Home screen logic)
+  const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
+    const percentileRanges = {
+      LOVED: [0.0, 0.25],      // Top 25%
+      LIKED: [0.25, 0.50],     // Upper-middle 25-50% 
+      AVERAGE: [0.50, 0.75],   // Lower-middle 50-75%
+      DISLIKED: [0.75, 1.0]    // Bottom 25%
+    };
+
+    if (!seenMovies || seenMovies.length === 0) {
+      console.log('🚨 No seen movies available');
+      return null;
+    }
+
+    // Sort movies by rating to establish percentile ranges
+    const sortedMovies = [...seenMovies].sort((a, b) => (a.userRating || 0) - (b.userRating || 0));
+    const [minPercent, maxPercent] = percentileRanges[emotion] || [0.5, 0.75];
+    
+    const startIndex = Math.floor(sortedMovies.length * minPercent);
+    const endIndex = Math.min(Math.floor(sortedMovies.length * maxPercent), sortedMovies.length - 1);
+    
+    console.log(`🎯 ${emotion} percentile [${minPercent}-${maxPercent}]: indices ${startIndex}-${endIndex}`);
+    
+    const percentileMovies = sortedMovies.slice(startIndex, endIndex + 1);
+    if (percentileMovies.length === 0) return sortedMovies[0]; // Fallback
+    
+    // Random selection from percentile
+    const selectedMovie = percentileMovies[Math.floor(Math.random() * percentileMovies.length)];
+    console.log(`🎬 Selected from ${emotion} percentile: ${selectedMovie.title} (Rating: ${selectedMovie.userRating})`);
+    
+    return selectedMovie;
+  }, []);
+
+  const handleEmotionSelected = useCallback((emotion) => {
+    console.log('🎭 PROFILE EMOTION SELECTED:', emotion);
+    console.log('🎭 SEEN MOVIES COUNT:', seen.length);
+    
+    setSelectedEmotion(emotion);
+    setEmotionModalVisible(false);
+    // Don't clear selectedMovie here - keep it for comparison modal
+    
+    // Select first opponent from percentile - EXACT COPY FROM HOME SCREEN LOGIC
+    const firstOpponent = selectMovieFromPercentile(seen, emotion);
+    if (!firstOpponent) {
+      console.log('❌ NO FIRST OPPONENT FOUND');
+      Alert.alert(
+        '🎬 Need More Ratings', 
+        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+    
+    // Select second and third opponents randomly from all seen movies (for known vs known)
+    const remainingMovies = seen.filter(movie => movie.id !== firstOpponent.id);
+    
+    if (remainingMovies.length < 2) {
+      console.log('❌ NOT ENOUGH REMAINING MOVIES');
+      Alert.alert(
+        '🎬 Need More Ratings', 
+        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+    
+    // Shuffle remaining movies and pick 2
+    const shuffled = remainingMovies.sort(() => 0.5 - Math.random());
+    const secondOpponent = shuffled[0];
+    const thirdOpponent = shuffled[1];
+    
+    // Set up comparison movies and start
+    setComparisonMovies([firstOpponent, secondOpponent, thirdOpponent]);
+    setCurrentComparison(0);
+    setComparisonResults([]);
+    setIsComparisonComplete(false);
+    setCurrentMovieRating(null);
+    setComparisonModalVisible(true);
+    
+    console.log(`🎭 Starting rating for ${selectedMovie?.title} with emotion: ${emotion} (no baseline)`);
+    console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
+    console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
+    console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
+  }, [selectedMovie, seen, selectMovieFromPercentile]);
+
+  const handleComparison = useCallback((winner) => {
+    const currentComparisonMovie = comparisonMovies[currentComparison];
+    
+    if (currentComparison === 0) {
+      // FIRST COMPARISON: Unknown vs Known (use unified pairwise calculation)
+      const opponentRating = currentComparisonMovie.userRating;
+      let result;
+      
+      if (winner === 'new') {
+        result = 'A_WINS';
+      } else if (winner === 'comparison') {
+        result = 'B_WINS';
+      } else if (winner === 'tie') {
+        result = 'TIE';
+      }
+      
+      const pairwiseResult = calculatePairwiseRating({
+        aRating: null, // New movie has no rating yet
+        bRating: opponentRating, // Opponent rating
+        aGames: 0, // New movie has no games
+        bGames: currentComparisonMovie.gamesPlayed || 5,
+        result: result
+      });
+      
+      const derivedRating = pairwiseResult.updatedARating;
+      setCurrentMovieRating(derivedRating);
+      
+      console.log(`🎯 ROUND 1 BASELINE-FREE: ${selectedMovie?.title} derived rating: ${derivedRating} (from ${winner} vs ${currentComparisonMovie.title})`);
+      
+      setComparisonResults([{ winner, opponentRating, derivedRating }]);
+      setCurrentComparison(1);
+    } else {
+      // Rounds 2-3: Known vs Known - Use Wildcard ELO system
+      const currentRating = currentMovieRating;
+      const opponentRating = currentComparisonMovie.userRating;
+      
+      // Wildcard ELO calculation
+      const adjustedRating = adjustRatingWildcard(winner, currentRating, opponentRating, selectedEmotion);
+      setCurrentMovieRating(adjustedRating);
+      
+      console.log(`🎯 ROUND ${currentComparison + 1} WILDCARD ELO: ${selectedMovie?.title} rating: ${currentRating} → ${adjustedRating} (${winner} vs ${currentComparisonMovie.title})`);
+      
+      setComparisonResults(prev => [...prev, { winner, opponentRating, newRating: adjustedRating }]);
+      
+      if (currentComparison === 2) {
+        // All comparisons complete
+        setIsComparisonComplete(true);
+      } else {
+        setCurrentComparison(currentComparison + 1);
+      }
+    }
+  }, [comparisonMovies, currentComparison, currentMovieRating, selectedMovie, selectedEmotion]);
+
+  const adjustRatingWildcard = useCallback((winner, currentRating, opponentRating, emotion) => {
+    const K = 32; // ELO K-factor
+    const currentK = winner === 'tie' ? K * 0.3 : K;
+    
+    // Calculate expected score
+    const ratingDiff = opponentRating - currentRating;
+    const expectedScore = 1 / (1 + Math.pow(10, ratingDiff / 400));
+    
+    // Determine actual score based on winner
+    let actualScore;
+    if (winner === 'new') actualScore = 1;
+    else if (winner === 'comparison') actualScore = 0;
+    else actualScore = 0.5; // tie
+    
+    // Calculate new rating
+    const newRating = currentRating + currentK * (actualScore - expectedScore);
+    
+    // Clamp between 1 and 10
+    return Math.max(1, Math.min(10, newRating));
+  }, []);
+
+  const handleConfirmRating = useCallback((finalRating) => {
+    console.log('✅ PROFILE: Confirming rating:', finalRating, 'for:', selectedMovie?.title);
+    if (!selectedMovie || !finalRating) return;
+
+    // Add movie to seen list with the calculated rating
+    onAddToSeen({
+      ...selectedMovie,
+      userRating: finalRating,
+      sentimentCategory: selectedEmotion,
+      eloRating: finalRating * 100,
+      comparisonWins: comparisonResults.filter(r => r.winner === 'new').length,
+      gamesPlayed: 3,
+      comparisonHistory: comparisonResults,
+    });
+
+    // Close all modals and reset state
+    setComparisonModalVisible(false);
+    setSelectedMovie(null);
+    setSelectedCategory(null);
+    setComparisonMovies([]);
+    setCurrentComparison(0);
+    setComparisonResults([]);
+    setIsComparisonComplete(false);
+    setCurrentMovieRating(null);
+    setSelectedEmotion(null);
+
+    Alert.alert(
+      "Rating Added!", 
+      `You rated "${selectedMovie.title}" (${finalRating.toFixed(1)}/10) from Profile watchlist`,
+      [{ text: "OK" }]
+    );
+  }, [selectedMovie, selectedEmotion, comparisonResults, onAddToSeen]);
 
   // Render functions
   const renderGenreButton = useCallback(({ item }) => {
@@ -962,7 +1207,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                   <TouchableOpacity
                     key={movie.id}
                     style={[listStyles.rankingItem, { backgroundColor: colors.card }]}
-                    onPress={() => handleMovieSelect(movie)}
+                    onPress={() => handleMovieSelect(movie, 'toprated')}
                     activeOpacity={0.7}
                     accessibilityLabel={`View details for ${getTitle(movie)}, rated ${displayRating(movie)} out of 10`}
                     accessibilityRole="button"
@@ -1174,7 +1419,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                 <TouchableOpacity
                   key={item.id}
                   style={[listStyles.rankingItem, { backgroundColor: colors.card }]}
-                  onPress={() => handleMoviePress(item)}
+                  onPress={() => handleMovieSelect(item, 'watchlist')}
                   activeOpacity={0.7}
                   accessibilityLabel={`View details for ${item.title || item.name}, rated ${item.score?.toFixed(1) || item.vote_average?.toFixed(1) || 'N/A'}`}
                   accessibilityRole="button"
@@ -1323,12 +1568,20 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
       </ThemedHeader>
 
       <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]}>
-        {/* Settings Button - positioned outside header */}
+        {/* Settings Button - positioned right below header */}
         <TouchableOpacity 
           style={styles.floatingSettingsButton}
           onPress={() => setShowDropdown(true)}
         >
           <Ionicons name="settings-outline" size={24} color="#fff" />
+        </TouchableOpacity>
+        
+        {/* Search Button - positioned below settings button */}
+        <TouchableOpacity 
+          style={styles.floatingSearchButton}
+          onPress={() => setSearchModalVisible(true)}
+        >
+          <Ionicons name="search-outline" size={24} color="#fff" />
         </TouchableOpacity>
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -1370,7 +1623,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
               <TouchableOpacity
                 key={movie.id}
                 style={[styles.posterContainer, { width: POSTER_WIDTH, height: POSTER_HEIGHT }]}
-                onPress={() => handleMovieSelect(movie)}
+                onPress={() => handleMovieSelect(movie, 'toppicks-grid')}
               >
                 <Image
                   source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
@@ -1393,7 +1646,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
               <TouchableOpacity
                 key={movie.id}
                 style={[styles.posterContainer, { width: POSTER_WIDTH, height: POSTER_HEIGHT }]}
-                onPress={() => handleMoviePress(movie)}
+                onPress={() => handleMovieSelect(movie, 'watchlist-grid')}
               >
                 <Image
                   source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
@@ -1441,7 +1694,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
               <TouchableOpacity
                 key={movie.id}
                 style={styles.listItem}
-                onPress={() => handleMovieSelect(movie)}
+                onPress={() => handleMovieSelect(movie, 'fulllist')}
               >
                 <Image
                   source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
@@ -1517,7 +1770,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         </TouchableOpacity>
       </Modal>
 
-      {/* Movie Detail Modal - Exact Copy from Home Screen */}
+      {/* Enhanced Movie Detail Modal - Now used for ALL movie interactions */}
       <Modal
         visible={movieDetailModalVisible}
         transparent
@@ -1583,12 +1836,13 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
             </View>
             
             <View style={modalStyles.buttonRow}>
-              {/* Edit Rating Button - Only for TopRated Tab */}
-              {selectedTab === 'toprated' && (
+              {/* Dynamic buttons based on context */}
+              {movieContext === 'toprated' || movieContext === 'toppicks-grid' || movieContext === 'fulllist' ? (
+                // For movies already rated - show Edit Rating button
                 <TouchableOpacity 
                   style={[
                     standardButtonStyles.baseButton,
-                    standardButtonStyles.tertiaryButton
+                    standardButtonStyles.primaryButton
                   ]}
                   onPress={() => {
                     closeDetailModal();
@@ -1599,34 +1853,79 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                   <Text 
                     style={[
                       standardButtonStyles.baseText,
-                      standardButtonStyles.tertiaryText
+                      standardButtonStyles.primaryText
                     ]}
                   >
                     Edit Rating
                   </Text>
                 </TouchableOpacity>
-              )}
-              
-              {/* Mark as Watched Button - Only for Watchlist Tab */}
-              {selectedTab === 'watchlist' && (
+              ) : movieContext === 'watchlist' || movieContext === 'watchlist-grid' ? (
+                // For watchlist movies - show Rate and Remove buttons
+                <>
+                  <TouchableOpacity 
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.primaryButton
+                    ]}
+                    onPress={() => {
+                      console.log('🎬 Rate button clicked from enhanced modal');
+                      closeDetailModal(true);
+                      setEmotionModalVisible(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.primaryText
+                      ]}
+                    >
+                      Rate
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
+                    onPress={handleWatchlistToggle}
+                    activeOpacity={0.7}
+                  >
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText
+                      ]}
+                    >
+                      Remove
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // Default case - show View Details button
                 <TouchableOpacity 
                   style={[
                     standardButtonStyles.baseButton,
-                    standardButtonStyles.tertiaryButton
+                    standardButtonStyles.primaryButton
                   ]}
                   onPress={() => {
                     closeDetailModal();
-                    openRatingModal(selectedMovie);
+                    navigation.navigate('MovieDetail', {
+                      movieId: selectedMovie.id,
+                      movieTitle: selectedMovie.title || selectedMovie.name,
+                      mediaType: mediaType
+                    });
                   }}
                   activeOpacity={0.7}
                 >
                   <Text 
                     style={[
                       standardButtonStyles.baseText,
-                      standardButtonStyles.tertiaryText
+                      standardButtonStyles.primaryText
                     ]}
                   >
-                    Mark as Watched
+                    View Details
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1646,7 +1945,12 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         currentUserId={currentUserId}
         onUserSelect={(user) => {
           console.log('User selected:', user);
-          // TODO: Navigate to user's public profile
+          setSearchModalVisible(false);
+          navigation.navigate('PublicProfile', {
+            userId: user.id,
+            username: user.username,
+            displayName: user.displayName
+          });
         }}
         isDarkMode={isDarkMode}
       />
@@ -1680,6 +1984,135 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         theme={theme}
         genres={genres}
       />
+      
+      {/* Enhanced Emotion Selection Modal */}
+      <SentimentRatingModal
+        visible={emotionModalVisible}
+        movie={selectedMovie}
+        onClose={() => setEmotionModalVisible(false)}
+        onRatingSelect={(movieWithRating, categoryKey, rating) => {
+          console.log('🎭 Profile: Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
+          setSelectedCategory(categoryKey);
+          handleEmotionSelected(categoryKey);
+        }}
+        colors={colors}
+        userMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
+      />
+      
+      {/* Comparison Modal */}
+      <Modal visible={comparisonModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <LinearGradient
+            colors={colors.primaryGradient || ['#667eea', '#764ba2']}
+            style={[styles.comparisonModalContent]}
+          >
+            {!isComparisonComplete ? (
+              <>
+                <View style={styles.comparisonHeader}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>
+                    🎬 Comparison {currentComparison + 1}/3
+                  </Text>
+                  <Text style={[styles.comparisonSubtitle, { color: colors.subText }]}>
+                    Which do you prefer?
+                  </Text>
+                </View>
+
+                <View style={styles.movieComparisonContainer}>
+                  {/* New Movie */}
+                  <TouchableOpacity 
+                    style={styles.movieComparisonCard}
+                    onPress={() => handleComparison('new')}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path || selectedMovie?.poster}` }}
+                      style={styles.comparisonPoster}
+                      resizeMode="cover"
+                    />
+                    <Text style={[styles.comparisonTitle, { color: colors.text }]} numberOfLines={2}>
+                      {selectedMovie?.title || selectedMovie?.name}
+                    </Text>
+                    <Text style={[styles.comparisonSubtext, { color: colors.subText }]}>
+                      New Movie
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.vsContainer}>
+                    <Text style={[styles.vsText, { color: colors.accent }]}>VS</Text>
+                  </View>
+
+                  {/* Comparison Movie */}
+                  <TouchableOpacity 
+                    style={styles.movieComparisonCard}
+                    onPress={() => handleComparison('comparison')}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w500${comparisonMovies[currentComparison]?.poster_path}` }}
+                      style={styles.comparisonPoster}
+                      resizeMode="cover"
+                    />
+                    <Text style={[styles.comparisonTitle, { color: colors.text }]} numberOfLines={2}>
+                      {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
+                    </Text>
+                    <Text style={[styles.comparisonSubtext, { color: colors.subText }]}>
+                      Your Rating: {comparisonMovies[currentComparison]?.userRating?.toFixed(1) || 'N/A'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.tieButton, { backgroundColor: colors.card }]}
+                  onPress={() => handleComparison('tie')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.tieButtonText, { color: colors.text }]}>
+                    Too Close to Call
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={() => setComparisonModalVisible(false)}
+                >
+                  <Text style={[styles.cancelButtonText, { color: colors.subText }]}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.comparisonHeader}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>
+                    🎉 Rating Complete!
+                  </Text>
+                  <Text style={[styles.comparisonSubtitle, { color: colors.subText }]}>
+                    Final Rating: {currentMovieRating?.toFixed(1)}/10
+                  </Text>
+                </View>
+
+                <View style={styles.resultsContainer}>
+                  <Text style={[styles.resultsTitle, { color: colors.text }]}>
+                    {selectedMovie?.title || selectedMovie?.name}
+                  </Text>
+                  <Text style={[styles.finalRatingText, { color: colors.accent }]}>
+                    {currentMovieRating?.toFixed(1)}/10
+                  </Text>
+                </View>
+
+                <View style={styles.comparisonButtonRow}>
+                  <TouchableOpacity 
+                    style={[styles.confirmButton, { backgroundColor: colors.primary }]}
+                    onPress={() => handleConfirmRating(currentMovieRating)}
+                  >
+                    <Text style={[styles.confirmButtonText, { color: colors.accent }]}>
+                      Confirm Rating
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </LinearGradient>
+        </View>
+      </Modal>
       
       {/* Enhanced Filter Modal */}
       <Modal
@@ -1893,160 +2326,133 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
 };
 
 const styles = StyleSheet.create({
-  // Main Container
   container: {
     flex: 1,
-    backgroundColor: '#000',
   },
-  
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+  floatingSettingsButton: {
+    position: 'absolute',
+    top: 10, // Right below header
+    right: 20,
+    zIndex: 100,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 8,
   },
-  
-  // Scroll View
+  floatingSearchButton: {
+    position: 'absolute',
+    top: 60, // Below settings button 
+    right: 20,
+    zIndex: 100,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 8,
+  },
   scrollView: {
     flex: 1,
-    backgroundColor: '#000',
   },
-  
-  // Instagram-style Header
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#000',
-  },
-  headerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  username: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginHorizontal: 8,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-  },
-  iconButton: {
-    marginLeft: 16,
-    padding: 4,
-  },
-  
-  // Profile Section
-  profileSection: {
-    paddingHorizontal: 16,
-    backgroundColor: '#000',
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  
-  // New Profile Info Row Styles
   profileInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#000',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   avatarContainer: {
-    marginRight: 16,
+    marginRight: 15,
   },
   avatar: {
     width: 60,
     height: 60,
-    backgroundColor: '#333',
     borderRadius: 30,
-    justifyContent: 'center',
+    backgroundColor: '#666',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   profileTextBlock: {
     flex: 1,
   },
-  filmCount: {
-    color: '#999',
-    fontSize: 16,
-    marginTop: 4,
+  username: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
   },
-  
-  // Friends Similarity Carousel Styles
+  filmCount: {
+    fontSize: 14,
+    color: '#ccc',
+  },
   friendsCarousel: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
   friendItem: {
     alignItems: 'center',
-    marginRight: 16,
-    minWidth: 60,
+    marginRight: 20,
   },
   friendAvatar: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#333',
-    borderRadius: 25,
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#444',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 8,
   },
   similarityPercentage: {
-    color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    color: '#fff',
+    fontWeight: 'bold',
   },
-  
-  // Section Container Styles
   sectionContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
+    paddingHorizontal: 20,
+    marginBottom: 30,
   },
   sectionTitle: {
-    color: '#fff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 12,
+    color: '#fff',
+    marginBottom: 15,
   },
   movieGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
+  posterContainer: {
+    marginBottom: 10,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  posterImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+  },
   ratingBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 5,
+    right: 5,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
     borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
   ratingText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
   },
-  
-  // Genre Filter Styles
   genreFilterContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
   genreFilterButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#333',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    justifyContent: 'space-between',
+    padding: 15,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   genreFilterText: {
     color: '#fff',
@@ -2054,30 +2460,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   genreButtonsList: {
-    paddingVertical: 8,
+    paddingHorizontal: 0,
   },
-  
-  // Full List Container Styles
   fullListContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
   },
   listPoster: {
     width: 60,
     height: 90,
-    borderRadius: 4,
+    borderRadius: 6,
     marginRight: 12,
   },
   listMovieInfo: {
     flex: 1,
-    paddingRight: 8,
+    marginRight: 10,
   },
   listTitle: {
     color: '#fff',
@@ -2086,7 +2491,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   listYear: {
-    color: '#999',
+    color: '#ccc',
     fontSize: 14,
     marginBottom: 4,
   },
@@ -2100,284 +2505,57 @@ const styles = StyleSheet.create({
   },
   ratingColumn: {
     alignItems: 'center',
-    marginLeft: 16,
+    marginLeft: 12,
   },
   ratingLabel: {
-    color: '#999',
+    color: '#ccc',
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginBottom: 2,
   },
   ratingValue: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   friendsRatingLabel: {
-    color: '#999',
+    color: '#4CAF50',
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginBottom: 2,
   },
   friendsRatingValue: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#4CAF50',
+    fontSize: 16,
     fontWeight: 'bold',
   },
-  
-  // Settings Button (moved outside header for consistency)
-  floatingSettingsButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  
-  // Empty State
   emptyState: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
+    paddingVertical: 40,
   },
   emptyText: {
-    color: '#666',
-    fontSize: 16,
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  
-  // Avatar Section
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 24,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#333',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#262626',
-  },
-  addButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#0095f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#000',
-  },
-  
-  // Stats Section
-  statsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 8,
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statNumber: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    color: '#999',
-    fontSize: 14,
-    marginTop: 2,
-  },
-  
-  // Profile Info Section
-  profileInfo: {
-    marginBottom: 16,
-  },
-  displayName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  location: {
-    color: '#999',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  bio: {
-    color: '#fff',
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  
-  // Action Buttons Section
-  actionButtons: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    gap: 8,
-  },
-  editButton: {
-    flex: 1,
-    backgroundColor: '#262626',
-    paddingVertical: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  editButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  shareButton: {
-    flex: 1,
-    backgroundColor: '#262626',
-    paddingVertical: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  shareButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  discoverButton: {
-    backgroundColor: '#262626',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  
-  // Tab Navigation Section
-  tabContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#262626',
-    backgroundColor: '#000',
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#fff',
-  },
-  
-  // Posts Grid Section
-  postsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    backgroundColor: '#000',
-    justifyContent: 'space-between',
-  },
-  posterContainer: {
-    width: POSTER_SIZE,
-    height: POSTER_SIZE * 1.5,
-    marginBottom: 4,
-    position: 'relative',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  posterImage: {
-    width: '100%',
-    height: '100%',
-  },
-  ratingOverlay: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  ratingText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  watchingOverlay: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  emptyPoster: {
-    backgroundColor: '#262626',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#333',
-    borderStyle: 'dashed',
-  },
-  emptyText: {
-    color: '#666',
-    fontSize: 10,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  
-  // Coming Soon Section
-  comingSoonContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-    backgroundColor: '#000',
-  },
-  comingSoonText: {
     color: '#999',
     fontSize: 16,
-    marginTop: 12,
+    marginTop: 10,
     textAlign: 'center',
   },
-
-  // Dropdown Styles
   dropdownOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
     paddingTop: 100,
-    paddingRight: 16,
+    paddingRight: 20,
   },
   dropdownContainer: {
-    backgroundColor: '#262626',
+    backgroundColor: '#333',
     borderRadius: 8,
-    paddingVertical: 8,
     minWidth: 150,
-    borderWidth: 1,
-    borderColor: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   dropdownItem: {
     flexDirection: 'row',
@@ -2388,282 +2566,177 @@ const styles = StyleSheet.create({
   dropdownText: {
     color: '#fff',
     fontSize: 16,
-    marginLeft: 12,
+    marginLeft: 8,
   },
   dropdownSeparator: {
     height: 1,
-    backgroundColor: '#333',
-    marginVertical: 4,
+    backgroundColor: '#555',
+    marginHorizontal: 16,
   },
-});
-
-// Profile-specific styles for TopRated and Watchlist functionality
-const profileStyles = StyleSheet.create({
-  // Filter Section Styles
-  filterSection: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4, 
-    borderBottomWidth: 1,
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  filterTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  clearButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  genreList: {
-    paddingVertical: 4,
-    paddingRight: 12,
-  },
-  genreButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    marginRight: 8,
-    borderWidth: 1,
-  },
-  selectedGenreButton: {
-    borderWidth: 1,
-  },
-  genreButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  activeFilterIndicator: {
-    marginTop: 8,
-    marginBottom: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  activeFilterText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  
-  // Filter Button
-  filterButton: {
-    padding: 4,
-    position: 'relative',
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF9500',
-  },
-  
-  // Active Filters Section
-  activeFiltersSection: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  activeFiltersTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  activeFiltersContainer: {
-    flexDirection: 'row',
-  },
-  activeFilterChip: {
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    borderRadius: 12,
-  },
-  activeFilterText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  
-  // Button Styles
-  editButton: {
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginTop: 1,
-    // CODE_BIBLE #3: Compact button sizing
-  },
-  editButtonText: {
-    fontSize: 10,
-    fontWeight: '600',
-    // CODE_BIBLE #3: Smaller button text for compact design
-  },
-  
-  // Score Container
-  scoreContainer: {
-    marginTop: 8,
-    flexGrow: 1,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  finalScore: {
+  comparisonModalContent: {
+    width: '90%',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    maxHeight: '80%',
+  },
+  comparisonHeader: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  comparisonSubtitle: {
+    fontSize: 16,
+    opacity: 0.8,
+  },
+  movieComparisonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 20,
+  },
+  movieComparisonCard: {
+    alignItems: 'center',
+    flex: 1,
+    maxWidth: 120,
+  },
+  comparisonPoster: {
+    width: 100,
+    height: 150,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  comparisonTitle: {
     fontSize: 14,
     fontWeight: 'bold',
+    textAlign: 'center',
     marginBottom: 4,
-    textAlign: 'left',
-    // CODE_BIBLE #3: 50% size reduction for mobile optimization
   },
-  
-  // Clear filters button styling
-  clearFiltersButton: {
+  comparisonSubtext: {
+    fontSize: 12,
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  vsContainer: {
+    paddingHorizontal: 15,
+  },
+  vsText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  tieButton: {
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     borderRadius: 8,
-    marginTop: 16,
-    alignSelf: 'center',
+    marginBottom: 15,
   },
-  clearFiltersButtonText: {
+  tieButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-  },
-  
-  // Filter title with arrow
-  filterTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  
-  // Friend profile ranking options
-  rankingOptionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginVertical: 8,
-  },
-  rankingOption: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: 'center',
-    minWidth: 120,
-  },
-  selectedRankingOption: {
-    borderWidth: 2,
-  },
-  rankingOptionText: {
-    fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
   },
-  
-  // Unwatched movies toggle
-  unwatchedToggleContainer: {
-    marginTop: 8,
-  },
-  unwatchedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  cancelButton: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
   },
-  selectedUnwatchedToggle: {
-    borderWidth: 2,
-  },
-  unwatchedToggleText: {
+  cancelButtonText: {
     fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
+    textAlign: 'center',
   },
-  
-  // Unwatched movie indicator
-  unwatchedIndicator: {
-    paddingVertical: 2,
-    paddingHorizontal: 8,
+  resultsContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  resultsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  finalRatingText: {
+    fontSize: 36,
+    fontWeight: 'bold',
+  },
+  comparisonButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  confirmButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 30,
     borderRadius: 8,
-    marginTop: 4,
   },
-  unwatchedIndicatorText: {
-    fontSize: 10,
-    fontWeight: '600',
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
     textAlign: 'center',
   },
 });
 
-// Filter Modal Styles
 const filterStyles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   enhancedModalContent: {
-    width: '95%',
-    maxHeight: '85%',
-    elevation: 10,
-    shadowOpacity: 0.5,
+    width: '90%',
+    maxHeight: '80%',
     borderRadius: 12,
-    paddingTop: 20,
+    padding: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
     marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: 'bold',
+    color: '#fff',
   },
   clearAllButton: {
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 6,
   },
   clearAllText: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
   modalScrollContainer: {
     flex: 1,
-    minHeight: 300,
-    maxHeight: 500,
+    maxHeight: 400,
   },
   modalScrollView: {
     flex: 1,
-    paddingHorizontal: 20,
   },
   scrollViewContent: {
     paddingBottom: 20,
-    flexGrow: 1,
   },
   filterSection: {
     marginBottom: 25,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    color: '#fff',
     marginBottom: 12,
-    color: '#FFFFFF',
   },
   optionsGrid: {
     flexDirection: 'row',
@@ -2675,80 +2748,204 @@ const filterStyles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 20,
     borderWidth: 1,
+    marginRight: 8,
     marginBottom: 8,
   },
   optionChipText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
-    textAlign: 'center',
   },
   streamingChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 20,
     borderWidth: 1,
+    marginRight: 8,
     marginBottom: 8,
-    minWidth: 120,
   },
   streamingLogoImage: {
-    width: 24,
-    height: 24,
-    marginRight: 8,
+    width: 20,
+    height: 20,
+    marginRight: 6,
     borderRadius: 4,
   },
   streamingLogoPlaceholder: {
-    width: 24,
-    height: 24,
-    marginRight: 8,
+    width: 20,
+    height: 20,
     borderRadius: 4,
     backgroundColor: '#666',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
   },
   streamingLogoText: {
-    fontSize: 12,
+    color: '#fff',
+    fontSize: 10,
     fontWeight: 'bold',
-    color: '#FFFFFF',
   },
   streamingText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
-    flex: 1,
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    marginTop: 10,
-  },
-  applyButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  applyButtonText: {
-    fontWeight: '600',
-    fontSize: 16,
+    marginTop: 20,
+    gap: 12,
   },
   cancelButton: {
     flex: 1,
     paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
-    marginRight: 8,
   },
   cancelButtonText: {
-    fontWeight: '600',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  applyButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+const profileStyles = StyleSheet.create({
+  genreButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  selectedGenreButton: {
+    borderWidth: 2,
+  },
+  genreButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  filterSection: {
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  filterTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  filterTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clearButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rankingOptionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  rankingOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  selectedRankingOption: {
+    borderWidth: 2,
+  },
+  rankingOptionText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  unwatchedToggleContainer: {
+    marginTop: 8,
+  },
+  unwatchedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  selectedUnwatchedToggle: {
+    borderWidth: 2,
+  },
+  unwatchedToggleText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  genreList: {
+    paddingVertical: 8,
+  },
+  activeFilterIndicator: {
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  activeFilterText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  ratingLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  finalScore: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  unwatchedIndicator: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  unwatchedIndicatorText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  clearFiltersButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  clearFiltersButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

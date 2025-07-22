@@ -18,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 // Import theme system and styling modules
 import { useMediaType } from '../../Navigation/TabNavigator';
 import { getLayoutStyles } from '../../Styles/layoutStyles';
-import { getHeaderStyles, ThemedHeader } from '../../Styles/headerStyles';
+import { getHeaderStyles } from '../../Styles/headerStyles';
 import { getButtonStyles } from '../../Styles/buttonStyles';
 import { getModalStyles } from '../../Styles/modalStyles';
 import { getMovieCardStyles } from '../../Styles/movieCardStyles';
@@ -1868,13 +1868,6 @@ function WildcardScreen({
  // Main UI
  return (
    <View style={[{ flex: 1, backgroundColor: colors.background }]}>
-     {/* ThemedHeader - identical format to other tabs */}
-     <ThemedHeader mediaType={mediaType} isDarkMode={isDarkMode} theme={theme}>
-       <Text style={headerStyles.screenTitle}>
-         {mediaType === 'movie' ? 'Movie' : 'TV Show'} Comparison
-       </Text>
-     </ThemedHeader>
-
      {/* Action buttons section */}
      <View style={[styles.actionRow, { backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 4, justifyContent: 'flex-end' }]}>
        {lastAction && lastAction.mediaType === mediaType && (

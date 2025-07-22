@@ -19,7 +19,7 @@ import UserSearchScreen from './src/Screens/UserSearchScreen';
 import PublicProfileScreen from './src/Screens/PublicProfileScreen';
 
 // Import development configuration
-import { isDevModeEnabled, getDevMovies, getDevTVShows, getDevUser } from './src/utils/DevConfig';
+import { isDevModeEnabled, getDevMovies, getDevTVShows, getDevUser, initializeDevEnvironment } from './src/utils/DevConfig';
 
 const Stack = createStackNavigator();
 
@@ -109,6 +109,10 @@ export default function App() {
       try {
         if (isDevModeEnabled()) {
           console.log('🔧 DEV MODE: Skipping directly to home screen');
+          
+          // Initialize dev environment (includes Firebase seeding)
+          await initializeDevEnvironment();
+          
           setIsLoading(false);
           setAppReady(true);
           return;

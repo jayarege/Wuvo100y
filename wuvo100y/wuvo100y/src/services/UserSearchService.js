@@ -33,7 +33,7 @@ class UserSearchService {
 
     } catch (error) {
       console.error('❌ Error searching users:', error);
-      return [];
+      throw error;
     }
   }
 
@@ -128,7 +128,7 @@ class UserSearchService {
   }
 
   // Get user's public ratings
-  async getUserRatings(userId, limit = 10) {
+  async getUserRatings(userId, _limit = 10) { // limit unused until Firebase ratings implemented
     try {
       const userProfile = await this.getUserProfile(userId);
       
@@ -139,7 +139,7 @@ class UserSearchService {
 
       // This would typically query a user_ratings subcollection
       // For now, we'll return empty array as ratings are stored locally
-      // TODO: Implement when ratings are moved to Firebase
+      // TODO: Implement when ratings are moved to Firebase (use limit parameter)
       console.log('📊 User ratings query - not yet implemented for Firebase storage');
       return [];
       
@@ -150,7 +150,7 @@ class UserSearchService {
   }
 
   // Get user's public watchlist
-  async getUserWatchlist(userId, limit = 10) {
+  async getUserWatchlist(userId, _limit = 10) { // limit unused until Firebase watchlist implemented
     try {
       const userProfile = await this.getUserProfile(userId);
       
@@ -161,7 +161,7 @@ class UserSearchService {
 
       // This would typically query a user_watchlist subcollection
       // For now, we'll return empty array as watchlist is stored locally
-      // TODO: Implement when watchlist is moved to Firebase
+      // TODO: Implement when watchlist is moved to Firebase (use limit parameter)
       console.log('📝 User watchlist query - not yet implemented for Firebase storage');
       return [];
       
@@ -208,6 +208,124 @@ class UserSearchService {
   // Format username for display
   formatUsername(username) {
     return username ? `@${username}` : '';
+  }
+
+  // Get recommended users for discovery
+  async getRecommendedUsers(currentUserId, limit = 15) {
+    try {
+      console.log('🔍 Getting recommended users for discovery');
+
+      // Get recent public users with high follower counts as recommendations
+      const recommendedUsers = await this.db
+        .collection('users')
+        .where('isPublic', '==', true)
+        .where('searchable', '==', true)
+        .orderBy('followerCount', 'desc')
+        .limit(limit * 2) // Get more to filter out current user
+        .get();
+
+      const results = recommendedUsers.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(user => user.id !== currentUserId) // Exclude current user
+        .slice(0, limit); // Take only requested amount
+
+      console.log(`✅ Found ${results.length} recommended users`);
+      return results;
+
+    } catch (error) {
+      console.error('❌ Error getting recommended users:', error);
+      return [];
+    }
+  }
+
+  // Get mutual followers for search suggestions
+  async getMutualFollowers(currentUserId, limit = 5) {
+    try {
+      console.log('🔍 Getting mutual followers for search suggestions');
+
+      // Get users that the current user follows
+      const currentUserFollowing = await this.db
+        .collection('follows')
+        .where('followerId', '==', currentUserId)
+        .get();
+
+      if (currentUserFollowing.empty) {
+        console.log('📝 Current user is not following anyone yet');
+        return [];
+      }
+
+      const followingIds = currentUserFollowing.docs.map(doc => doc.data().followingId);
+      console.log(`👥 Current user follows ${followingIds.length} users`);
+
+      // Get users who follow back (mutual follows)
+      const mutualFollowPromises = followingIds.map(async (followingId) => {
+        const mutualFollow = await this.db
+          .collection('follows')
+          .where('followerId', '==', followingId)
+          .where('followingId', '==', currentUserId)
+          .get();
+
+        if (!mutualFollow.empty) {
+          // This is a mutual follower - get their user profile
+          try {
+            const userProfile = await this.getUserProfile(followingId);
+            return userProfile;
+          } catch (error) {
+            console.log(`⚠️ Could not get profile for mutual follower ${followingId}`);
+            return null;
+          }
+        }
+        return null;
+      });
+
+      const mutualFollowers = (await Promise.all(mutualFollowPromises))
+        .filter(user => user !== null)
+        .slice(0, limit);
+
+      console.log(`✅ Found ${mutualFollowers.length} mutual followers for suggestions`);
+      return mutualFollowers;
+
+    } catch (error) {
+      console.error('❌ Error getting mutual followers:', error);
+      return [];
+    }
+  }
+
+  // Get search suggestions based on mutual followers and recent activity
+  async getSearchSuggestions(currentUserId, limit = 8) {
+    try {
+      console.log('💡 Getting search suggestions');
+
+      // Get mutual followers first (highest priority)
+      const mutualFollowers = await this.getMutualFollowers(currentUserId, 3);
+
+      // Get recent active users to fill remaining slots
+      const recentActiveUsers = await this.db
+        .collection('users')
+        .where('isPublic', '==', true)
+        .where('searchable', '==', true)
+        .orderBy('lastActive', 'desc')
+        .limit(limit)
+        .get();
+
+      const recentUsers = recentActiveUsers.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(user => user.id !== currentUserId)
+        .filter(user => !mutualFollowers.find(mf => mf.id === user.id)); // Exclude mutual followers already included
+
+      // Combine suggestions with mutual followers taking priority
+      const suggestions = [
+        ...mutualFollowers,
+        ...recentUsers.slice(0, limit - mutualFollowers.length)
+      ];
+
+      console.log(`✅ Generated ${suggestions.length} search suggestions (${mutualFollowers.length} mutual followers, ${recentUsers.length} recent users)`);
+      return suggestions;
+
+    } catch (error) {
+      console.error('❌ Error getting search suggestions:', error);
+      return [];
+    }
   }
 
   // Check if current user can view another user's profile

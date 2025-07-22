@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,48 +10,12 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
-  Alert,
-  Dimensions
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-// Mock user data for Snack compatibility
-const mockUsers = [
-  { id: 'user1', displayName: 'Alice Cooper', username: 'alice_movie_fan', profilePicture: 'https://via.placeholder.com/50x50?text=AC', followerCount: 1250, ratingCount: 342, mutualFollowCount: 5 },
-  { id: 'user2', displayName: 'Bob Smith', username: 'bob_cinephile', profilePicture: 'https://via.placeholder.com/50x50?text=BS', followerCount: 890, ratingCount: 567, mutualFollowCount: 3 },
-  { id: 'user3', displayName: 'Carol Davis', username: 'carol_reviews', profilePicture: 'https://via.placeholder.com/50x50?text=CD', followerCount: 2100, ratingCount: 789, mutualFollowCount: 8 },
-  { id: 'user4', displayName: 'David Wilson', username: 'david_films', profilePicture: 'https://via.placeholder.com/50x50?text=DW', followerCount: 450, ratingCount: 234, mutualFollowCount: 2 },
-  { id: 'user5', displayName: 'Emma Johnson', username: 'emma_movie_buff', profilePicture: 'https://via.placeholder.com/50x50?text=EJ', followerCount: 1680, ratingCount: 456, mutualFollowCount: 7 }
-];
+import UserSearchService from '../services/UserSearchService';
+import FollowService from '../services/FollowService';
 
-// Mock Firebase service functions
-const searchUsers = async (query, limit = 20) => {
-  // Simulate search delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return mockUsers.filter(user => 
-    user.displayName.toLowerCase().includes(query.toLowerCase()) ||
-    user.username.toLowerCase().includes(query.toLowerCase())
-  ).slice(0, limit);
-};
-
-const getRecommendedUsers = async (currentUserId, limit = 15) => {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  return mockUsers.slice(0, Math.min(limit, mockUsers.length));
-};
-
-const followUser = async (currentUserId, targetUserId) => {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  console.log(`User ${currentUserId} followed ${targetUserId}`);
-};
-
-const unfollowUser = async (currentUserId, targetUserId) => {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  console.log(`User ${currentUserId} unfollowed ${targetUserId}`);
-};
-
-const isFollowing = async (currentUserId, targetUserId) => {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return Math.random() > 0.5; // Random follow status for demo
-};
 
 // Simple debounce function
 const debounce = (func, delay) => {
@@ -64,7 +28,7 @@ const debounce = (func, delay) => {
   return debounced;
 };
 
-const { width, height } = Dimensions.get('window');
+// const { width } = Dimensions.get('window'); // Used in styles below
 
 const UserSearchModal = ({
   visible,
@@ -103,7 +67,7 @@ const UserSearchModal = ({
 
       try {
         setIsSearching(true);
-        const results = await searchUsers(query.trim(), 20);
+        const results = await UserSearchService.searchUsers(query.trim(), 20);
         
         // Filter out current user from results
         const filteredResults = results.filter(user => user.id !== currentUserId);
@@ -113,7 +77,7 @@ const UserSearchModal = ({
         const followStatuses = {};
         await Promise.all(
           filteredResults.map(async (user) => {
-            const following = await isFollowing(currentUserId, user.id);
+            const following = await FollowService.isFollowing(currentUserId, user.id);
             followStatuses[user.id] = following;
           })
         );
@@ -145,14 +109,23 @@ const UserSearchModal = ({
   const loadRecommendations = async () => {
     try {
       setIsLoadingRecommendations(true);
-      const recs = await getRecommendedUsers(currentUserId, 15);
-      setRecommendations(recs);
+      
+      // Get mutual followers and search suggestions first
+      const suggestions = await UserSearchService.getSearchSuggestions(currentUserId, 8);
+      
+      // If not enough suggestions, fill with general recommendations  
+      if (suggestions.length < 8) {
+        const generalRecs = await UserSearchService.getRecommendedUsers(currentUserId, 8 - suggestions.length);
+        suggestions.push(...generalRecs);
+      }
+      
+      setRecommendations(suggestions);
       
       // Check follow status for recommendations
       const followStatuses = {};
       await Promise.all(
-        recs.map(async (user) => {
-          const following = await isFollowing(currentUserId, user.id);
+        suggestions.map(async (user) => {
+          const following = await FollowService.isFollowing(currentUserId, user.id);
           followStatuses[user.id] = following;
         })
       );
@@ -168,10 +141,10 @@ const UserSearchModal = ({
   const handleFollow = async (userId) => {
     try {
       if (followingStatus[userId]) {
-        await unfollowUser(currentUserId, userId);
+        await FollowService.unfollowUser(currentUserId, userId);
         setFollowingStatus(prev => ({ ...prev, [userId]: false }));
       } else {
-        await followUser(currentUserId, userId);
+        await FollowService.followUser(currentUserId, userId);
         setFollowingStatus(prev => ({ ...prev, [userId]: true }));
       }
     } catch (error) {
