@@ -16,11 +16,11 @@ import Constants from 'expo-constants';
 export const ENV = {
   // TMDB API Key - for movie data (secure production-only access)
   TMDB_API_KEY: Constants.expoConfig?.extra?.tmdbApiKey || 
-    (__DEV__ ? null : null),
+    (__DEV__ ? "your-tmdb-api-key-here" : null),
   
   // GROQ API Key - for AI recommendations (secure production-only access)
   GROQ_API_KEY: Constants.expoConfig?.extra?.groqApiKey || 
-    (__DEV__ ? null : null),
+    (__DEV__ ? "your-groq-api-key-here" : null),
     
   // Environment info
   IS_DEV: __DEV__,

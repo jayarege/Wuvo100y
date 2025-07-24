@@ -10,22 +10,14 @@ import Constants from 'expo-constants';
 // CRITICAL: This is PRODUCTION database with REAL USER DATA - handle carefully!
 
 const firebaseConfig = {
-  apiKey: Constants.expoConfig?.extra?.firebaseApiKey || 
-    (__DEV__ ? "AIzaSyBoUnBWZWZ2fPclNR3LxZZV98GFVbtaVyE" : null),
-  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain || 
-    (__DEV__ ? "wuvo100y-social.firebaseapp.com" : null),
-  databaseURL: Constants.expoConfig?.extra?.firebaseDatabaseURL || 
-    (__DEV__ ? "https://wuvo100y-social-default-rtdb.firebaseio.com" : null),
-  projectId: Constants.expoConfig?.extra?.firebaseProjectId || 
-    (__DEV__ ? "wuvo100y-social" : null),
-  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket || 
-    (__DEV__ ? "wuvo100y-social.firebasestorage.app" : null),
-  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId || 
-    (__DEV__ ? "263509576989" : null),
-  appId: Constants.expoConfig?.extra?.firebaseAppId || 
-    (__DEV__ ? "1:263509576989:web:f1bac2c73bf8638045a5f4" : null),
-  measurementId: Constants.expoConfig?.extra?.firebaseMeasurementId || 
-    (__DEV__ ? "G-KF1VVYG0HV" : null)
+  apiKey: Constants.expoConfig?.extra?.firebaseApiKey || "AIzaSyBoUnBWZWZ2fPclNR3LxZZV98GFVbtaVyE",
+  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain || "wuvo100y-social.firebaseapp.com",
+  databaseURL: Constants.expoConfig?.extra?.firebaseDatabaseURL || "https://wuvo100y-social-default-rtdb.firebaseio.com",
+  projectId: Constants.expoConfig?.extra?.firebaseProjectId || "wuvo100y-social",
+  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket || "wuvo100y-social.firebasestorage.app",
+  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId || "263509576989",
+  appId: Constants.expoConfig?.extra?.firebaseAppId || "1:263509576989:web:f1bac2c73bf8638045a5f4",
+  measurementId: Constants.expoConfig?.extra?.firebaseMeasurementId || "G-KF1VVYG0HV"
 };
 
 // Validate Firebase configuration before initialization

@@ -5,6 +5,9 @@
 // WHAT: Replaces static app.json with dynamic config supporting EAS secrets
 // HOW: Environment variables injected at build time via EAS secrets
 
+// Load environment variables from .env file in development
+require('dotenv').config();
+
 module.exports = ({ config }) => {
   const isProduction = process.env.EXPO_PUBLIC_ENV === 'production';
   const isPreview = process.env.EXPO_PUBLIC_ENV === 'preview';
