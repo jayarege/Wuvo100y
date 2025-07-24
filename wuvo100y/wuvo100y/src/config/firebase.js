@@ -1,23 +1,55 @@
 // =============================================================================
-// FIREBASE V8 CONFIGURATION - EXPO SNACK COMPATIBLE
+// FIREBASE V8 CONFIGURATION - SECURE PRODUCTION READY
 // =============================================================================
 import firebase from 'firebase';
+import Constants from 'expo-constants';
 
-// Your Firebase configuration
+// WHY: Hardcoded Firebase config was security risk for App Store submission
+// WHAT: Config now loads from secure environment variables in production
+// HOW: Falls back to development config for local testing
+// CRITICAL: This is PRODUCTION database with REAL USER DATA - handle carefully!
+
 const firebaseConfig = {
-  apiKey: "AIzaSyBoUnBWZWZ2fPclNR3LxZZV98GFVbtaVyE",
-  authDomain: "wuvo100y-social.firebaseapp.com",
-  databaseURL: "https://wuvo100y-social-default-rtdb.firebaseio.com",
-  projectId: "wuvo100y-social",
-  storageBucket: "wuvo100y-social.firebasestorage.app",
-  messagingSenderId: "263509576989",
-  appId: "1:263509576989:web:f1bac2c73bf8638045a5f4",
-  measurementId: "G-KF1VVYG0HV"
+  apiKey: Constants.expoConfig?.extra?.firebaseApiKey || 
+    (__DEV__ ? "AIzaSyBoUnBWZWZ2fPclNR3LxZZV98GFVbtaVyE" : null),
+  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain || 
+    (__DEV__ ? "wuvo100y-social.firebaseapp.com" : null),
+  databaseURL: Constants.expoConfig?.extra?.firebaseDatabaseURL || 
+    (__DEV__ ? "https://wuvo100y-social-default-rtdb.firebaseio.com" : null),
+  projectId: Constants.expoConfig?.extra?.firebaseProjectId || 
+    (__DEV__ ? "wuvo100y-social" : null),
+  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket || 
+    (__DEV__ ? "wuvo100y-social.firebasestorage.app" : null),
+  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId || 
+    (__DEV__ ? "263509576989" : null),
+  appId: Constants.expoConfig?.extra?.firebaseAppId || 
+    (__DEV__ ? "1:263509576989:web:f1bac2c73bf8638045a5f4" : null),
+  measurementId: Constants.expoConfig?.extra?.firebaseMeasurementId || 
+    (__DEV__ ? "G-KF1VVYG0HV" : null)
 };
 
-// Initialize Firebase (v8 style)
+// Validate Firebase configuration before initialization
+const validateFirebaseConfig = () => {
+  const required = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+  const missing = required.filter(key => !firebaseConfig[key]);
+  
+  if (missing.length > 0) {
+    const error = `Missing Firebase config: ${missing.join(', ')}`;
+    if (!__DEV__) {
+      throw new Error(error);
+    } else {
+      console.warn('⚠️ Firebase config incomplete in development:', missing.join(', '));
+    }
+  }
+  
+  console.log('✅ Firebase configuration validated');
+  return missing.length === 0;
+};
+
+// Initialize Firebase (v8 style) with validation
 let app;
 if (!firebase.apps.length) {
+  validateFirebaseConfig();
   app = firebase.initializeApp(firebaseConfig);
 } else {
   app = firebase.app();
@@ -33,7 +65,7 @@ export default app;
 
 // Utility functions
 export const isFirebaseConfigured = () => {
-  return firebaseConfig.apiKey !== "your-api-key-here";
+  return firebaseConfig.apiKey && firebaseConfig.apiKey !== "your-api-key-here";
 };
 
 export const getFirebaseConfig = () => {

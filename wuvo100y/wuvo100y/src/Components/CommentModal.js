@@ -51,6 +51,29 @@ function CommentModal({
     warning: '#FF9800'
   };
 
+  const loadCommentLikes = useCallback(async (commentsToCheck) => {
+    if (!currentUser?.id) return;
+
+    try {
+      const likePromises = commentsToCheck.map(comment =>
+        CommentService.hasUserLikedComment(comment.id, currentUser.id)
+      );
+
+      const likeResults = await Promise.all(likePromises);
+      const newLikedComments = new Set();
+
+      commentsToCheck.forEach((comment, index) => {
+        if (likeResults[index]) {
+          newLikedComments.add(comment.id);
+        }
+      });
+
+      setLikedComments(newLikedComments);
+    } catch (error) {
+      console.error('❌ Error loading comment likes:', error);
+    }
+  }, [currentUser?.id]);
+
   const loadComments = useCallback(async () => {
     if (!activity?.id || !currentUser?.id) return;
 
@@ -76,30 +99,7 @@ function CommentModal({
     } finally {
       setIsLoading(false);
     }
-  }, [activity?.id, currentUser?.id]);
-
-  const loadCommentLikes = async (commentsToCheck) => {
-    if (!currentUser?.id) return;
-
-    try {
-      const likePromises = commentsToCheck.map(comment =>
-        CommentService.hasUserLikedComment(comment.id, currentUser.id)
-      );
-
-      const likeResults = await Promise.all(likePromises);
-      const newLikedComments = new Set();
-
-      commentsToCheck.forEach((comment, index) => {
-        if (likeResults[index]) {
-          newLikedComments.add(comment.id);
-        }
-      });
-
-      setLikedComments(newLikedComments);
-    } catch (error) {
-      console.error('❌ Error loading comment likes:', error);
-    }
-  };
+  }, [activity?.id, currentUser?.id, loadCommentLikes]);
 
   useEffect(() => {
     if (visible) {

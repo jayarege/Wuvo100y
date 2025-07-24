@@ -721,7 +721,7 @@ const WildcardComparison = ({
         onComparisonComplete(finalRating);
       }, 2500);
     }
-  }, [currentComparison, comparisonResults, comparisonMovies, newMovie, categoryInfo, onComparisonComplete]);
+  }, [currentComparison, comparisonResults, comparisonMovies, newMovie, onComparisonComplete]);
 
 
   const resetComparison = () => {
@@ -745,7 +745,7 @@ const WildcardComparison = ({
       <View style={styles.modalOverlay}>
         <LinearGradient
           colors={colors.primaryGradient || ['#667eea', '#764ba2']}
-          style={[styles.comparisonModalContent]}
+          style={styles.comparisonModalContent}
         >
           {!isComplete ? (
             <>
@@ -1093,13 +1093,13 @@ const EnhancedRatingButton = ({
     } else {
       handleConfirmRating(categoryAverage);
     }
-  }, [seen, movie, genres]);
+  }, [seen, movie, genres, handleConfirmRating]);
 
   const handleComparisonComplete = useCallback((finalRating) => {
     console.log('✅ Comparison complete, final rating:', finalRating);
     setComparisonModalVisible(false);
     handleConfirmRating(finalRating);
-  }, []);
+  }, [handleConfirmRating]);
 
   const handleConfirmRating = useCallback((finalRating) => {
     console.log('✅ Confirming rating:', finalRating, 'for:', movie?.title);
@@ -1149,7 +1149,7 @@ const EnhancedRatingButton = ({
         }
       ]
     );
-  }, [movie, selectedCategory, isAlreadyRated, onUpdateRating, onAddToSeen, mediaType, seen, comparisonMovies]);
+  }, [movie, selectedCategory, isAlreadyRated, onUpdateRating, onAddToSeen, mediaType, seen, comparisonMovies, onSuccess]);
 
   const handleCloseModals = useCallback(() => {
     console.log('🚫 Closing modals');
@@ -1626,30 +1626,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Action Buttons
-  actionButtons: {
-    gap: 12,
-  },
-  confirmButton: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  confirmButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  adjustButton: {
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  adjustButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
 
   // Cancel Button
   cancelButton: {

@@ -1,0 +1,55 @@
+{
+  "cli": {
+    "version": ">= 10.2.3",
+    "requireCommit": false
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium",
+        "bundleIdentifier": "com.wuvo.wuvo.dev"
+      },
+      "env": {
+        "EXPO_PUBLIC_ENV": "development",
+        "APP_VERSION": "1.0.0-dev",
+        "BUILD_NUMBER": "1.0.0-dev"
+      }
+    },
+    "preview": {
+      "distribution": "internal", 
+      "ios": {
+        "resourceClass": "m-medium",
+        "simulator": false,
+        "bundleIdentifier": "com.wuvo.wuvo"
+      },
+      "env": {
+        "EXPO_PUBLIC_ENV": "preview",
+        "APP_VERSION": "1.0.0-preview",
+        "BUILD_NUMBER": "1.0.0-preview"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "ios": {
+        "resourceClass": "m-medium",
+        "bundleIdentifier": "com.wuvo.wuvo"
+      },
+      "env": {
+        "EXPO_PUBLIC_ENV": "production",
+        "APP_VERSION": "1.0.0",
+        "BUILD_NUMBER": "1.0.0"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "TO_BE_CONFIGURED@example.com",
+        "ascAppId": "TO_BE_CONFIGURED", 
+        "appleTeamId": "TO_BE_CONFIGURED"
+      }
+    }
+  }
+}

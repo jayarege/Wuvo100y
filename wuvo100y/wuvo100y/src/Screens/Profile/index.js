@@ -94,6 +94,7 @@ import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
 import UserSearchModal from '../../Components/UserSearchModal';
 import { useAuth } from '../../hooks/useAuth';
+import FirebaseAuthTest from '../../Components/FirebaseAuthTest';
 import { RatingModal } from '../../Components/RatingModal';
 import { SentimentRatingModal, calculateDynamicRatingCategories, calculatePairwiseRating, ComparisonResults } from '../../Components/EnhancedRatingSystem';
 import { filterAdultContent } from '../../utils/ContentFiltering';
@@ -125,6 +126,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const [showDropdown, setShowDropdown] = useState(false);
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [firebaseTestVisible, setFirebaseTestVisible] = useState(false);
   const [movieDetailModalVisible, setMovieDetailModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieCredits, setMovieCredits] = useState(null);
@@ -169,8 +171,8 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   // Animation refs
   const slideAnim = useRef(new Animated.Value(300)).current;
   
-  // Get actual current user ID from Firebase Auth
-  const currentUserId = userInfo?.uid || userInfo?.userId || 'demo-user-123';
+  // Get current user ID from Firebase Auth (userInfo.id is set in useAuth hook)
+  const currentUserId = userInfo?.id || userInfo?.uid || userInfo?.userId || 'demo-user-123';
   
   const API_KEY = TMDB_API_KEY;
 
@@ -1584,6 +1586,14 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
           <Ionicons name="search-outline" size={24} color="#fff" />
         </TouchableOpacity>
 
+        {/* Firebase Auth Test Button - positioned below search button */}
+        <TouchableOpacity 
+          style={styles.floatingFirebaseButton}
+          onPress={() => setFirebaseTestVisible(true)}
+        >
+          <Ionicons name="flame-outline" size={24} color="#fff" />
+        </TouchableOpacity>
+
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Info Row */}
         <View style={styles.profileInfoRow}>
@@ -1954,6 +1964,13 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         }}
         isDarkMode={isDarkMode}
       />
+
+      {/* Firebase Auth Test Modal */}
+      {firebaseTestVisible && (
+        <FirebaseAuthTest 
+          onClose={() => setFirebaseTestVisible(false)}
+        />
+      )}
       
       {/* TopRated Edit Modal */}
       <RatingModal
@@ -2344,6 +2361,15 @@ const styles = StyleSheet.create({
     right: 20,
     zIndex: 100,
     backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  floatingFirebaseButton: {
+    position: 'absolute',
+    top: 110, // Below search button
+    right: 20,
+    zIndex: 100,
+    backgroundColor: 'rgba(255, 69, 0, 0.7)', // Firebase orange
     borderRadius: 20,
     padding: 8,
   },

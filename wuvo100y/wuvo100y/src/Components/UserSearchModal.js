@@ -58,6 +58,7 @@ const UserSearchModal = ({
 
   // Debounced search function
   const debouncedSearch = useCallback(
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     debounce(async (query) => {
       if (!query || query.trim().length < 2) {
         setSearchResults([]);
@@ -98,7 +99,7 @@ const UserSearchModal = ({
     if (visible && currentUserId) {
       loadRecommendations();
     }
-  }, [visible, currentUserId]);
+  }, [visible, currentUserId, loadRecommendations]);
 
   // Trigger search when query changes
   useEffect(() => {
@@ -106,7 +107,7 @@ const UserSearchModal = ({
     return () => debouncedSearch.cancel();
   }, [searchQuery, debouncedSearch]);
 
-  const loadRecommendations = async () => {
+  const loadRecommendations = useCallback(async () => {
     try {
       setIsLoadingRecommendations(true);
       
@@ -136,7 +137,7 @@ const UserSearchModal = ({
     } finally {
       setIsLoadingRecommendations(false);
     }
-  };
+  }, [currentUserId]);
 
   const handleFollow = async (userId) => {
     try {

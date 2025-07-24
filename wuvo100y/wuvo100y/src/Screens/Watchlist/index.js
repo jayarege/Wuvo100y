@@ -848,22 +848,7 @@ const styles = StyleSheet.create({
    marginRight: 8,
    borderRadius: 12,
  },
- activeFilterText: {
-   color: '#FFFFFF',
-   fontSize: 12,
-   fontWeight: '500',
- },
  
- // Movie Card Styles
- movieCard: {
-   borderRadius: 12,
-   marginBottom: 16,
-   overflow: 'hidden',
- },
- cardContent: {
-   position: 'relative',
-   flexDirection: 'row',
- },
  rankBadge: {
    position: 'absolute',
    top: 8,

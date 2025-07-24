@@ -14,13 +14,13 @@ import Constants from 'expo-constants';
  */
 
 export const ENV = {
-  // TMDB API Key - for movie data
+  // TMDB API Key - for movie data (secure production-only access)
   TMDB_API_KEY: Constants.expoConfig?.extra?.tmdbApiKey || 
-    (__DEV__ ? 'b401be0ea16515055d8d0bde16f80069' : null),
+    (__DEV__ ? null : null),
   
-  // GROQ API Key - for AI recommendations  
+  // GROQ API Key - for AI recommendations (secure production-only access)
   GROQ_API_KEY: Constants.expoConfig?.extra?.groqApiKey || 
-    (__DEV__ ? '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' : null),
+    (__DEV__ ? null : null),
     
   // Environment info
   IS_DEV: __DEV__,

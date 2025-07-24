@@ -2434,7 +2434,7 @@ function HomeScreen({
                 }
               ]}>
                 <TouchableOpacity
-                  style={[{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }]}
+                  style={{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }}
                   activeOpacity={0.7}
                   onPress={() => handleMovieSelect(item)}
                 >
@@ -2535,7 +2535,7 @@ function HomeScreen({
               }
             ]}>
               <TouchableOpacity
-                style={[{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }]}
+                style={{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }}
                 activeOpacity={0.7}
                 onPress={() => handleMovieSelect(item)}
               >
@@ -2987,14 +2987,12 @@ function HomeScreen({
               <View style={modalStyles.buttonRow}>
                 {/* **ACTION BUTTONS** */}
                 <Animated.View 
-                  style={[
-                    { 
-                      opacity: fadeAnim,
-                      position: showSentimentButtons ? 'absolute' : 'relative',
-                      width: '100%',
-                      flexDirection: 'row'
-                    }
-                  ]}
+                  style={{ 
+                    opacity: fadeAnim,
+                    position: showSentimentButtons ? 'absolute' : 'relative',
+                    width: '100%',
+                    flexDirection: 'row'
+                  }}
                   pointerEvents="auto"
                 >
                   {/* Rate Button */}
@@ -3074,16 +3072,14 @@ function HomeScreen({
                 {/* **SENTIMENT BUTTONS** */}
                 {showSentimentButtons && (
                   <Animated.View 
-                    style={[
-                      { 
-                        opacity: sentimentFadeAnim,
-                        position: 'absolute',
-                        width: '100%',
-                        flexDirection: 'row',
-                        flexWrap: 'wrap',
-                        justifyContent: 'space-between'
-                      }
-                    ]}
+                    style={{ 
+                      opacity: sentimentFadeAnim,
+                      position: 'absolute',
+                      width: '100%',
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      justifyContent: 'space-between'
+                    }}
                   >
                     {Object.entries(calculateDynamicRatingCategories(seen.filter(item => (item.mediaType || 'movie') === mediaType), mediaType)).map(([categoryKey, category]) => (
                       <TouchableOpacity
@@ -3139,7 +3135,7 @@ function HomeScreen({
                       onPress={cancelSentimentSelection}
                       activeOpacity={0.8}
                     >
-                      <Text style={[{ color: colors.subText, fontSize: 14 }]}>← Back to Options</Text>
+                      <Text style={{ color: colors.subText, fontSize: 14 }}>← Back to Options</Text>
                     </TouchableOpacity>
                   </Animated.View>
                 )}
@@ -3172,7 +3168,7 @@ function HomeScreen({
           <View style={styles.modalOverlay}>
             <LinearGradient
               colors={colors.primaryGradient || ['#667eea', '#764ba2']}
-              style={[styles.comparisonModalContent]}
+              style={styles.comparisonModalContent}
             >
               {!isComparisonComplete ? (
                 <>
@@ -3467,12 +3463,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  movieTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
   // sentimentGrid: { // REMOVED: No longer using separate sentiment modal
   //   gap: 16,
   //   marginBottom: 24,
@@ -3576,25 +3566,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginHorizontal: 4,
   },
-  completionScreen: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  resultsContainer: {
-    marginTop: 20,
-    width: '100%',
-  },
-  resultRow: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginVertical: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-  },
-  resultText: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
   cancelButton: {
     paddingVertical: 12,
     borderRadius: 8,
@@ -3606,36 +3577,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  // **Sentiment Button Styles**
-  sentimentButton: {
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 4,
-  },
-  sentimentLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   sentimentBackButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
-  },
-  
-  // **Session Dismiss Button - Plain X without circle**
-  notInterestedButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 4,
-    padding: 4,
-    zIndex: 2,
   },
   
   // **Final Rating Modal Styles**

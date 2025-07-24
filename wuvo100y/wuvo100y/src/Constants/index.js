@@ -1,7 +1,16 @@
-// API Configuration
-export const TMDB_API_KEY = 'b401be0ea16515055d8d0bde16f80069';
-export const GROQ_API_KEY = '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';
-export const API_KEY = 'b401be0ea16515055d8d0bde16f80069'; // Keep for backward compatibility
+// =============================================================================
+// SECURE API CONFIGURATION - HARDCODED KEYS REMOVED
+// =============================================================================
+// WHY: Hardcoded API keys were critical security vulnerability
+// WHAT: Keys now imported from secure environment system
+// HOW: Import ENV.TMDB_API_KEY and ENV.GROQ_API_KEY from ../config/environment
+
+import { ENV } from '../config/environment';
+
+// API Configuration - now secure
+export const TMDB_API_KEY = ENV.TMDB_API_KEY;
+export const GROQ_API_KEY = ENV.GROQ_API_KEY;
+export const API_KEY = ENV.TMDB_API_KEY; // Backward compatibility
 export const API_TIMEOUT = 10000;
 export const MIN_VOTE_COUNT = 500;
 export const MIN_SCORE = 7.0;

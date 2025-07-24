@@ -1,6 +1,14 @@
+// =============================================================================
+// LEGACY CONFIG - API KEYS REMOVED FOR SECURITY
+// =============================================================================
+// WHY: Hardcoded API keys were security vulnerability for App Store submission
+// WHAT: Keys moved to secure environment system (src/config/environment.js)
+// HOW: Use ENV.TMDB_API_KEY and ENV.GROQ_API_KEY instead
+
 export const API_CONFIG = {
-  TMDB_API_KEY: 'b401be0ea16515055d8d0bde16f80069',
-  GROQ_API_KEY: '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',
+  // API keys removed - use ENV system instead
+  TMDB_API_KEY: null, // Use ENV.TMDB_API_KEY 
+  GROQ_API_KEY: null, // Use ENV.GROQ_API_KEY
   TIMEOUT: 10000,
   BASE_URL: 'https://api.themoviedb.org/3',
   IMAGE_BASE_URL: 'https://image.tmdb.org/t/p',
