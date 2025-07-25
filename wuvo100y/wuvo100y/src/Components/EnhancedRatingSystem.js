@@ -118,6 +118,58 @@ const getDefaultRatingForCategory = (categoryKey) => {
   return defaults[categoryKey] || midpoint;
 };
 
+/**
+ * Confidence Badge Component
+ * Shows statistical confidence level and provisional status for ratings
+ */
+const ConfidenceBadge = ({ confidence, size = 'small', style = {} }) => {
+  if (!confidence) return null;
+
+  const { confidence: confidencePercent, isProvisional, confidenceLevel, numComparisons } = confidence;
+  
+  // Color scheme based on confidence level
+  const getConfidenceColor = (level) => {
+    switch (level) {
+      case 'high': return '#4CAF50'; // Green
+      case 'medium': return '#FF9800'; // Orange  
+      case 'low': return '#F44336'; // Red
+      default: return '#9E9E9E'; // Gray
+    }
+  };
+
+  const backgroundColor = getConfidenceColor(confidenceLevel);
+  const fontSize = size === 'large' ? 10 : size === 'medium' ? 9 : 8;
+  const padding = size === 'large' ? 4 : size === 'medium' ? 3 : 2;
+
+  return (
+    <View style={[{
+      backgroundColor: backgroundColor + '20', // 20% opacity background
+      borderWidth: 1,
+      borderColor: backgroundColor,
+      borderRadius: 4,
+      paddingHorizontal: padding + 1,
+      paddingVertical: padding,
+      marginLeft: 4,
+      flexDirection: 'row',
+      alignItems: 'center'
+    }, style]}>
+      <Ionicons 
+        name={isProvisional ? "help-circle" : "checkmark-circle"} 
+        size={fontSize + 2} 
+        color={backgroundColor}
+        style={{ marginRight: 2 }}
+      />
+      <Text style={{
+        fontSize: fontSize,
+        color: backgroundColor,
+        fontWeight: 'bold'
+      }}>
+        {confidencePercent}%{isProvisional ? ' P' : ''} 
+      </Text>
+    </View>
+  );
+};
+
 const getRatingRangeFromPercentile = (userMovies, percentile) => {
   const sortedRatings = userMovies
     .map(m => m.userRating || (m.eloRating / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
@@ -815,11 +867,20 @@ const WildcardComparison = ({
                   <Text style={[styles.movieCardYear, { color: colors.subText }]}>
                     {currentComparisonMovie?.release_date ? new Date(currentComparisonMovie.release_date).getFullYear() : 'N/A'}
                   </Text>
-                  <View style={[styles.ratingBadgeWildcard, { backgroundColor: categoryInfo?.color }]}>
-                    <Ionicons name="star" size={12} color="#FFF" />
-                    <Text style={styles.ratingTextWildcard}>
-                      {currentComparisonMovie?.userRating?.toFixed(1)}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={[styles.ratingBadgeWildcard, { backgroundColor: categoryInfo?.color }]}>
+                      <Ionicons name="star" size={12} color="#FFF" />
+                      <Text style={styles.ratingTextWildcard}>
+                        {currentComparisonMovie?.userRating?.toFixed(1)}
+                      </Text>
+                    </View>
+                    {currentComparisonMovie?.confidence && (
+                      <ConfidenceBadge 
+                        confidence={currentComparisonMovie.confidence} 
+                        size="small"
+                        style={{ marginLeft: 6 }}
+                      />
+                    )}
                   </View>
                 </TouchableOpacity>
               </View>
@@ -915,11 +976,11 @@ const WildcardComparison = ({
 };
 
 // Sentiment Rating Modal Component  
-const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors, userMovies }) => {
+const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors, userMovies, mediaType = 'movie' }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
 
   // Calculate dynamic categories based on user's rating history
-  const RATING_CATEGORIES = calculateDynamicRatingCategories(userMovies);
+  const RATING_CATEGORIES = calculateDynamicRatingCategories(userMovies, mediaType);
 
   const handleCategorySelect = useCallback((categoryKey) => {
     console.log('🎭 User selected sentiment:', categoryKey);
@@ -1137,9 +1198,14 @@ const EnhancedRatingButton = ({
     const RATING_CATEGORIES = calculateDynamicRatingCategories(seen);
     const categoryLabel = RATING_CATEGORIES[selectedCategory]?.label || 'rated';
     
+    // Get confidence metadata if available from UnifiedRatingEngine
+    const confidenceText = movie.confidence ? 
+      `\n\nConfidence: ${movie.confidence.confidence}% (${movie.confidence.confidenceLevel})${movie.confidence.isProvisional ? ' • Provisional' : ''}` : 
+      '';
+    
     Alert.alert(
       `Rating Complete!`, 
-      `You ${categoryLabel.toLowerCase()} "${movie.title}" (${finalRating.toFixed(1)}/10)\n\nCalculated through ${comparisonMovies.length > 0 ? '3 movie comparisons' : 'category average'}`,
+      `You ${categoryLabel.toLowerCase()} "${movie.title}" (${finalRating.toFixed(1)}/10)\n\nCalculated through ${comparisonMovies.length > 0 ? `${comparisonMovies.length} movie comparisons` : 'category average'}${confidenceText}`,
       [
         {
           text: "Perfect!",
@@ -1232,31 +1298,39 @@ const EnhancedRatingButton = ({
           size={getIconSize()} 
           color={colors.accent} 
         />
-        {variant !== 'icon-only' && (
-          <Text style={[
-            buttonStyles?.primaryButtonText || styles.defaultButtonText,
-            styles.enhancedRateButtonText,
-            { 
-              color: colors.accent,
-              fontSize: getTextSize(),
-              marginLeft: variant === 'compact' ? 4 : 6,
-              marginTop: 0
-            }
-          ]}>
-            {getButtonText()}
-          </Text>
-        )}
-        {variant === 'icon-only' && showRatingValue && currentRating && (
-          <Text style={[
-            styles.iconOnlyRatingText,
-            { 
-              color: colors.accent,
-              fontSize: size === 'small' ? 8 : size === 'large' ? 12 : 10
-            }
-          ]}>
-            {currentRating.toFixed(1)}
-          </Text>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          {variant !== 'icon-only' && (
+            <Text style={[
+              buttonStyles?.primaryButtonText || styles.defaultButtonText,
+              styles.enhancedRateButtonText,
+              { 
+                color: colors.accent,
+                fontSize: getTextSize(),
+                marginLeft: variant === 'compact' ? 4 : 6,
+                marginTop: 0
+              }
+            ]}>
+              {getButtonText()}
+            </Text>
+          )}
+          {variant === 'icon-only' && showRatingValue && currentRating && (
+            <Text style={[
+              styles.iconOnlyRatingText,
+              { 
+                color: colors.accent,
+                fontSize: size === 'small' ? 8 : size === 'large' ? 12 : 10
+              }
+            ]}>
+              {currentRating.toFixed(1)}
+            </Text>
+          )}
+          {showRatingValue && currentRating && movie?.confidence && (
+            <ConfidenceBadge 
+              confidence={movie.confidence} 
+              size={size === 'large' ? 'medium' : 'small'}
+            />
+          )}
+        </View>
       </TouchableOpacity>
 
       <SentimentRatingModal
@@ -1744,6 +1818,7 @@ export {
   QuickRatingButton, 
   CompactRatingButton, 
   SentimentRatingModal,
+  ConfidenceBadge,
   getRatingCategory, 
   calculateDynamicRatingCategories,
   processUnifiedRatingFlow,

@@ -53,7 +53,7 @@ import { STORAGE_KEYS } from '../../config/storageConfig';
 const getStorageKey = (mediaType) => mediaType === 'movie' ? STORAGE_KEYS.MOVIES.SEEN : STORAGE_KEYS.TV_SHOWS.SEEN;
 
 // **ENHANCED RATING SYSTEM IMPORT**
-import { calculateDynamicRatingCategories, SentimentRatingModal, calculatePairwiseRating, ComparisonResults } from '../../Components/EnhancedRatingSystem';
+import { calculateDynamicRatingCategories, SentimentRatingModal, calculatePairwiseRating, ComparisonResults, ConfidenceBadge } from '../../Components/EnhancedRatingSystem';
 import InitialRatingFlow from '../InitialRatingFlow';
 
 // Helper functions for calculating range from percentile (moved from component)
@@ -96,6 +96,40 @@ console.log('🏠 HomeScreen: Enhanced Rating System loaded');
 // Devil's advocate: Users will try to spam refresh, so we need strict limits
 const REFRESH_STORAGE_KEY_PREFIX = 'ai_refresh';
 const MAX_DAILY_REFRESHES = 3;
+
+// **STREAMING PROVIDER PAYMENT TYPE MAPPING** - Based on common provider business models
+const getProviderPaymentType = (providerId) => {
+  // Free services (ad-supported)
+  const freeProviders = [
+    546, // YouTube
+    613, // Tubi
+    350, // Apple TV (has free content)
+    283, // Crackle
+    207, // YouTube Movies
+    457, // Vudu (has free with ads)
+  ];
+  
+  // Most major streaming services are paid
+  const paidProviders = [
+    8,   // Netflix
+    384, // HBO Max
+    9,   // Amazon Prime Video
+    15,  // Hulu
+    337, // Disney+
+    387, // Peacock Premium
+    1899, // Max
+    531, // Paramount+
+    26,  // Crunchyroll
+    2,   // Apple TV+
+    286, // Showtime
+  ];
+  
+  if (freeProviders.includes(providerId)) return 'free';
+  if (paidProviders.includes(providerId)) return 'paid';
+  
+  // Default to paid for unknown providers (most streaming services are paid)
+  return 'paid';
+};
 
 // **SHARED BUTTON STYLES** - Consistent styling with semantic variants
 const getStandardizedButtonStyles = (colors) => ({
@@ -321,6 +355,17 @@ function HomeScreen({
       isProcessingMovieSelect
     });
   }, [movieDetailModalVisible, selectedMovie, movieCredits, movieProviders, isLoadingMovieDetails, isProcessingMovieSelect]);
+  
+  // **HOME TAB NAVIGATION RESET - Reset to 'New Releases' when home tab is pressed**
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress', (e) => {
+      // Reset to 'New Releases' tab when home tab is pressed
+      console.log('🏠 Home tab pressed - resetting to New Releases');
+      setActiveTab('new');
+    });
+
+    return unsubscribe;
+  }, [navigation]);
   
   // **ANIMATION SYSTEM - ENGINEER TEAM 4-6**
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -665,7 +710,7 @@ function HomeScreen({
   const fetchMovieCredits = useCallback(async (movieId) => {
     try {
       const response = await fetch(
-        `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${API_KEY}`
+        `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=b401be0ea16515055d8d0bde16f80069`
       );
       const data = await response.json();
       return data.cast?.slice(0, 3) || [];
@@ -678,7 +723,7 @@ function HomeScreen({
   const fetchMovieProviders = useCallback(async (movieId) => {
     try {
       const response = await fetch(
-        `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=${API_KEY}`
+        `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
       );
       const data = await response.json();
       return data.results?.US?.flatrate || [];
@@ -827,8 +872,8 @@ function HomeScreen({
       
       for (let page = 1; page <= 5; page++) {
         const endpoint = contentType === 'movies'
-          ? `https://api.themoviedb.org/3/movie/popular?api_key=${API_KEY}&language=en-US&page=${page}&include_adult=false`
-          : `https://api.themoviedb.org/3/tv/popular?api_key=${API_KEY}&language=en-US&page=${page}&include_adult=false`;
+          ? `https://api.themoviedb.org/3/movie/popular?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&page=${page}&include_adult=false`
+          : `https://api.themoviedb.org/3/tv/popular?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&page=${page}&include_adult=false`;
           
         const res = await fetch(endpoint);
         const { results } = await res.json();
@@ -879,7 +924,7 @@ function HomeScreen({
           try {
             const mediaTypeForAPI = contentType === 'movies' ? 'movie' : 'tv';
             const providerResponse = await fetch(
-              `https://api.themoviedb.org/3/${mediaTypeForAPI}/${item.id}/watch/providers?api_key=${API_KEY}`
+              `https://api.themoviedb.org/3/${mediaTypeForAPI}/${item.id}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
             );
             const providerData = await providerResponse.json();
             streamingProviders = providerData.results?.US?.flatrate || [];
@@ -922,8 +967,8 @@ function HomeScreen({
       const oneWeekAgoFormatted = formatDateForAPI(oneWeekAgo);
       
       const endpoint = contentType === 'movies' 
-        ? `https://api.themoviedb.org/3/discover/movie?api_key=${API_KEY}&language=en-US&sort_by=primary_release_date.desc&include_adult=false&include_video=false&page=1&primary_release_date.gte=${oneWeekAgoFormatted}&primary_release_date.lte=${todayFormatted}&vote_count.gte=5`
-        : `https://api.themoviedb.org/3/discover/tv?api_key=${API_KEY}&language=en-US&sort_by=first_air_date.desc&include_adult=false&page=1&first_air_date.gte=${oneWeekAgoFormatted}&first_air_date.lte=${todayFormatted}&vote_count.gte=5`;
+        ? `https://api.themoviedb.org/3/discover/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&sort_by=primary_release_date.desc&include_adult=false&include_video=false&page=1&primary_release_date.gte=${oneWeekAgoFormatted}&primary_release_date.lte=${todayFormatted}&vote_count.gte=5`
+        : `https://api.themoviedb.org/3/discover/tv?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&sort_by=first_air_date.desc&include_adult=false&page=1&first_air_date.gte=${oneWeekAgoFormatted}&first_air_date.lte=${todayFormatted}&vote_count.gte=5`;
       
       const response = await fetch(endpoint);
       
@@ -1427,7 +1472,9 @@ function HomeScreen({
       comparisonHistory: [],
       comparisonWins: 0,
       mediaType: contentType === 'movies' ? 'movie' : 'tv',
-      ratingCategory: selectedCategory
+      ratingCategory: selectedCategory,
+      // Add confidence metadata if available (from adaptive rating system)
+      confidence: selectedMovie.confidence || null
     };
     
     onAddToSeen(ratedMovie);
@@ -1821,7 +1868,9 @@ function HomeScreen({
       eloRating: rating * 100,
       comparisonHistory: [],
       comparisonWins: 0,
-      mediaType: contentType === 'movies' ? 'movie' : 'tv'
+      mediaType: contentType === 'movies' ? 'movie' : 'tv',
+      // Add confidence metadata if available (from adaptive rating system)
+      confidence: selectedMovie.confidence || null
     };
     
     onAddToSeen(ratedMovie);
@@ -2576,14 +2625,32 @@ function HomeScreen({
                     </View>
                     {item.streamingProviders && item.streamingProviders.length > 0 && (
                       <View style={{ flexDirection: 'row', marginTop: 4, flexWrap: 'wrap' }}>
-                        {item.streamingProviders.slice(0, 3).map((provider) => (
-                          <Image
-                            key={provider.provider_id}
-                            source={{ uri: `https://image.tmdb.org/t/p/w92${provider.logo_path}` }}
-                            style={{ width: 16, height: 16, marginRight: 2, borderRadius: 2 }}
-                            resizeMode="contain"
-                          />
-                        ))}
+                        {item.streamingProviders.slice(0, 3).map((provider) => {
+                          const paymentType = getProviderPaymentType(provider.provider_id);
+                          return (
+                            <View key={provider.provider_id} style={{ alignItems: 'center', marginRight: 4 }}>
+                              <Image
+                                source={{ uri: `https://image.tmdb.org/t/p/w92${provider.logo_path}` }}
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: 2,
+                                  borderColor: paymentType === 'paid' ? '#FF4444' : '#22C55E',
+                                  borderWidth: 0.5,
+                                }}
+                                resizeMode="contain"
+                              />
+                              <Text style={{
+                                fontSize: 6,
+                                color: paymentType === 'paid' ? '#FF4444' : '#22C55E',
+                                fontWeight: 'bold',
+                                marginTop: 1
+                              }}>
+                                {paymentType === 'paid' ? '$' : 'FREE'}
+                              </Text>
+                            </View>
+                          );
+                        })}
                       </View>
                     )}
 
@@ -2608,7 +2675,7 @@ function HomeScreen({
       <View style={homeStyles.section}>
         <View style={styles.sectionHeaderRow}>
           <Text style={homeStyles.sectionTitle}>
-            In Theatres
+            New Movies
           </Text>
           <Text style={homeStyles.swipeInstructions}>
             {formatDate(today)}
@@ -2920,6 +2987,26 @@ function HomeScreen({
               end={{ x: 1, y: 1 }}
               style={modalStyles.detailModalContent}
             >
+              {/* X button at top-right */}
+              <TouchableOpacity
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  borderRadius: 15,
+                  width: 30,
+                  height: 30,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10
+                }}
+                onPress={closeDetailModal}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+              
               <Image 
                 source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }} 
                 style={modalStyles.detailPoster}
@@ -2972,14 +3059,32 @@ function HomeScreen({
                     deduplicateProviders(movieProviders)
                       .filter(provider => provider.logo_path)
                       .slice(0, 5)
-                      .map((provider) => (
-                        <Image 
-                          key={provider.provider_id}
-                          source={{ uri: getProviderLogoUrl(provider.logo_path) }}
-                          style={modalStyles.platformIcon}
-                          resizeMode="contain"
-                        />
-                      ))
+                      .map((provider) => {
+                        const paymentType = getProviderPaymentType(provider.provider_id);
+                        return (
+                          <View key={provider.provider_id} style={{ alignItems: 'center', marginRight: 8 }}>
+                            <Image 
+                              source={{ uri: getProviderLogoUrl(provider.logo_path) }}
+                              style={[
+                                modalStyles.platformIcon,
+                                {
+                                  borderColor: paymentType === 'paid' ? '#FF4444' : '#22C55E',
+                                  borderWidth: 0.5,
+                                }
+                              ]}
+                              resizeMode="contain"
+                            />
+                            <Text style={{
+                              fontSize: 8,
+                              color: paymentType === 'paid' ? '#FF4444' : '#22C55E',
+                              fontWeight: 'bold',
+                              marginTop: 2
+                            }}>
+                              {paymentType === 'paid' ? '$' : 'FREE'}
+                            </Text>
+                          </View>
+                        );
+                      })
                   ) : null
                 )}
               </View>
@@ -3161,6 +3266,7 @@ function HomeScreen({
           }}
           colors={colors}
           userMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
+          mediaType={mediaType}
         />
 
         {/* **WILDCARD COMPARISON MODAL** */}
