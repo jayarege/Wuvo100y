@@ -107,3 +107,68 @@ Wuvo100y is a React Native movie/TV show recommendation app with AI-powered pers
 - Test on multiple devices and iOS versions
 - Ensure proper error handling and fallbacks
 - Keep API keys secure in production builds
+
+---
+
+## 🎯 **STREAMING SERVICE PRIORITIZATION** (July 26, 2025)
+**Completed**: Max 3 streaming services per modal with user preferences + top 10 priority
+
+### Changes Since Last Git Push:
+1. **Constants/index.js**: Added STREAMING_SERVICES_PRIORITY array (Netflix, Amazon Prime, etc.)
+2. **Home/index.js**: Added prioritizeStreamingProviders function (limits to 3, user prefs first)  
+3. **ProfileSetupScreen.js**: Theme integration, streaming service selection UI, fixed duplicate imports, accessibility
+
+**Remaining**: Fix 2 hardcoded colors in action buttons to use colors.textOnPrimary
+
+---
+
+## 🎯 **CURRENT SESSION: ADAPTIVE ELO RATING SYSTEM** (July 25, 2025)
+
+### 🚨 **CONTEXT: WHERE WE LEFT OFF**
+**User Issue**: Frustrated that previous ELO system work wasn't remembered between sessions
+**Current Problem**: Fixed 3-round rating system is statistically insufficient 
+**Research Finding**: Beli app uses 3-4 adaptive rounds with binary search positioning, chess uses 25-50 games for non-provisional ratings
+
+### 📊 **KEY RESEARCH INSIGHTS**
+1. **Statistical Evidence**: 3 comparisons insufficient for reliable ratings
+2. **Beli Success**: Uses adaptive rounds (3-4) for relative positioning, not absolute scoring
+3. **Chess Standards**: First 25-50 games marked as "provisional" ratings
+4. **ELO Accuracy**: Even with many games, prediction accuracy is ~70%
+
+### 🎯 **APPROVED IMPLEMENTATION PLAN**
+**Adaptive Confidence-Based Rating System**:
+```javascript
+const CONFIDENCE_CONFIG = {
+  MIN_ROUNDS: 3,           // Minimum for basic rating
+  MAX_ROUNDS: 7,           // Maximum to prevent fatigue  
+  TARGET_CONFIDENCE: 0.85, // 85% confidence threshold
+  PROVISIONAL_THRESHOLD: 5 // Mark as provisional below this
+};
+```
+
+### 📋 **CURRENT TODO LIST** (Active Tasks):
+1. ✅ **Research & Planning**: Statistical validation complete
+2. 🔄 **ELO Agent Implementation**: Use elo-system-auditor for adaptive system
+3. ⏳ **Core Implementation**: 
+   - Statistical confidence calculator (rating variance, opponent spread, consistency)
+   - Adaptive round logic (3-7 rounds based on confidence)
+   - Provisional rating system UI indicators
+4. ⏳ **CODE_BIBLE Review**: Team of 3 consultants to review implementation
+5. ⏳ **Integration**: Update UnifiedRatingEngine.js, EnhancedRatingSystem.js, Home/index.js
+
+### 🔧 **FILES REQUIRING MODIFICATION**
+- `src/utils/UnifiedRatingEngine.js` - Core adaptive logic (line 274: `for (let round = 1; round <= 3; round++)`)
+- `src/Components/EnhancedRatingSystem.js` - UI confidence indicators  
+- `src/Screens/Home/index.js` - Integration with existing rating flow
+
+### 💡 **NEXT STEPS ON RESUME**
+1. Complete ELO agent implementation of adaptive confidence system
+2. Deploy consultant team for CODE_BIBLE compliance review
+3. Test mathematical accuracy of confidence calculations
+4. Validate user experience with provisional rating indicators
+
+### 🚨 **CRITICAL CONTEXT FOR NEXT SESSION**
+- User was setting up ELO agent implementation when session ended
+- Serena project activation failed (needs project config)
+- All research and planning complete - ready for implementation
+- User specifically wants CODE_BIBLE compliance and consultant review

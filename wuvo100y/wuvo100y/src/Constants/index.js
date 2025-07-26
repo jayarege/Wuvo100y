@@ -8,6 +8,7 @@
 import { ENV } from '../config/environment';
 
 // API Configuration - now secure
+console.log('🔍 Constants loading - ENV.TMDB_API_KEY:', ENV.TMDB_API_KEY ? ENV.TMDB_API_KEY.substring(0, 10) + '...' : 'NULL');
 export const TMDB_API_KEY = ENV.TMDB_API_KEY;
 export const GROQ_API_KEY = ENV.GROQ_API_KEY;
 export const API_KEY = ENV.TMDB_API_KEY; // Backward compatibility
@@ -44,7 +45,21 @@ export const INITIAL_GENRES = {
   10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
 };
 
-// Streaming services
+// Streaming services priority order (top 10)
+export const STREAMING_SERVICES_PRIORITY = [
+  { id: 8, name: 'Netflix', priority: 1 },
+  { id: 9, name: 'Amazon Prime Video', priority: 2 },
+  { id: 531, name: 'Paramount+', priority: 3 },
+  { id: 384, name: 'Max', priority: 4 },
+  { id: 15, name: 'Hulu', priority: 5 },
+  { id: 337, name: 'Disney+', priority: 6 },
+  { id: 387, name: 'Peacock', priority: 7 },
+  { id: 467, name: 'ESPN+', priority: 8 },
+  { id: 350, name: 'Apple TV+', priority: 9 },
+  { id: 43, name: 'Starz', priority: 10 }
+];
+
+// Legacy streaming services (keep for backward compatibility)
 export const STREAMING_SERVICES = [
   { 
     id: 8, 

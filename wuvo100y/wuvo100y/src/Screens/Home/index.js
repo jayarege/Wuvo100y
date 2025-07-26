@@ -42,7 +42,7 @@ import { getCurrentSessionType } from '../../config/discoveryConfig';
 import { useAuth } from '../../hooks/useAuth';
 import { RatingModal } from '../../Components/RatingModal';
 import { ActivityIndicator } from 'react-native';
-import { TMDB_API_KEY as API_KEY } from '../../Constants';
+import { TMDB_API_KEY as API_KEY, STREAMING_SERVICES_PRIORITY } from '../../Constants';
 import { filterAdultContent, isContentSafe } from '../../utils/ContentFiltering';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -697,6 +697,42 @@ function HomeScreen({
     
     return filtered;
   }, [normalizeProviderName]);
+  const prioritizeStreamingProviders = useCallback((providers, userPreferences = []) => {
+    if (!providers || !Array.isArray(providers)) return [];
+    
+    // First deduplicate providers
+    const deduplicated = deduplicateProviders(providers);
+    
+    // Sort by priority: user preferences first, then top 10 priority, then others
+    const sorted = deduplicated.sort((a, b) => {
+      // Check if user has preferences for these providers
+      const aUserPref = userPreferences.findIndex(pref => pref.id === a.provider_id);
+      const bUserPref = userPreferences.findIndex(pref => pref.id === b.provider_id);
+      
+      // User preferences take highest priority
+      if (aUserPref !== -1 && bUserPref !== -1) {
+        return aUserPref - bUserPref; // Sort by user preference order
+      }
+      if (aUserPref !== -1) return -1; // a is user preference
+      if (bUserPref !== -1) return 1;  // b is user preference
+      
+      // Then sort by top 10 priority
+      const aPriority = STREAMING_SERVICES_PRIORITY.find(s => s.id === a.provider_id);
+      const bPriority = STREAMING_SERVICES_PRIORITY.find(s => s.id === b.provider_id);
+      
+      if (aPriority && bPriority) {
+        return aPriority.priority - bPriority.priority;
+      }
+      if (aPriority) return -1; // a is in top 10
+      if (bPriority) return 1;  // b is in top 10
+      
+      // Finally, sort by name for consistent ordering
+      return a.provider_name.localeCompare(b.provider_name);
+    });
+    
+    // Return maximum 3 providers
+    return sorted.slice(0, 3);
+  }, [deduplicateProviders]);
 
   const getProviderLogoUrl = useCallback((logoPath) => {
     if (!logoPath) return null;
@@ -1377,9 +1413,10 @@ function HomeScreen({
     
     const range = percentileRanges[emotion] || [0.25, 0.75];
     
-    // Sort movies by rating descending - EXACT COPY FROM ADDMOVIE LOGIC
+    // Sort movies by rating descending - FILTERED BY MEDIA TYPE
     const sortedMovies = [...seenMovies]
       .filter(movie => movie.userRating && !isNaN(movie.userRating))
+      .filter(movie => (movie.mediaType || 'movie') === mediaType) // CRITICAL FIX: Filter by media type
       .sort((a, b) => b.userRating - a.userRating);
     
     if (sortedMovies.length === 0) return null;
@@ -1390,7 +1427,7 @@ function HomeScreen({
     
     // Return random movie from the percentile range
     return candidates[Math.floor(Math.random() * candidates.length)];
-  }, []);
+  }, [mediaType]);
   
   // Handle emotion selection and start comparison process
   const handleEmotionSelected = useCallback((emotion) => {
@@ -1415,7 +1452,9 @@ function HomeScreen({
     }
     
     // Select second and third opponents randomly from all seen movies (for known vs known)
-    const remainingMovies = seen.filter(movie => movie.id !== firstOpponent.id);
+    const remainingMovies = seen
+      .filter(movie => movie.id !== firstOpponent.id)
+      .filter(movie => (movie.mediaType || 'movie') === mediaType); // CRITICAL FIX: Filter by media type
     
     if (remainingMovies.length < 2) {
       console.log('❌ NOT ENOUGH REMAINING MOVIES');
@@ -1444,7 +1483,7 @@ function HomeScreen({
     console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
     console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
     console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
-  }, [selectedMovie, seen, selectMovieFromPercentile]);
+  }, [selectedMovie, seen, selectMovieFromPercentile, mediaType]);
 
 
   const handleConfirmRating = useCallback((finalRating) => {
@@ -1493,10 +1532,10 @@ function HomeScreen({
     // Close the detail modal
     closeDetailModal();
     
-    // Refresh home screen data
+    // Refresh home screen data (but NOT AI recommendations - let them remain static)
     fetchRecentReleases();
     fetchPopularMovies();
-    fetchAIRecommendations();
+    // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static until empty or manual refresh
     
     // Reset state
     setSelectedCategory(null);
@@ -1652,10 +1691,37 @@ function HomeScreen({
       // Record not interested for GROQ AI learning
       await recordNotInterested(movie, userProfile, contentType === 'movies' ? 'movie' : 'tv');
       
-      // Remove from current recommendations
-      setAiRecommendations(prev => prev.filter(item => item.id !== movie.id));
-      setPopularMovies(prev => prev.filter(item => item.id !== movie.id));
-      setRecentReleases(prev => prev.filter(item => item.id !== movie.id));
+      // Remove from current recommendations - ONLY update the specific list that contains the item
+      // This prevents multiple FlatList re-renders that cause screen "spazzing"
+      const movieId = movie.id;
+      
+      // Check which list contains the movie and only update that one
+      setAiRecommendations(prev => {
+        const hasMovie = prev.some(item => item.id === movieId);
+        if (hasMovie) {
+          console.log(`🎯 Removing ${movie.title} from AI recommendations`);
+          return prev.filter(item => item.id !== movieId);
+        }
+        return prev; // No change if movie not in this list
+      });
+      
+      setPopularMovies(prev => {
+        const hasMovie = prev.some(item => item.id === movieId);
+        if (hasMovie) {
+          console.log(`🎯 Removing ${movie.title} from popular movies`);
+          return prev.filter(item => item.id !== movieId);
+        }
+        return prev; // No change if movie not in this list
+      });
+      
+      setRecentReleases(prev => {
+        const hasMovie = prev.some(item => item.id === movieId);
+        if (hasMovie) {
+          console.log(`🎯 Removing ${movie.title} from recent releases`);
+          return prev.filter(item => item.id !== movieId);
+        }
+        return prev; // No change if movie not in this list
+      });
       
       // Add to permanent not interested list - never show again
       setNotInterestedMovies(prev => [...prev, movie.id]);
@@ -1678,46 +1744,7 @@ function HomeScreen({
       };
       storePermanentNotInterested();
       
-      // Enhanced similarity filtering - reduce similar movies
-      const similarMovies = [];
-      setAiRecommendations(prev => prev.filter(item => {
-        if (item.id === movie.id) return false;
-        
-        // Calculate similarity score based on genres
-        const genreOverlap = movie.genre_ids?.filter(id => 
-          item.genre_ids?.includes(id)
-        ).length || 0;
-        
-        // If movie shares 2+ genres, reduce its likelihood (mark as similar)
-        if (genreOverlap >= 2) {
-          similarMovies.push(item.id);
-          // 70% chance to remove similar movies
-          return Math.random() > 0.7;
-        }
-        
-        return true;
-      }));
-      
-      // Apply same filtering to other recommendation sections
-      [setPopularMovies, setRecentReleases].forEach(setter => {
-        setter(prev => prev.filter(item => {
-          if (item.id === movie.id) return false;
-          
-          const genreOverlap = movie.genre_ids?.filter(id => 
-            item.genre_ids?.includes(id)
-          ).length || 0;
-          
-          if (genreOverlap >= 2) {
-            return Math.random() > 0.7;
-          }
-          
-          return true;
-        }));
-      });
-      
-      if (similarMovies.length > 0) {
-        console.log(`🎯 Reduced likelihood of ${similarMovies.length} similar movies`);
-      }
+      // NO ADDITIONAL FILTERING - just remove the clicked movie and let the static list show remaining items
       
       console.log('✅ Movie removed from recommendations and recorded for AI learning');
       
@@ -2334,6 +2361,27 @@ function HomeScreen({
           activeOpacity={0.7}
           onPress={() => handleMovieSelect(item)}
         >
+          {/* NOT INTERESTED X BUTTON - TOP RIGHT */}
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              borderRadius: 15,
+              width: 30,
+              height: 30,
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10
+            }}
+            onPress={(event) => handleNotInterested(item, event)}
+            activeOpacity={0.8}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={18} color="white" />
+          </TouchableOpacity>
+          
           <Image 
             source={{ uri: `https://image.tmdb.org/t/p/w500${item.poster}` }} 
             style={styles.recentPoster}
@@ -2474,6 +2522,15 @@ function HomeScreen({
             keyExtractor={item => item.id.toString()}
             snapToInterval={MOVIE_CARD_WIDTH + 12}
             decelerationRate="fast"
+            removeClippedSubviews={false}
+            getItemLayout={(data, index) => ({
+              length: MOVIE_CARD_WIDTH + 12,
+              offset: (MOVIE_CARD_WIDTH + 12) * index,
+              index,
+            })}
+            windowSize={10}
+            initialNumToRender={5}
+            maxToRenderPerBatch={3}
             renderItem={({ item, index }) => (
               <View style={[
                 homeStyles.movieCardBorder,
@@ -2503,17 +2560,27 @@ function HomeScreen({
                       </Text>
                     </View>
                     
-                    {/* Enhanced Not Interested Button */}
+                    {/* NOT INTERESTED X BUTTON - TOP RIGHT */}
                     <TouchableOpacity
-                      style={styles.notInterestedButton}
-                      onPress={(e) => {
-                        e.stopPropagation(); // Prevent card tap
-                        handleNotInterested(item, e);
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        borderRadius: 15,
+                        width: 30,
+                        height: 30,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10
                       }}
+                      onPress={(event) => handleNotInterested(item, event)}
+                      activeOpacity={0.8}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <Ionicons name="close" size={24} color="#ff4444" />
+                      <Ionicons name="close" size={18} color="white" />
                     </TouchableOpacity>
+                    
                     <Image
                       source={{
                         uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
@@ -2574,6 +2641,12 @@ function HomeScreen({
           keyExtractor={item => item.id.toString()}
           snapToInterval={MOVIE_CARD_WIDTH + 12}
           decelerationRate="fast"
+          removeClippedSubviews={false}
+          getItemLayout={(data, index) => ({
+            length: MOVIE_CARD_WIDTH + 12,
+            offset: (MOVIE_CARD_WIDTH + 12) * index,
+            index,
+          })}
           renderItem={({ item, index }) => (
             <View style={[
               homeStyles.movieCardBorder, 
@@ -2594,6 +2667,28 @@ function HomeScreen({
                   <View style={[styles.rankingBadge, { backgroundColor: theme[mediaType][isDarkMode ? 'dark' : 'light'].accent }]}>
                     <Text style={styles.rankingNumber}>{index + 1}</Text>
                   </View>
+                  
+                  {/* NOT INTERESTED X BUTTON - TOP RIGHT */}
+                  <TouchableOpacity
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      borderRadius: 15,
+                      width: 30,
+                      height: 30,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 10
+                    }}
+                    onPress={(event) => handleNotInterested(item, event)}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="close" size={18} color="white" />
+                  </TouchableOpacity>
+                  
                   <Image
                     source={{
                       uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
@@ -2700,6 +2795,15 @@ function HomeScreen({
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={homeStyles.carouselContent}
+            removeClippedSubviews={false}
+            getItemLayout={(data, index) => ({
+              length: MOVIE_CARD_WIDTH + 12,
+              offset: (MOVIE_CARD_WIDTH + 12) * index,
+              index,
+            })}
+            windowSize={10}
+            initialNumToRender={5}
+            maxToRenderPerBatch={3}
           />
         )}
       </View>
@@ -2722,8 +2826,8 @@ function HomeScreen({
     // Refresh home screen data when movies are rated to remove them from display
     fetchRecentReleases();
     fetchPopularMovies();
-    fetchAIRecommendations();
-  }, [seen.length, fetchRecentReleases, fetchPopularMovies, fetchAIRecommendations]);
+    // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static to prevent reloading
+  }, [seen.length, fetchRecentReleases, fetchPopularMovies]);
 
   useEffect(() => {
     if (popularMovies.length > 0 && activeTab === 'new' && contentType === 'movies') {
@@ -2744,13 +2848,13 @@ function HomeScreen({
   }, [activeTab, recommendations, contentType, startAutoScroll]);
 
   useEffect(() => {
-    if (seen.length >= 3) {
+    if (seen.length >= 3 && aiRecommendations.length === 0) {
       console.log('🤖 Fetching AI recommendations - user has', seen.length, 'rated items');
       fetchAIRecommendations();
-      // Also fetch social recommendations when user data changes
-      fetchSocialRecommendations();
     }
-  }, [seen.length, contentType, fetchAIRecommendations, fetchSocialRecommendations]);
+    // Always fetch social recommendations when user data changes
+    fetchSocialRecommendations();
+  }, [seen.length, contentType, aiRecommendations.length, fetchAIRecommendations, fetchSocialRecommendations]);
 
   useEffect(() => {
     const loadNotInterested = async () => {
@@ -2767,17 +2871,17 @@ function HomeScreen({
       console.log('🔄 Re-fetching data due to skippedMovies change');
       fetchPopularMovies();
       fetchRecentReleases();
-      fetchAIRecommendations();
+      // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static
     }
-  }, [skippedMovies, fetchPopularMovies, fetchRecentReleases, fetchAIRecommendations]);
+  }, [skippedMovies, fetchPopularMovies, fetchRecentReleases]);
 
   useEffect(() => {
     console.log('🔄 watchlist (unseen) updated:', unseen.length);
     console.log('🔄 Re-fetching data due to watchlist change');
     fetchPopularMovies();
     fetchRecentReleases();
-    fetchAIRecommendations();
-  }, [unseen.length, fetchPopularMovies, fetchRecentReleases, fetchAIRecommendations]);
+    // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static
+  }, [unseen.length, fetchPopularMovies, fetchRecentReleases]);
 
   // ============================================================================
   // **MAIN RENDER - COLLABORATIVE UI MASTERPIECE**
@@ -2858,6 +2962,9 @@ function HomeScreen({
                   onMoviePress={handleMovieSelect}
                   isDarkMode={isDarkMode}
                   homeStyles={homeStyles}
+                  mediaType={mediaType}
+                  theme={theme}
+                  colors={colors}
                 />
                 {renderAIRecommendationsSection()}
                 {renderPopularMoviesSection()}
@@ -2949,6 +3056,9 @@ function HomeScreen({
                   onMoviePress={handleMovieSelect}
                   isDarkMode={isDarkMode}
                   homeStyles={homeStyles}
+                  mediaType={mediaType}
+                  theme={theme}
+                  colors={colors}
                 />
                 {renderAIRecommendationsSection()}
                 {renderPopularMoviesSection()}
@@ -2987,13 +3097,13 @@ function HomeScreen({
               end={{ x: 1, y: 1 }}
               style={modalStyles.detailModalContent}
             >
-              {/* X button at top-right */}
+              {/* X button at top-right - NOW WORKS AS NOT INTERESTED */}
               <TouchableOpacity
                 style={{
                   position: 'absolute',
                   top: 8,
                   right: 8,
-                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
                   borderRadius: 15,
                   width: 30,
                   height: 30,
@@ -3001,10 +3111,11 @@ function HomeScreen({
                   justifyContent: 'center',
                   zIndex: 10
                 }}
-                onPress={closeDetailModal}
+                onPress={(event) => handleNotInterested(selectedMovie, event)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.8}
               >
-                <Ionicons name="close" size={18} color="#FFFFFF" />
+                <Ionicons name="close" size={18} color="white" />
               </TouchableOpacity>
               
               <Image 
@@ -3056,9 +3167,8 @@ function HomeScreen({
                   </Text>
                 ) : (
                   movieProviders && movieProviders.length > 0 ? (
-                    deduplicateProviders(movieProviders)
+                    prioritizeStreamingProviders(movieProviders, currentUser?.profile?.preferences?.streamingServices || [])
                       .filter(provider => provider.logo_path)
-                      .slice(0, 5)
                       .map((provider) => {
                         const paymentType = getProviderPaymentType(provider.provider_id);
                         return (
