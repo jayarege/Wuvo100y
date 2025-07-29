@@ -96,6 +96,7 @@ console.log('🏠 HomeScreen: Enhanced Rating System loaded');
 // Devil's advocate: Users will try to spam refresh, so we need strict limits
 const REFRESH_STORAGE_KEY_PREFIX = 'ai_refresh';
 const MAX_DAILY_REFRESHES = 3;
+const REFRESH_RESET_HOURS = 24; // 24-hour rolling window
 
 // **STREAMING PROVIDER PAYMENT TYPE MAPPING** - Based on common provider business models
 const getProviderPaymentType = (providerId) => {
@@ -258,6 +259,10 @@ function HomeScreen({
   // COMMANDMENT 2: Never assume - track refresh usage with proper validation
   const [dailyRefreshCount, setDailyRefreshCount] = useState(0);
   const [lastRefreshDate, setLastRefreshDate] = useState(null);
+  
+  // **COUNTDOWN TIMER STATE FOR 24-HOUR ROLLING REFRESH**
+  const [timeUntilReset, setTimeUntilReset] = useState(null);
+  const [refreshTimestamps, setRefreshTimestamps] = useState([]);
   const [movieCredits, setMovieCredits] = useState(null);
   const [movieProviders, setMovieProviders] = useState(null);
   
@@ -405,76 +410,82 @@ function HomeScreen({
   const [currentIndex, setCurrentIndex] = useState(0);
   const autoScrollAnimation = useRef(null);
   
+  // Track previous content type to detect changes for AI recommendations
+  const previousContentType = useRef(contentType);
+  
   // **CONTENT TYPE HELPERS - ENGINEER TEAM 7**
   const contentType = mediaType === 'movie' ? 'movies' : 'tv';
 
-  // COMMANDMENT 2: Never assume - validate refresh eligibility with proper error handling
+  // **IMPROVED 24-HOUR ROLLING REFRESH SYSTEM**
   const checkRefreshEligibility = useCallback(async () => {
     try {
-      const today = new Date().toDateString();
-      const refreshKey = `${REFRESH_STORAGE_KEY_PREFIX}_${mediaType}_${today}`;
-      const storedData = await AsyncStorage.getItem(refreshKey);
+      const timestampsKey = `ai_refresh_timestamps_${mediaType}`;
+      const storedTimestamps = await AsyncStorage.getItem(timestampsKey);
       
-      if (!storedData) {
-        // First refresh of the day
-        return { canRefresh: true, remainingRefreshes: MAX_DAILY_REFRESHES, count: 0 };
+      const now = Date.now();
+      const twentyFourHoursAgo = now - (REFRESH_RESET_HOURS * 60 * 60 * 1000);
+      
+      let timestamps = storedTimestamps ? JSON.parse(storedTimestamps) : [];
+      
+      // Filter out timestamps older than 24 hours (rolling window)
+      timestamps = timestamps.filter(timestamp => timestamp > twentyFourHoursAgo);
+      
+      // Update stored timestamps
+      await AsyncStorage.setItem(timestampsKey, JSON.stringify(timestamps));
+      setRefreshTimestamps(timestamps);
+      
+      const remaining = Math.max(0, MAX_DAILY_REFRESHES - timestamps.length);
+      
+      // Calculate time until next reset (when oldest timestamp expires)
+      let nextResetTime = null;
+      if (timestamps.length >= MAX_DAILY_REFRESHES && timestamps.length > 0) {
+        nextResetTime = timestamps[0] + (REFRESH_RESET_HOURS * 60 * 60 * 1000);
       }
-      
-      const { count, date } = JSON.parse(storedData);
-      
-      if (date !== today) {
-        // New day, reset counter
-        return { canRefresh: true, remainingRefreshes: MAX_DAILY_REFRESHES, count: 0 };
-      }
-      
-      // Same day, check limits
-      const remaining = Math.max(0, MAX_DAILY_REFRESHES - count);
       
       return { 
         canRefresh: remaining > 0, 
         remainingRefreshes: remaining,
-        count: count
+        count: timestamps.length,
+        nextResetTime: nextResetTime,
+        timestamps: timestamps
       };
       
     } catch (error) {
       console.error('Error checking refresh eligibility:', error);
       // COMMANDMENT 9: Handle errors explicitly - fail safe with reduced access
-      return { canRefresh: true, remainingRefreshes: 1, count: 2 };
+      return { canRefresh: false, remainingRefreshes: 0, count: MAX_DAILY_REFRESHES, nextResetTime: null, timestamps: [] };
     }
   }, [mediaType]);
 
-  // COMMANDMENT 9: Handle errors explicitly with comprehensive error recovery
+  // **IMPROVED REFRESH WITH ROLLING TIMESTAMPS**
   const handleRefreshRecommendations = useCallback(async () => {
     try {
       const eligibility = await checkRefreshEligibility();
       
       if (!eligibility.canRefresh) {
-        console.log('⏰ Daily refresh limit reached');
+        console.log('⏰ 24-hour refresh limit reached');
         return false;
       }
       
       setIsRefreshingAI(true);
       
-      // Update usage counter immediately (pessimistic update)
-      const today = new Date().toDateString();
-      const refreshKey = `${REFRESH_STORAGE_KEY_PREFIX}_${mediaType}_${today}`;
-      const newCount = eligibility.count + 1;
+      // Add current timestamp to rolling window
+      const now = Date.now();
+      const timestampsKey = `ai_refresh_timestamps_${mediaType}`;
+      const updatedTimestamps = [...eligibility.timestamps, now];
       
-      await AsyncStorage.setItem(refreshKey, JSON.stringify({
-        count: newCount,
-        date: today
-      }));
-      
-      setDailyRefreshCount(newCount);
+      await AsyncStorage.setItem(timestampsKey, JSON.stringify(updatedTimestamps));
+      setRefreshTimestamps(updatedTimestamps);
+      setDailyRefreshCount(updatedTimestamps.length);
       
       // COMMANDMENT 4: Brutally honest - clear old recommendations for fresh start
       setAiRecommendations([]);
       setDismissedInSession([]);
       
-      // Force fresh recommendations with Groq enhancement
+      // Force fresh recommendations with enhanced filtering
       await fetchAIRecommendations();
       
-      console.log(`🔄 AI recommendations refreshed (${newCount}/${MAX_DAILY_REFRESHES})`);
+      console.log(`🔄 AI recommendations refreshed (${updatedTimestamps.length}/${MAX_DAILY_REFRESHES})`);
       return true;
       
     } catch (error) {
@@ -492,9 +503,48 @@ function HomeScreen({
     const initializeRefreshStatus = async () => {
       const eligibility = await checkRefreshEligibility();
       setDailyRefreshCount(eligibility.count);
+      if (eligibility.nextResetTime) {
+        setTimeUntilReset(eligibility.nextResetTime);
+      }
     };
     initializeRefreshStatus();
   }, [checkRefreshEligibility]);
+  
+  // **COUNTDOWN TIMER EFFECT - Updates every minute when refresh is disabled**
+  useEffect(() => {
+    let interval;
+    if (dailyRefreshCount >= MAX_DAILY_REFRESHES && timeUntilReset) {
+      interval = setInterval(() => {
+        const now = Date.now();
+        if (now >= timeUntilReset) {
+          // Reset time reached, refresh eligibility
+          setTimeUntilReset(null);
+          checkRefreshEligibility();
+        }
+      }, 60000); // Update every minute
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [dailyRefreshCount, timeUntilReset, checkRefreshEligibility]);
+  
+  // **COUNTDOWN DISPLAY FORMATTER**
+  const formatTimeUntilReset = useCallback((resetTime) => {
+    if (!resetTime) return '';
+    
+    const now = Date.now();
+    const remaining = resetTime - now;
+    
+    if (remaining <= 0) return 'Available now';
+    
+    const hours = Math.floor(remaining / (1000 * 60 * 60));
+    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  }, []);
   
   // **DATE UTILITIES - ENGINEER TEAM 8**
   const today = useMemo(() => new Date(), []);
@@ -899,29 +949,91 @@ function HomeScreen({
       
       let recommendations;
       
-      // Enhanced AI recommendations with discovery session logic
+      // CODE_BIBLE Commandment #2: Never assume - guarantee exactly 10 items
       console.log(`🎯 Fetching enhanced AI recommendations with discovery session logic for ${currentMediaType}`);
-      recommendations = await getImprovedRecommendations(
-        recommendationBasis, 
-        currentMediaType,
-        {
-          count: 20,
-          seen: seen,
-          unseen: unseen,
-          skipped: skippedMovies,
-          notInterested: notInterestedMovies, // TEAM SOLUTION: Pass not interested movies to AI system
-          useDiscoverySession: true, // Enable discovery session logic
-          sessionType: getCurrentSessionType(), // Pass current session type for time-based theming
-          userId: userId, // Pass user ID for session tracking
-          useGroq: true // Enable GROQ for enhanced themes
-        }
-      );
       
-      // Filter out movies user marked as "Not Interested" and watchlist movies to prevent them from reappearing
-      const filteredRecommendations = recommendations.filter(movie => 
-        !notInterestedMovies.includes(movie.id) && !unseen.some(u => u.id === movie.id)
-      );
-      setAiRecommendations(filteredRecommendations);
+      let filteredRecommendations = [];
+      let attempts = 0;
+      const maxAttempts = 3;
+      const targetCount = 10;
+      
+      // Enhanced backfill logic to guarantee 10 items
+      while (filteredRecommendations.length < targetCount && attempts < maxAttempts) {
+        attempts++;
+        const fetchCount = Math.max(20, (targetCount - filteredRecommendations.length) * 3);
+        
+        console.log(`🔄 Attempt ${attempts}/${maxAttempts}: Requesting ${fetchCount} items to get ${targetCount - filteredRecommendations.length} more`);
+        
+        const candidateRecommendations = await getImprovedRecommendations(
+          recommendationBasis, 
+          currentMediaType,
+          {
+            count: fetchCount,
+            seen: seen,
+            unseen: unseen,
+            skipped: [...skippedMovies, ...filteredRecommendations.map(r => r.id)], // Exclude already selected
+            notInterested: notInterestedMovies,
+            useDiscoverySession: true,
+            sessionType: getCurrentSessionType(),
+            userId: userId,
+            useGroq: true
+          }
+        );
+        
+        // **ENHANCED FILTERING - Remove all unwanted content**
+        const newCandidates = candidateRecommendations.filter(movie => {
+          // Basic duplicates and already filtered
+          if (filteredRecommendations.some(existing => existing.id === movie.id)) {
+            return false;
+          }
+          
+          // Not interested list
+          if (notInterestedMovies.includes(movie.id)) {
+            return false;
+          }
+          
+          // Already in watchlist (unseen)
+          if (unseen.some(u => u.id === movie.id)) {
+            return false;
+          }
+          
+          // Already rated (seen) - CRITICAL: Don't recommend what user already rated
+          if (seen.some(s => s.id === movie.id)) {
+            return false;
+          }
+          
+          // Skipped in this session
+          if (skippedMovies.includes(movie.id)) {
+            return false;
+          }
+          
+          // Dismissed in current session
+          if (dismissedInSession.includes(movie.id)) {
+            return false;
+          }
+          
+          return true;
+        });
+        
+        // Add new candidates up to target count
+        const needed = targetCount - filteredRecommendations.length;
+        filteredRecommendations.push(...newCandidates.slice(0, needed));
+        
+        console.log(`📊 After attempt ${attempts}: Got ${filteredRecommendations.length}/${targetCount} items`);
+        
+        if (filteredRecommendations.length >= targetCount) {
+          break;
+        }
+      }
+      
+      // CODE_BIBLE Commandment #9: Handle errors explicitly - warn if we couldn't get 10
+      if (filteredRecommendations.length < targetCount) {
+        console.warn(`⚠️ Could only get ${filteredRecommendations.length}/${targetCount} recommendations after ${maxAttempts} attempts`);
+      } else {
+        console.log(`✅ Successfully got exactly ${filteredRecommendations.length}/${targetCount} recommendations`);
+      }
+      
+      setAiRecommendations(filteredRecommendations.slice(0, targetCount));
       
     } catch (error) {
       console.error('Failed to fetch AI recommendations:', error);
@@ -936,7 +1048,7 @@ function HomeScreen({
       setIsLoadingRecommendations(false);
       setIsRefreshingAI(false);
     }
-  }, [seen, unseen, contentType, skippedMovies, notInterestedMovies, mediaType, canGenerateNewSession, currentSession, generateSession]);
+  }, [seen, unseen, contentType, skippedMovies, notInterestedMovies, dismissedInSession, mediaType, canGenerateNewSession, currentSession, generateSession]);
 
   // **PERFORMANCE OPTIMIZATION: Firebase error caching**
   const [firebaseErrorCache, setFirebaseErrorCache] = useState(new Map());
@@ -2586,14 +2698,26 @@ function HomeScreen({
                 />
               )}
             </TouchableOpacity>
-            {/* COMMANDMENT 10: Treat user data as sacred - show usage clearly */}
+            {/* **ENHANCED STATUS WITH COUNTDOWN TIMER** */}
             <Text style={{
               fontSize: 10,
               color: colors.subText,
               marginTop: 2,
-              fontWeight: '500'
+              fontWeight: '500',
+              textAlign: 'center'
             }}>
-              {dailyRefreshCount}/{MAX_DAILY_REFRESHES}
+              {dailyRefreshCount >= MAX_DAILY_REFRESHES && timeUntilReset ? (
+                // Show countdown when limit reached
+                <>
+                  3/3{'\n'}
+                  <Text style={{ fontSize: 9, color: colors.accent }}>
+                    {formatTimeUntilReset(timeUntilReset)}
+                  </Text>
+                </>
+              ) : (
+                // Show normal counter
+                `${dailyRefreshCount}/${MAX_DAILY_REFRESHES}`
+              )}
             </Text>
           </View>
         </View>
@@ -2966,9 +3090,25 @@ function HomeScreen({
   // }, [activeTab, recommendations, contentType, startAutoScroll]);
 
   useEffect(() => {
-    if (seen.length >= 3 && aiRecommendations.length === 0) {
-      console.log('🤖 Fetching AI recommendations - user has', seen.length, 'rated items');
-      fetchAIRecommendations();
+    if (seen.length >= 3) {
+      // Check if we have media-type-specific content for recommendations
+      const currentMediaType = contentType === 'movies' ? 'movie' : 'tv';
+      const currentMediaContent = seen.filter(item => 
+        (item.mediaType || 'movie') === currentMediaType
+      );
+      
+      if (currentMediaContent.length >= 3 && (aiRecommendations.length === 0 || contentType !== previousContentType.current)) {
+        console.log(`🤖 Fetching AI recommendations for ${contentType} - user has ${currentMediaContent.length} rated ${currentMediaType}s`);
+        
+        // Clear old recommendations when media type changes
+        if (contentType !== previousContentType.current) {
+          setAiRecommendations([]);
+          console.log(`🔄 Cleared AI recommendations due to media type change: ${previousContentType.current} → ${contentType}`);
+        }
+        
+        fetchAIRecommendations();
+        previousContentType.current = contentType;
+      }
     }
     // Always fetch social recommendations when user data changes
     fetchSocialRecommendations();

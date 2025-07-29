@@ -24,6 +24,7 @@ import { getModalStyles } from '../../Styles/modalStyles';
 import { getLayoutStyles } from '../../Styles/layoutStyles';
 import { getHeaderStyles } from '../../Styles/headerStyles';
 import { getListStyles } from '../../Styles/listStyles';
+import FullRatingsList from '../../Components/FullRatingsList';
 
 const { width } = Dimensions.get('window');
 
@@ -150,9 +151,12 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [selectedDecades, setSelectedDecades] = useState([]);
   const [selectedStreamingServices, setSelectedStreamingServices] = useState([]);
+  // **NEW: Price filtering state**
+  const [selectedPriceTypes, setSelectedPriceTypes] = useState([]);
   const [tempGenres, setTempGenres] = useState([]);
   const [tempDecades, setTempDecades] = useState([]);
   const [tempStreamingServices, setTempStreamingServices] = useState([]);
+  const [tempPriceTypes, setTempPriceTypes] = useState([]);
   const [streamingProviders, setStreamingProviders] = useState([]);
   
   // Enhanced rating modal state
@@ -202,6 +206,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     setSelectedGenres([]);
     setSelectedDecades([]);
     setSelectedStreamingServices([]);
+    setSelectedPriceTypes([]);
     setSelectedGenreId(null);
   }, [mediaType]);
 
@@ -213,6 +218,100 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const currentUnseen = useMemo(() => {
     return unseen.filter(item => (item.mediaType || 'movie') === mediaType);
   }, [unseen, mediaType]);
+
+  // **STREAMING PROVIDER PAYMENT TYPE MAPPING** - From Home screen
+  const getProviderPaymentType = useCallback((providerId) => {
+    // Free services (ad-supported or free with subscription)
+    const freeProviders = [
+      546, // YouTube
+      613, // Tubi
+      350, // Apple TV (has free content)
+      283, // Crackle
+      207, // YouTube Movies
+      457, // Vudu (has free with ads)
+      300, // Pluto TV
+      279, // IMDb TV
+    ];
+    
+    // Paid services (subscription or rental/purchase)
+    const paidProviders = [
+      8,   // Netflix
+      15,  // Hulu
+      9,   // Amazon Prime Video
+      531, // Paramount+
+      384, // Max (HBO Max)
+      337, // Disney+
+      387, // Peacock
+      467, // ESPN+
+      43,  // Starz
+      283, // Crunchyroll
+      546, // Showtime
+      49,  // HBO Now
+    ];
+    
+    if (freeProviders.includes(providerId)) return 'free';
+    if (paidProviders.includes(providerId)) return 'paid';
+    
+    // Default to paid for unknown providers (most streaming services are paid)
+    return 'paid';
+  }, []);
+
+  // **COMPREHENSIVE FILTERING FUNCTION** - Shared between TopRated and Watchlist
+  const applyComprehensiveFilters = useCallback((content, useAdvancedFilters = true) => {
+    const safeContent = filterAdultContent(content, mediaType);
+    let filtered = safeContent;
+
+    if (!useAdvancedFilters) return filtered;
+
+    // Genre filtering (for advanced filters, not basic genre dropdown)
+    if (selectedGenres.length > 0) {
+      filtered = filtered.filter(movie => 
+        movie.genre_ids && movie.genre_ids.some(genreId => 
+          selectedGenres.includes(genreId.toString())
+        )
+      );
+    }
+
+    // Decade filtering
+    if (selectedDecades.length > 0) {
+      filtered = filtered.filter(movie => {
+        const dateField = movie.release_date || movie.first_air_date;
+        if (!dateField) return false;
+        const year = new Date(dateField).getFullYear();
+        return selectedDecades.some(decade => {
+          const decadeInfo = DECADES.find(d => d.value === decade);
+          return year >= decadeInfo.startYear && year <= decadeInfo.endYear;
+        });
+      });
+    }
+
+    // Streaming service filtering
+    if (selectedStreamingServices.length > 0) {
+      filtered = filtered.filter(movie => {
+        if (!movie.streamingProviders || movie.streamingProviders.length === 0) {
+          return false; // No streaming data
+        }
+        return movie.streamingProviders.some(provider => 
+          selectedStreamingServices.includes(provider.provider_id.toString())
+        );
+      });
+    }
+
+    // Price filtering
+    if (selectedPriceTypes.length > 0) {
+      filtered = filtered.filter(movie => {
+        if (!movie.streamingProviders || movie.streamingProviders.length === 0) {
+          return false; // No streaming data means we can't determine price
+        }
+        return movie.streamingProviders.some(provider => {
+          const paymentType = getProviderPaymentType(provider.provider_id);
+          return selectedPriceTypes.includes(paymentType);
+        });
+      });
+    }
+
+    return filtered;
+  }, [selectedGenres, selectedDecades, selectedStreamingServices, selectedPriceTypes, mediaType, getProviderPaymentType]);
 
   // Get top rated content for display
   const topRatedContent = useMemo(() => {
@@ -254,6 +353,53 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     
     return sortedContent.slice(0, 9);
   }, [currentSeen, currentUnseen, isOwnProfile, selectedRankingType, showUnwatchedMovies]);
+
+  // **FILTERED TOP RATED CONTENT** - For FullRatingsList with comprehensive filtering
+  const filteredTopRatedContent = useMemo(() => {
+    // Get all top-rated content (not just top 9)
+    let allContent = [...currentSeen];
+    
+    // Apply ranking logic first
+    if (!isOwnProfile) {
+      switch (selectedRankingType) {
+        case 'user':
+          allContent = allContent.sort((a, b) => (b.userRating || 0) - (a.userRating || 0));
+          break;
+        case 'average':
+          allContent = allContent.sort((a, b) => {
+            const avgA = ((a.userRating || 0) + (a.vote_average || 0)) / 2;
+            const avgB = ((b.userRating || 0) + (b.vote_average || 0)) / 2;
+            return avgB - avgA;
+          });
+          break;
+        case 'imdb':
+          allContent = allContent.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+          break;
+      }
+      
+      if (showUnwatchedMovies) {
+        const unwatchedWithRatings = currentUnseen.map(movie => ({
+          ...movie,
+          isUnwatched: true
+        }));
+        allContent = [...allContent, ...unwatchedWithRatings];
+      }
+    } else {
+      // Own profile - show ALL rated content (not just 7+)
+      allContent = allContent
+        .sort((a, b) => b.userRating - a.userRating);
+    }
+
+    // Apply comprehensive filtering (will gracefully handle missing streaming data)
+    const filtered = applyComprehensiveFilters(allContent, hasActiveFilters);
+
+    // Apply basic genre filter if no advanced filters active
+    if (!hasActiveFilters && selectedGenreId) {
+      return filtered.filter(movie => movie.genre_ids?.includes(selectedGenreId));
+    }
+
+    return filtered;
+  }, [currentSeen, currentUnseen, isOwnProfile, selectedRankingType, showUnwatchedMovies, applyComprehensiveFilters, hasActiveFilters, selectedGenreId]);
 
   // Get recently watched content (latest rated first)
   const recentlyWatchedContent = useMemo(() => {
@@ -298,8 +444,8 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   }, [mediaFilteredMovies]);
 
   const filteredAndRankedMovies = useMemo(() => {
-    const safeContent = filterAdultContent(mediaFilteredMovies, mediaType);
-    let filtered = [...safeContent];
+    // Start with filtered content from our comprehensive filtering
+    let filtered = applyComprehensiveFilters(mediaFilteredMovies, hasActiveFilters);
     
     // Apply friend profile ranking logic for toprated tab
     if (!isOwnProfile && selectedTab === 'toprated') {
@@ -328,8 +474,8 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         filtered = [...filtered, ...unwatchedWithRatings];
       }
     } else {
-      // Original logic for own profile
-      if (selectedGenreId !== null) {
+      // Original logic for own profile - apply basic genre filter if no advanced filters
+      if (!hasActiveFilters && selectedGenreId !== null) {
         filtered = filtered.filter(movie => 
           movie.genre_ids && movie.genre_ids.includes(selectedGenreId)
         );
@@ -339,12 +485,12 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
         if (a.userRating !== undefined && b.userRating !== undefined) {
           return b.userRating - a.userRating;
         }
-        return b.eloRating - a.eloRating;
+        return (b.eloRating || 0) - (a.eloRating || 0);
       });
     }
     
-    return filtered.slice(0, 5);
-  }, [mediaFilteredMovies, selectedGenreId, mediaType, isOwnProfile, selectedTab, selectedRankingType, showUnwatchedMovies, currentUnseen]);
+    return filtered;
+  }, [applyComprehensiveFilters, mediaFilteredMovies, hasActiveFilters, selectedGenreId, mediaType, isOwnProfile, selectedTab, selectedRankingType, showUnwatchedMovies, currentUnseen]);
 
   // Watchlist data processing
   const moviesByMediaType = useMemo(() => {
@@ -358,37 +504,18 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   }, [moviesByMediaType]);
 
   const filteredMovies = useMemo(() => {
-    const safeContent = filterAdultContent(sortedMovies, mediaType);
-    let filtered = safeContent;
+    // Apply comprehensive filtering to watchlist content
+    let filtered = applyComprehensiveFilters(sortedMovies, hasActiveFilters);
 
-    if (selectedGenres.length > 0) {
-      filtered = filtered.filter(movie => 
-        movie.genre_ids && movie.genre_ids.some(genreId => 
-          selectedGenres.includes(genreId.toString())
-        )
-      );
-    }
-
-    if (selectedDecades.length > 0) {
-      filtered = filtered.filter(movie => {
-        const dateField = movie.release_date || movie.first_air_date;
-        if (!dateField) return false;
-        const year = new Date(dateField).getFullYear();
-        return selectedDecades.some(decade => {
-          const decadeInfo = DECADES.find(d => d.value === decade);
-          return year >= decadeInfo.startYear && year <= decadeInfo.endYear;
-        });
-      });
-    }
-
-    if (selectedGenres.length === 0 && selectedDecades.length === 0 && selectedStreamingServices.length === 0 && selectedGenreId) {
+    // Apply basic genre filter if no advanced filters are active
+    if (!hasActiveFilters && selectedGenreId) {
       filtered = filtered.filter(movie => movie.genre_ids?.includes(selectedGenreId));
     }
 
     return filtered;
-  }, [selectedGenres, selectedDecades, selectedStreamingServices, selectedGenreId, sortedMovies, mediaType]);
+  }, [applyComprehensiveFilters, sortedMovies, hasActiveFilters, selectedGenreId]);
 
-  const hasActiveFilters = selectedGenres.length > 0 || selectedDecades.length > 0 || selectedStreamingServices.length > 0;
+  const hasActiveFilters = selectedGenres.length > 0 || selectedDecades.length > 0 || selectedStreamingServices.length > 0 || selectedPriceTypes.length > 0;
 
   // TopRated helper functions
   const fetchMovieCredits = useCallback(async (movieId) => {
@@ -706,18 +833,20 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     setTempGenres([...selectedGenres]);
     setTempDecades([...selectedDecades]);
     setTempStreamingServices([...selectedStreamingServices]);
+    setTempPriceTypes([...selectedPriceTypes]);
     setFilterModalVisible(true);
-  }, [selectedGenres, selectedDecades, selectedStreamingServices]);
+  }, [selectedGenres, selectedDecades, selectedStreamingServices, selectedPriceTypes]);
 
   const applyFilters = useCallback(() => {
     setFilterModalVisible(false);
     setSelectedGenres([...tempGenres]);
     setSelectedDecades([...tempDecades]);
     setSelectedStreamingServices([...tempStreamingServices]);
-    if (tempGenres.length > 0 || tempDecades.length > 0 || tempStreamingServices.length > 0) {
+    setSelectedPriceTypes([...tempPriceTypes]);
+    if (tempGenres.length > 0 || tempDecades.length > 0 || tempStreamingServices.length > 0 || tempPriceTypes.length > 0) {
       setSelectedGenreId(null);
     }
-  }, [tempGenres, tempDecades, tempStreamingServices]);
+  }, [tempGenres, tempDecades, tempStreamingServices, tempPriceTypes]);
 
   const cancelFilters = useCallback(() => {
     setFilterModalVisible(false);
@@ -747,10 +876,19 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     );
   }, []);
 
+  const togglePriceType = useCallback((priceType) => {
+    setTempPriceTypes(prev => 
+      prev.includes(priceType) 
+        ? prev.filter(type => type !== priceType)
+        : [...prev, priceType]
+    );
+  }, []);
+
   const clearAllFilters = useCallback(() => {
     setTempGenres([]);
     setTempDecades([]);
     setTempStreamingServices([]);
+    setTempPriceTypes([]);
   }, []);
 
   const closeDetailModal = useCallback((preserveForRating = false) => {
@@ -1607,10 +1745,10 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const POSTER_WIDTH = (width - (GRID_PADDING * 2) - (GRID_GAP * 4)) / GRID_COLUMNS;
   const POSTER_HEIGHT = POSTER_WIDTH * 1.5;
 
-  // Get top 5 rated movies for grid display
+  // Get top 5 rated movies for grid display (filtered by genre if selected)
   const topPicksForGrid = useMemo(() => {
-    return topRatedContent.slice(0, 5);
-  }, [topRatedContent]);
+    return filteredTopRatedContent.slice(0, 5);
+  }, [filteredTopRatedContent]);
 
   // Get top 5 watchlist movies sorted by TMDB score
   const watchlistForGrid = useMemo(() => {
@@ -1704,6 +1842,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
             ))}
           </View>
         </View>
+
 
         {/* Watchlist Grid */}
         <View style={styles.sectionContainer}>
@@ -2354,6 +2493,64 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                       </Text>
                     </TouchableOpacity>
                   ))}
+                </View>
+              </View>
+
+              {/* **NEW: Price Filter Section** */}
+              <View style={filterStyles.filterSection}>
+                <Text style={filterStyles.sectionTitle}>
+                  Price ({tempPriceTypes.length} selected)
+                </Text>
+                <View style={filterStyles.optionsGrid}>
+                  <TouchableOpacity
+                    style={[
+                      filterStyles.optionChip,
+                      { 
+                        backgroundColor: tempPriceTypes.includes('free')
+                          ? '#FFFFFF'
+                          : 'transparent',
+                        borderColor: '#FFFFFF'
+                      }
+                    ]}
+                    onPress={() => togglePriceType('free')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      filterStyles.optionChipText,
+                      { 
+                        color: tempPriceTypes.includes('free')
+                          ? colors.primary
+                          : '#FFFFFF'
+                      }
+                    ]}>
+                      Free with subscription
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      filterStyles.optionChip,
+                      { 
+                        backgroundColor: tempPriceTypes.includes('paid')
+                          ? '#FFFFFF'
+                          : 'transparent',
+                        borderColor: '#FFFFFF'
+                      }
+                    ]}
+                    onPress={() => togglePriceType('paid')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      filterStyles.optionChipText,
+                      { 
+                        color: tempPriceTypes.includes('paid')
+                          ? colors.primary
+                          : '#FFFFFF'
+                      }
+                    ]}>
+                      Paid / Rental
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
