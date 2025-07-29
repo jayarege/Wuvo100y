@@ -5,8 +5,8 @@
 // WHAT: Replaces static app.json with dynamic config supporting EAS secrets
 // HOW: Environment variables injected at build time via EAS secrets
 
-// Load environment variables from .env file in development
-require('dotenv').config();
+// Environment variables loaded from EAS secrets in production
+// Development uses fallback values in firebase.js
 
 module.exports = ({ config }) => {
   const isProduction = process.env.EXPO_PUBLIC_ENV === 'production';
