@@ -343,7 +343,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
       });
     }
     
-    return filtered.slice(0, 10);
+    return filtered.slice(0, 5);
   }, [mediaFilteredMovies, selectedGenreId, mediaType, isOwnProfile, selectedTab, selectedRankingType, showUnwatchedMovies, currentUnseen]);
 
   // Watchlist data processing
@@ -394,7 +394,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const fetchMovieCredits = useCallback(async (movieId) => {
     try {
       const response = await fetch(
-        `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${API_KEY}`
+        `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=b401be0ea16515055d8d0bde16f80069`
       );
       const data = await response.json();
       return data.cast?.slice(0, 3) || [];
@@ -407,7 +407,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const fetchMovieProviders = useCallback(async (movieId) => {
     try {
       const response = await fetch(
-        `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=${API_KEY}`
+        `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
       );
       const data = await response.json();
       return data.results?.US?.flatrate || [];
@@ -417,14 +417,65 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     }
   }, []);
 
+  const normalizeProviderName = useCallback((providerName) => {
+    const normalized = providerName.toLowerCase();
+    
+    // Remove Amazon Channel redundancies - prefer main service over channel
+    if (normalized.includes('amazon channel')) {
+      // Extract the main service name (e.g., "HBO Max Amazon Channel" -> "max")
+      if (normalized.includes('hbo') || normalized.includes('max')) return 'max';
+      if (normalized.includes('starz')) return 'starz';
+      if (normalized.includes('showtime')) return 'showtime';
+      if (normalized.includes('mgm')) return 'mgm';
+      if (normalized.includes('cinemax')) return 'cinemax';
+      if (normalized.includes('epix')) return 'epix';
+      // Skip other Amazon channels that don't have main service equivalent
+      return null;
+    }
+    
+    if (normalized.includes('netflix')) return 'netflix';
+    if (normalized.includes('prime') || normalized.includes('amazon')) return 'prime';
+    if (normalized.includes('apple')) return 'apple';
+    if (normalized.includes('hulu')) return 'hulu';
+    if (normalized.includes('disney')) return 'disney';
+    if (normalized.includes('max') || normalized.includes('hbo')) return 'max';
+    if (normalized.includes('paramount')) return 'paramount';
+    if (normalized.includes('peacock')) return 'peacock';
+    if (normalized.includes('showtime')) return 'showtime';
+    if (normalized.includes('starz')) return 'starz';
+    
+    return normalized
+      .replace(/\s*\(.*?\)/g, '')
+      .replace(/\s*(with\s+)?ads?$/gi, '')
+      .replace(/\s*premium$/gi, '')
+      .replace(/\s*plus$/gi, '')
+      .replace(/\s*\+$/gi, '')
+      .trim();
+  }, []);
+
   const deduplicateProviders = useCallback((providers) => {
     if (!providers || !Array.isArray(providers)) return [];
     
     const seen = new Set();
     const filtered = [];
     
-    for (const provider of providers) {
-      const normalizedName = provider.provider_name.toLowerCase();
+    const sorted = [...providers].sort((a, b) => {
+      const aHasAds = a.provider_name.toLowerCase().includes('ads');
+      const bHasAds = b.provider_name.toLowerCase().includes('ads');
+      
+      if (aHasAds && !bHasAds) return 1;
+      if (!aHasAds && bHasAds) return -1;
+      return 0;
+    });
+    
+    for (const provider of sorted) {
+      const normalizedName = normalizeProviderName(provider.provider_name);
+      
+      // Skip providers that should be filtered out (Amazon channels without main service)
+      if (normalizedName === null) {
+        continue;
+      }
+      
       if (!seen.has(normalizedName)) {
         seen.add(normalizedName);
         filtered.push(provider);
@@ -432,10 +483,16 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     }
     
     return filtered;
-  }, []);
+  }, [normalizeProviderName]);
 
-  const getProviderLogoUrl = useCallback((logoPath) => {
+  const getProviderLogoUrl = useCallback((logoPath, providerId) => {
     if (!logoPath) return null;
+    
+    // Use blue Amazon Prime logo for better brand recognition
+    if (providerId === 9) {
+      return 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Amazon_Prime_Video_logo.svg/300px-Amazon_Prime_Video_logo.svg.png';
+    }
+    
     return `https://image.tmdb.org/t/p/w92${logoPath}`;
   }, []);
 
@@ -444,7 +501,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     try {
       const endpoint = mediaType === 'movie' ? 'movie' : 'tv';
       const response = await fetchWithTimeout(
-        `https://api.themoviedb.org/3/watch/providers/${endpoint}?api_key=${API_KEY}&watch_region=US`
+        `https://api.themoviedb.org/3/watch/providers/${endpoint}?api_key=b401be0ea16515055d8d0bde16f80069&watch_region=US`
       );
       
       if (!response.ok) {
@@ -497,7 +554,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
     try {
       // Fetch movie credits
       const creditsResponse = await fetch(
-        `https://api.themoviedb.org/3/${mediaType}/${movie.id}/credits?api_key=${ENV.TMDB_API_KEY}`
+        `https://api.themoviedb.org/3/${mediaType}/${movie.id}/credits?api_key=b401be0ea16515055d8d0bde16f80069`
       );
       const creditsData = await creditsResponse.json();
       const cast = creditsData.cast?.slice(0, 5) || [];
@@ -505,7 +562,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
       
       // Fetch streaming providers
       const providersResponse = await fetch(
-        `https://api.themoviedb.org/3/${mediaType}/${movie.id}/watch/providers?api_key=${ENV.TMDB_API_KEY}`
+        `https://api.themoviedb.org/3/${mediaType}/${movie.id}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
       );
       const providersData = await providersResponse.json();
       const usProviders = providersData.results?.US?.flatrate || [];
@@ -1550,16 +1607,16 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
   const POSTER_WIDTH = (width - (GRID_PADDING * 2) - (GRID_GAP * 4)) / GRID_COLUMNS;
   const POSTER_HEIGHT = POSTER_WIDTH * 1.5;
 
-  // Get top 10 rated movies for grid display
+  // Get top 5 rated movies for grid display
   const topPicksForGrid = useMemo(() => {
-    return topRatedContent.slice(0, 10);
+    return topRatedContent.slice(0, 5);
   }, [topRatedContent]);
 
-  // Get top 10 watchlist movies sorted by TMDB score
+  // Get top 5 watchlist movies sorted by TMDB score
   const watchlistForGrid = useMemo(() => {
     return [...moviesByMediaType]
       .sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))
-      .slice(0, 10);
+      .slice(0, 5);
   }, [moviesByMediaType]);
 
   return (
@@ -1837,7 +1894,7 @@ const ProfileScreen = ({ seen = [], unseen = [], isDarkMode, navigation, onUpdat
                   .map((provider) => (
                     <Image 
                       key={provider.provider_id}
-                      source={{ uri: getProviderLogoUrl(provider.logo_path) }}
+                      source={{ uri: getProviderLogoUrl(provider.logo_path, provider.provider_id) }}
                       style={modalStyles.platformIcon}
                       resizeMode="contain"
                     />

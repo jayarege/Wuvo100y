@@ -88,7 +88,7 @@ class AIRecommendations {
       );
 
       // Enhanced filtering and scoring with session context
-      const filtered = this.filterAndScoreWithSession(recommendations, userProfile, sessionType, { seen, skippedMovies });
+      const filtered = this.filterAndScoreWithSession(recommendations, userProfile, sessionType, { seen, skippedMovies }, mediaType);
       
       return filtered.slice(0, count);
 
@@ -168,8 +168,10 @@ class AIRecommendations {
     const decadeCounts = {};
     
     movies.forEach(movie => {
-      if (movie.release_date) {
-        const year = parseInt(movie.release_date.substring(0, 4));
+      // Handle both movie and TV show date fields
+      const dateField = movie.release_date || movie.first_air_date;
+      if (dateField) {
+        const year = parseInt(dateField.substring(0, 4));
         const decade = Math.floor(year / 10) * 10;
         decadeCounts[decade] = (decadeCounts[decade] || 0) + movie.userRating;
       }
@@ -329,7 +331,7 @@ class AIRecommendations {
     
     for (const movie of userProfile.topRatedMovies.slice(0, 3)) {
       try {
-        const url = `${this.baseURL}/${mediaType}/${movie.id}/similar?api_key=${TMDB_API_KEY}&page=1`;
+        const url = `${this.baseURL}/${mediaType}/${movie.id}/similar?api_key=b401be0ea16515055d8d0bde16f80069&page=1`;
         const response = await fetch(url);
         
         if (!response.ok) {
@@ -356,7 +358,7 @@ class AIRecommendations {
   async getGenreBasedRecommendations(userProfile, mediaType, count) {
     try {
       const genreIds = userProfile.topGenres.slice(0, 2).join(',');
-      const url = `${this.baseURL}/discover/${mediaType}?api_key=${TMDB_API_KEY}&with_genres=${genreIds}&vote_average.gte=${this.qualityThreshold}&vote_count.gte=${this.minVoteCount}&sort_by=vote_average.desc&page=1`;
+      const url = `${this.baseURL}/discover/${mediaType}?api_key=b401be0ea16515055d8d0bde16f80069&with_genres=${genreIds}&vote_average.gte=${this.qualityThreshold}&vote_count.gte=${this.minVoteCount}&sort_by=vote_average.desc&page=1`;
       
       const response = await fetch(url);
       
@@ -376,7 +378,7 @@ class AIRecommendations {
   async getPopularInGenres(userProfile, mediaType, count) {
     try {
       const genreIds = userProfile.topGenres.join(',');
-      const url = `${this.baseURL}/discover/${mediaType}?api_key=${TMDB_API_KEY}&with_genres=${genreIds}&sort_by=popularity.desc&vote_average.gte=${this.qualityThreshold}&vote_count.gte=${this.minVoteCount}&page=1`;
+      const url = `${this.baseURL}/discover/${mediaType}?api_key=b401be0ea16515055d8d0bde16f80069&with_genres=${genreIds}&sort_by=popularity.desc&vote_average.gte=${this.qualityThreshold}&vote_count.gte=${this.minVoteCount}&page=1`;
       
       const response = await fetch(url);
       
@@ -396,7 +398,9 @@ class AIRecommendations {
   async getHighRatedRecent(userProfile, mediaType, count) {
     try {
       const currentYear = new Date().getFullYear();
-      const url = `${this.baseURL}/discover/${mediaType}?api_key=${TMDB_API_KEY}&primary_release_year=${currentYear}&vote_average.gte=8.0&vote_count.gte=1000&sort_by=vote_average.desc&page=1`;
+      // Use appropriate date parameter for media type
+      const dateParam = mediaType === 'movie' ? 'primary_release_year' : 'first_air_date_year';
+      const url = `${this.baseURL}/discover/${mediaType}?api_key=b401be0ea16515055d8d0bde16f80069&${dateParam}=${currentYear}&vote_average.gte=8.0&vote_count.gte=1000&sort_by=vote_average.desc&page=1`;
       
       const response = await fetch(url);
       
@@ -417,7 +421,7 @@ class AIRecommendations {
   // ENHANCED FILTERING AND SCORING WITH SESSION CONTEXT
   // =============================================================================
 
-  filterAndScoreWithSession(recommendations, userProfile, sessionType, filters) {
+  filterAndScoreWithSession(recommendations, userProfile, sessionType, filters, mediaType = 'movie') {
     const { seen = [], skippedMovies = [] } = filters;
     const seenIds = new Set(seen.map(m => m.id));
     const skippedIds = new Set(skippedMovies.map(m => m.id));
@@ -426,15 +430,17 @@ class AIRecommendations {
     return recommendations
       .filter(movie => !seenIds.has(movie.id) && !skippedIds.has(movie.id))
       .filter(movie => movie.vote_average >= this.qualityThreshold && movie.vote_count >= 100)
-      // 🎯 MODERN CINEMA FILTER: Focus on 1990s+ films
+      // 🎯 MODERN CINEMA FILTER: Focus on 1990s+ content
       .filter(movie => {
-        if (movie.release_date) {
-          const year = parseInt(movie.release_date.substring(0, 4));
-          // Strongly exclude pre-1980s films
+        // Use appropriate date field based on media type
+        const dateField = mediaType === 'movie' ? movie.release_date : movie.first_air_date;
+        if (dateField) {
+          const year = parseInt(dateField.substring(0, 4));
+          // Strongly exclude pre-1980s content
           if (year < 1980) {
             return false;
           }
-          // Limit 1980s films to only highly popular/rated ones
+          // Limit 1980s content to only highly popular/rated ones
           if (year < 1990 && (movie.vote_count < 1000 || movie.vote_average < this.qualityThreshold + 0.5)) {
             return false;
           }
@@ -445,7 +451,7 @@ class AIRecommendations {
         }
         return true;
       })
-      .map(movie => this.scoreMovieWithSession(movie, userProfile, sessionTemplate))
+      .map(movie => this.scoreMovieWithSession(movie, userProfile, sessionTemplate, mediaType))
       .sort((a, b) => {
         // Primary sort: TMDB rating (highest first) - leftmost = highest rated
         if (b.vote_average !== a.vote_average) {
@@ -456,7 +462,7 @@ class AIRecommendations {
       });
   }
 
-  scoreMovieWithSession(movie, userProfile, sessionTemplate) {
+  scoreMovieWithSession(movie, userProfile, sessionTemplate, mediaType = 'movie') {
     let score = movie.vote_average || 5.0;
 
     // Genre matching bonus (enhanced with session preferences)
@@ -487,9 +493,10 @@ class AIRecommendations {
       score += 0.3;
     }
 
-    // Recent release bonus
-    if (movie.release_date) {
-      const year = parseInt(movie.release_date.substring(0, 4));
+    // Recent release bonus  
+    const dateField = mediaType === 'movie' ? movie.release_date : movie.first_air_date;
+    if (dateField) {
+      const year = parseInt(dateField.substring(0, 4));
       if (year >= 2020) {
         score += 0.2;
       }
@@ -517,13 +524,13 @@ class AIRecommendations {
       score += 0.1;
     }
     
-    // Modern era scoring: heavily favor 1990s+ films
-    if (movie.release_date) {
-      const year = parseInt(movie.release_date.substring(0, 4));
+    // Modern era scoring: heavily favor 1990s+ content
+    if (dateField) {
+      const year = parseInt(dateField.substring(0, 4));
       if (year >= 2020) {
-        score += 0.8; // Recent films (last 4 years)
+        score += 0.8; // Recent content (last 4 years)
       } else if (year >= 2010) {
-        score += 0.6; // 2010s films
+        score += 0.6; // 2010s content
       } else if (year >= 2000) {
         score += 0.5; // 2000s films  
       } else if (year >= 1990) {
@@ -579,7 +586,7 @@ class AIRecommendations {
       
       // Try session-specific popular movies first
       if (sessionGenreIds) {
-        const url = `${this.baseURL}/discover/${mediaType}?api_key=${TMDB_API_KEY}&with_genres=${sessionGenreIds}&vote_average.gte=${this.qualityThreshold}&vote_count.gte=${this.minVoteCount}&sort_by=popularity.desc&page=1`;
+        const url = `${this.baseURL}/discover/${mediaType}?api_key=b401be0ea16515055d8d0bde16f80069&with_genres=${sessionGenreIds}&vote_average.gte=${this.qualityThreshold}&vote_count.gte=${this.minVoteCount}&sort_by=popularity.desc&page=1`;
         const response = await fetch(url);
         
         if (!response.ok) {
@@ -598,7 +605,7 @@ class AIRecommendations {
       }
       
       // Fallback to general popular with quality filter
-      const url = `${this.baseURL}/discover/${mediaType}?api_key=${TMDB_API_KEY}&vote_average.gte=${this.qualityThreshold}&vote_count.gte=${this.minVoteCount}&sort_by=popularity.desc&page=1`;
+      const url = `${this.baseURL}/discover/${mediaType}?api_key=b401be0ea16515055d8d0bde16f80069&vote_average.gte=${this.qualityThreshold}&vote_count.gte=${this.minVoteCount}&sort_by=popularity.desc&page=1`;
       const response = await fetch(url);
       
       if (!response.ok) {

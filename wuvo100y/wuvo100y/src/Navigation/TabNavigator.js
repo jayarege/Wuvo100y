@@ -26,8 +26,12 @@ const Tab = createBottomTabNavigator();
 function TabNavigator({
   seen,
   unseen,
+  seenTVShows,
+  unseenTVShows,
   setSeen,
   setUnseen,
+  setSeenTVShows,
+  setUnseenTVShows,
   genres,
   isDarkMode,
   toggleTheme,
@@ -42,6 +46,12 @@ function TabNavigator({
 }) {
   // Add media type state
   const [currentMediaType, setCurrentMediaType] = useState('movie'); // Default to movies
+
+  // Media type-aware data selection
+  const currentSeen = currentMediaType === 'movie' ? seen : seenTVShows;
+  const currentUnseen = currentMediaType === 'movie' ? unseen : unseenTVShows;
+  const currentSetSeen = currentMediaType === 'movie' ? setSeen : setSeenTVShows;
+  const currentSetUnseen = currentMediaType === 'movie' ? setUnseen : setUnseenTVShows;
 
   // Direct passthrough to central location - NO LOCAL LOGIC
   const handleAddToSeen = newMovie => {
@@ -114,10 +124,10 @@ function TabNavigator({
           {props => (
             <HomeScreen
   {...props}
-  seen={seen}
-  unseen={unseen}
-  setSeen={setSeen}
-  setUnseen={setUnseen}
+  seen={currentSeen}
+  unseen={currentUnseen}
+  setSeen={currentSetSeen}
+  setUnseen={currentSetUnseen}
   onAddToSeen={handleAddToSeen}
   onAddToUnseen={handleAddToUnseen}
   onRemoveFromWatchlist={handleRemoveFromWatchlist}
@@ -139,8 +149,8 @@ function TabNavigator({
           {props => (
             <AddMovieScreen
               {...props}
-              seen={seen}
-              unseen={unseen}
+              seen={currentSeen}
+              unseen={currentUnseen}
               onAddToSeen={handleAddToSeen}
               onAddToUnseen={handleAddToUnseen}
               onRemoveFromWatchlist={handleRemoveFromWatchlist}
@@ -155,8 +165,8 @@ function TabNavigator({
           {props => (
             <ProfileScreen
               {...props}
-              seen={seen}
-              unseen={unseen}
+              seen={currentSeen}
+              unseen={currentUnseen}
               isDarkMode={isDarkMode}
               genres={genres}
               onUpdateRating={onUpdateRating}

@@ -2380,7 +2380,8 @@ function HomeScreen({
     );
   }, [getCardScale, getCardRotation, calculateMatchPercentage, position.x, homeStyles, handleMovieSelect, colors, getRatingBorderColor]);
 
-  const renderMovieCard = useCallback(({ item }) => (
+  // **PERFORMANCE OPTIMIZATION: Memoized movie card component**
+  const MovieCard = React.memo(({ item }) => (
     <View style={[
       homeStyles.movieCardBorder,
       { 
@@ -2449,10 +2450,18 @@ function HomeScreen({
         </View>
       </TouchableOpacity>
     </View>
-  ), [homeStyles, handleMovieSelect, colors, getRatingBorderColor]);
+  ), (prevProps, nextProps) => {
+    // **PERFORMANCE: Custom comparison for memo optimization**
+    return prevProps.item.id === nextProps.item.id && 
+           prevProps.item.userRating === nextProps.item.userRating &&
+           prevProps.item.alreadySeen === nextProps.item.alreadySeen;
+  });
+
+  const renderMovieCard = useCallback(({ item }) => <MovieCard item={item} />, []);
 
   // **🎯 CRITICAL ENHANCED RATING BUTTON INTEGRATION**
-  const renderRecentReleaseCard = useCallback(({ item }) => {
+  // **PERFORMANCE OPTIMIZATION: Memoized recent release card component**
+  const RecentReleaseCard = React.memo(({ item }) => {
     console.log('🎬 Rendering recent release card for:', item?.title, 'Already seen:', item?.alreadySeen);
     
     return (
@@ -2519,7 +2528,14 @@ function HomeScreen({
         </TouchableOpacity>
       </View>
     );
-  }, [homeStyles, buttonStyles, formatReleaseDate, handleMovieSelect, seen, onAddToSeen, onUpdateRating, colors, modalStyles, genres, mediaType, getRatingBorderColor]);
+  }, (prevProps, nextProps) => {
+    // **PERFORMANCE: Custom comparison for memo optimization**
+    return prevProps.item.id === nextProps.item.id && 
+           prevProps.item.alreadySeen === nextProps.item.alreadySeen &&
+           prevProps.item.userRating === nextProps.item.userRating;
+  });
+
+  const renderRecentReleaseCard = useCallback(({ item }) => <RecentReleaseCard item={item} />, []);
 
   const renderAIRecommendationsSection = useCallback(() => {
     return (
