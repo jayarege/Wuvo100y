@@ -45,7 +45,7 @@ export const INITIAL_GENRES = {
   10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
 };
 
-// Streaming services priority order (top 10)
+// Streaming services priority order (top 20)
 export const STREAMING_SERVICES_PRIORITY = [
   { id: 8, name: 'Netflix', priority: 1 },
   { id: 9, name: 'Amazon Prime Video', priority: 2 },
@@ -56,7 +56,17 @@ export const STREAMING_SERVICES_PRIORITY = [
   { id: 387, name: 'Peacock', priority: 7 },
   { id: 467, name: 'ESPN+', priority: 8 },
   { id: 350, name: 'Apple TV+', priority: 9 },
-  { id: 43, name: 'Starz', priority: 10 }
+  { id: 43, name: 'Starz', priority: 10 },
+  { id: 283, name: 'Crunchyroll', priority: 11 },
+  { id: 546, name: 'Showtime', priority: 12 },
+  { id: 49, name: 'HBO Now', priority: 13 },
+  { id: 300, name: 'Pluto TV', priority: 14 },
+  { id: 279, name: 'Tubi', priority: 15 },
+  { id: 613, name: 'Plex', priority: 16 },
+  { id: 386, name: 'YouTube Premium', priority: 17 },
+  { id: 257, name: 'fuboTV', priority: 18 },
+  { id: 1796, name: 'Netflix basic with Ads', priority: 19 },
+  { id: 1899, name: 'Max Amazon Channel', priority: 20 }
 ];
 
 // Legacy streaming services (keep for backward compatibility)

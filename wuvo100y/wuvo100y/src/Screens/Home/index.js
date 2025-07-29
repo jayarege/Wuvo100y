@@ -356,20 +356,41 @@ function HomeScreen({
     });
   }, [movieDetailModalVisible, selectedMovie, movieCredits, movieProviders, isLoadingMovieDetails, isProcessingMovieSelect]);
   
-  // **HOME TAB NAVIGATION RESET - Reset to 'New Releases' when home tab is pressed**
+  // **PERFORMANCE OPTIMIZATION: Smart Home tab navigation with caching**
+  const [lastDataFetch, setLastDataFetch] = useState(null);
+  const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache
+
   useEffect(() => {
     const unsubscribe = navigation.addListener('tabPress', (e) => {
-      // Reset to 'New Releases' tab when home tab is pressed
-      console.log('🏠 Home tab pressed - resetting to New Releases');
+      console.log('🏠 Home tab pressed - checking cache validity');
       setActiveTab('new');
+      
+      // **PERFORMANCE: Only refetch if cache is stale or data is empty**
+      const now = Date.now();
+      const isCacheStale = !lastDataFetch || (now - lastDataFetch) > CACHE_DURATION;
+      const hasNoData = recentReleases.length === 0 && popularMovies.length === 0;
+      
+      if (isCacheStale || hasNoData) {
+        console.log('🔄 Cache stale or no data - refreshing:', { 
+          cacheStale: isCacheStale, 
+          noData: hasNoData,
+          cacheAge: lastDataFetch ? Math.round((now - lastDataFetch) / 1000) + 's' : 'never'
+        });
+        // Only fetch if truly needed
+        if (recentReleases.length === 0) fetchRecentReleases();
+        if (popularMovies.length === 0) fetchPopularMovies();
+        setLastDataFetch(now);
+      } else {
+        console.log('✅ Using cached data - age:', Math.round((now - lastDataFetch) / 1000) + 's');
+      }
     });
 
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, lastDataFetch, recentReleases.length, popularMovies.length, fetchRecentReleases, fetchPopularMovies]);
   
   // **ANIMATION SYSTEM - ENGINEER TEAM 4-6**
-  const slideAnim = useRef(new Animated.Value(300)).current;
-  const popularScrollX = useRef(new Animated.Value(0)).current;
+  // REMOVED: slideAnim - caused screen movement
+  // REMOVED: popularScrollX - caused screen movement
   const popularScrollRef = useRef(null);
   const [popularIndex, setPopularIndex] = useState(0);
   const autoScrollPopular = useRef(null);
@@ -379,6 +400,7 @@ function HomeScreen({
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const sentimentFadeAnim = useRef(new Animated.Value(0)).current;
   const position = useRef(new Animated.ValueXY()).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const autoScrollAnimation = useRef(null);
@@ -651,6 +673,19 @@ function HomeScreen({
   const normalizeProviderName = useCallback((providerName) => {
     const normalized = providerName.toLowerCase();
     
+    // Remove Amazon Channel redundancies - prefer main service over channel
+    if (normalized.includes('amazon channel')) {
+      // Extract the main service name (e.g., "HBO Max Amazon Channel" -> "max")
+      if (normalized.includes('hbo') || normalized.includes('max')) return 'max';
+      if (normalized.includes('starz')) return 'starz';
+      if (normalized.includes('showtime')) return 'showtime';
+      if (normalized.includes('mgm')) return 'mgm';
+      if (normalized.includes('cinemax')) return 'cinemax';
+      if (normalized.includes('epix')) return 'epix';
+      // Skip other Amazon channels that don't have main service equivalent
+      return null;
+    }
+    
     if (normalized.includes('netflix')) return 'netflix';
     if (normalized.includes('prime') || normalized.includes('amazon')) return 'prime';
     if (normalized.includes('apple')) return 'apple';
@@ -689,6 +724,11 @@ function HomeScreen({
     for (const provider of sorted) {
       const normalizedName = normalizeProviderName(provider.provider_name);
       
+      // Skip providers that should be filtered out (Amazon channels without main service)
+      if (normalizedName === null) {
+        continue;
+      }
+      
       if (!seen.has(normalizedName)) {
         seen.add(normalizedName);
         filtered.push(provider);
@@ -703,39 +743,66 @@ function HomeScreen({
     // First deduplicate providers
     const deduplicated = deduplicateProviders(providers);
     
-    // Sort by priority: user preferences first, then top 10 priority, then others
-    const sorted = deduplicated.sort((a, b) => {
-      // Check if user has preferences for these providers
-      const aUserPref = userPreferences.findIndex(pref => pref.id === a.provider_id);
-      const bUserPref = userPreferences.findIndex(pref => pref.id === b.provider_id);
-      
-      // User preferences take highest priority
-      if (aUserPref !== -1 && bUserPref !== -1) {
-        return aUserPref - bUserPref; // Sort by user preference order
-      }
-      if (aUserPref !== -1) return -1; // a is user preference
-      if (bUserPref !== -1) return 1;  // b is user preference
-      
-      // Then sort by top 10 priority
-      const aPriority = STREAMING_SERVICES_PRIORITY.find(s => s.id === a.provider_id);
-      const bPriority = STREAMING_SERVICES_PRIORITY.find(s => s.id === b.provider_id);
-      
-      if (aPriority && bPriority) {
-        return aPriority.priority - bPriority.priority;
-      }
-      if (aPriority) return -1; // a is in top 10
-      if (bPriority) return 1;  // b is in top 10
-      
-      // Finally, sort by name for consistent ordering
-      return a.provider_name.localeCompare(b.provider_name);
-    });
+    // Separate free (flatrate) and paid (rent/buy) providers
+    const freeProviders = deduplicated.filter(p => p.providerType === 'flatrate');
+    const paidProviders = deduplicated.filter(p => p.providerType === 'rent' || p.providerType === 'buy');
     
-    // Return maximum 3 providers
-    return sorted.slice(0, 3);
-  }, [deduplicateProviders]);
+    // Helper function to sort providers by priority within each group
+    const sortByPriority = (providerList) => {
+      return providerList.sort((a, b) => {
+        // Check if user has preferences for these providers
+        const aUserPref = userPreferences.findIndex(pref => pref.id === a.provider_id);
+        const bUserPref = userPreferences.findIndex(pref => pref.id === b.provider_id);
+        
+        // User preferences take highest priority
+        if (aUserPref !== -1 && bUserPref !== -1) {
+          return aUserPref - bUserPref; // Sort by user preference order
+        }
+        if (aUserPref !== -1) return -1; // a is user preference
+        if (bUserPref !== -1) return 1;  // b is user preference
+        
+        // Then sort by top 10 priority
+        const aPriority = STREAMING_SERVICES_PRIORITY.find(s => s.id === a.provider_id);
+        const bPriority = STREAMING_SERVICES_PRIORITY.find(s => s.id === b.provider_id);
+        
+        if (aPriority && bPriority) {
+          return aPriority.priority - bPriority.priority;
+        }
+        if (aPriority) return -1; // a is in top 10
+        if (bPriority) return 1;  // b is in top 10
+        
+        // Finally, sort by name for consistent ordering
+        return a.provider_name.localeCompare(b.provider_name);
+      });
+    };
+    
+    // Sort both free and paid providers by priority
+    const sortedFree = sortByPriority(freeProviders);
+    const sortedPaid = sortByPriority(paidProviders);
+    
+    // Two-pass system: First pass for free, second pass for paid
+    const result = [];
+    
+    // Pass 1: Add free providers up to 3 slots
+    result.push(...sortedFree.slice(0, 3));
+    
+    // Pass 2: If we don't have 3 services yet, fill remaining slots with paid
+    const remainingSlots = Math.max(0, 3 - result.length);
+    if (remainingSlots > 0) {
+      result.push(...sortedPaid.slice(0, remainingSlots));
+    }
+    
+    return result;
+  }, [deduplicateProviders]);;
 
-  const getProviderLogoUrl = useCallback((logoPath) => {
+  const getProviderLogoUrl = useCallback((logoPath, providerId) => {
     if (!logoPath) return null;
+    
+    // Use blue Amazon Prime logo for better brand recognition
+    if (providerId === 9) {
+      return 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Amazon_Prime_Video_logo.svg/300px-Amazon_Prime_Video_logo.svg.png';
+    }
+    
     return `https://image.tmdb.org/t/p/w92${logoPath}`;
   }, []);
 
@@ -762,12 +829,21 @@ function HomeScreen({
         `https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
       );
       const data = await response.json();
-      return data.results?.US?.flatrate || [];
+      
+      // Get all provider types: flatrate (free with subscription), rent, buy
+      const usProviders = data.results?.US || {};
+      const allProviders = [
+        ...(usProviders.flatrate || []).map(p => ({ ...p, providerType: 'flatrate' })),
+        ...(usProviders.rent || []).map(p => ({ ...p, providerType: 'rent' })),
+        ...(usProviders.buy || []).map(p => ({ ...p, providerType: 'buy' }))
+      ];
+      
+      return allProviders;
     } catch (error) {
       console.error('Error fetching movie providers:', error);
       return [];
     }
-  }, []);
+  }, []);;
 
   const fetchAIRecommendations = useCallback(async (forceRefresh = false) => {
     try {
@@ -862,9 +938,24 @@ function HomeScreen({
     }
   }, [seen, unseen, contentType, skippedMovies, notInterestedMovies, mediaType, canGenerateNewSession, currentSession, generateSession]);
 
-  // Social recommendations function
+  // **PERFORMANCE OPTIMIZATION: Firebase error caching**
+  const [firebaseErrorCache, setFirebaseErrorCache] = useState(new Map());
+  const FIREBASE_ERROR_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  // Social recommendations function with error caching
   const fetchSocialRecommendations = useCallback(async () => {
     if (!currentUser?.id) return;
+    
+    // **PERFORMANCE: Check Firebase error cache to prevent repeated failures**
+    const cacheKey = `social_recs_${currentUser.id}_${contentType}`;
+    const cachedError = firebaseErrorCache.get(cacheKey);
+    const now = Date.now();
+    
+    if (cachedError && (now - cachedError.timestamp) < FIREBASE_ERROR_CACHE_DURATION) {
+      console.log(`⚡ Firebase error cached - skipping social recommendations for ${Math.round((FIREBASE_ERROR_CACHE_DURATION - (now - cachedError.timestamp)) / 1000)}s`);
+      setSocialRecommendations([]);
+      return;
+    }
     
     try {
       setIsLoadingSocialRecs(true);
@@ -882,16 +973,33 @@ function HomeScreen({
         }
       );
       
+      // **PERFORMANCE: Clear error cache on success**
+      if (firebaseErrorCache.has(cacheKey)) {
+        const newCache = new Map(firebaseErrorCache);
+        newCache.delete(cacheKey);
+        setFirebaseErrorCache(newCache);
+      }
+      
       setSocialRecommendations(socialRecs);
       console.log(`✅ Got ${socialRecs.length} social recommendations`);
       
     } catch (error) {
       console.error('❌ Error fetching social recommendations:', error);
+      
+      // **PERFORMANCE: Cache Firebase errors to prevent repeated attempts**
+      const newCache = new Map(firebaseErrorCache);
+      newCache.set(cacheKey, { 
+        error: error.message, 
+        timestamp: now,
+        type: 'firebase_permission'
+      });
+      setFirebaseErrorCache(newCache);
+      
       setSocialRecommendations([]);
     } finally {
       setIsLoadingSocialRecs(false);
     }
-  }, [currentUser?.id, contentType, seen]);
+  }, [currentUser?.id, contentType, seen, firebaseErrorCache]);
 
   const handleRefreshAI = useCallback(async () => {
     try {
@@ -963,7 +1071,13 @@ function HomeScreen({
               `https://api.themoviedb.org/3/${mediaTypeForAPI}/${item.id}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
             );
             const providerData = await providerResponse.json();
-            streamingProviders = providerData.results?.US?.flatrate || [];
+            // Get all provider types: flatrate (free with subscription), rent, buy
+            const usProviders = providerData.results?.US || {};
+            streamingProviders = [
+              ...(usProviders.flatrate || []).map(p => ({ ...p, providerType: 'flatrate' })),
+              ...(usProviders.rent || []).map(p => ({ ...p, providerType: 'rent' })),
+              ...(usProviders.buy || []).map(p => ({ ...p, providerType: 'buy' }))
+            ];
           } catch (error) {
             console.error('Error fetching streaming providers:', error);
           }
@@ -990,6 +1104,7 @@ function HomeScreen({
       
       console.log(`🎬 Popular movies updated: ${sortedFiltered.length} items (filtered out ${allResults.length - sortedFiltered.length} rated/watchlisted movies)`);
       setPopularMovies(sortedFiltered);
+      setLastDataFetch(Date.now()); // **PERFORMANCE: Update cache timestamp**
     } catch (err) {
       console.warn(`Failed fetching popular ${contentType}`, err);
     }
@@ -1042,6 +1157,7 @@ function HomeScreen({
       
       console.log(`🎬 Recent releases updated: ${recentContent.length} items (filtered out rated movies)`);
       setRecentReleases(recentContent);
+      setLastDataFetch(Date.now()); // **PERFORMANCE: Update cache timestamp**
       setIsLoadingRecent(false);
     } catch (error) {
       console.error('Error fetching recent releases:', error);
@@ -1057,14 +1173,10 @@ function HomeScreen({
     if (autoScrollPopular.current) clearInterval(autoScrollPopular.current);
     autoScrollPopular.current = setInterval(() => {
       const next = (popularIndex + 1) % 10;
-      Animated.timing(popularScrollX, {
-        toValue: next * CAROUSEL_ITEM_WIDTH,
-        duration: 800,
-        useNativeDriver: true
-      }).start();
+      // REMOVED: popularScrollX animation
       setPopularIndex(next);
     }, 5000);
-  }, [popularIndex, popularScrollX]);
+  }, [popularIndex]);
 
   const startAutoScroll = useCallback(() => {
     if (autoScrollAnimation.current) {
@@ -1100,9 +1212,8 @@ function HomeScreen({
       useNativeDriver: true,
     }).start();
     
-    // Calculate dynamic categories based on user's rating history filtered by media type
-    const currentMediaMovies = seen.filter(item => (item.mediaType || 'movie') === mediaType);
-    const RATING_CATEGORIES = calculateDynamicRatingCategories(currentMediaMovies, mediaType);
+    // **PERFORMANCE: Use memoized rating categories instead of recalculating**
+    const RATING_CATEGORIES = memoizedRatingCategories;
     const categoryInfo = RATING_CATEGORIES[categoryKey];
     
     // Find movies in the same percentile range for comparison (filtered by media type)
@@ -1544,8 +1655,8 @@ function HomeScreen({
     setComparisonResults([]);
     setIsComparisonComplete(false);
     
-    const currentMediaMovies = seen.filter(item => (item.mediaType || 'movie') === mediaType);
-    const RATING_CATEGORIES = calculateDynamicRatingCategories(currentMediaMovies, mediaType);
+    // **PERFORMANCE: Use memoized rating categories instead of recalculating**
+    const RATING_CATEGORIES = memoizedRatingCategories;
     
     Alert.alert(
       "Rating Added!", 
@@ -1977,6 +2088,13 @@ function HomeScreen({
   // **COMPUTED VALUES - ENGINEER TEAM 14**
   // ============================================================================
 
+  // **PERFORMANCE OPTIMIZATION: Memoize rating categories to prevent 8x redundant calculations**
+  const memoizedRatingCategories = useMemo(() => {
+    const currentMediaMovies = seen.filter(item => (item.mediaType || 'movie') === mediaType);
+    console.log('🎯 PERFORMANCE: Calculating rating categories once for', mediaType, '- movies count:', currentMediaMovies.length);
+    return calculateDynamicRatingCategories(currentMediaMovies, mediaType);
+  }, [seen, mediaType]);
+
   const recommendations = useMemo(() => {
     if (seen.length === 0) return [];
     
@@ -2138,10 +2256,7 @@ function HomeScreen({
         });
         position.setValue({ x: 0, y: 0 });
       },
-      onPanResponderMove: Animated.event(
-        [null, { dx: position.x, dy: position.y }],
-        { useNativeDriver: false }
-      ),
+      // REMOVED: PanResponder movement
       onPanResponderRelease: (e, { dx, vx }) => {
         position.flattenOffset();
         const newIndex = Math.max(
@@ -2176,12 +2291,7 @@ function HomeScreen({
         style={[
           homeStyles.carouselItem,
           {
-            transform: [
-              { scale: cardScale },
-              { rotate: cardRotation },
-              { translateX: position.x },
-              { translateY: Animated.multiply(position.x, 0.1) },
-            ],
+            // REMOVED: transform animation causing screen movement,
           },
         ]}
       >
@@ -2514,7 +2624,7 @@ function HomeScreen({
             })()}
           </Text>
         ) : (
-          <Animated.FlatList
+          <FlatList
             data={aiRecommendations.filter(item => !dismissedInSession.includes(item.id))}
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -2523,11 +2633,7 @@ function HomeScreen({
             snapToInterval={MOVIE_CARD_WIDTH + 12}
             decelerationRate="fast"
             removeClippedSubviews={false}
-            getItemLayout={(data, index) => ({
-              length: MOVIE_CARD_WIDTH + 12,
-              offset: (MOVIE_CARD_WIDTH + 12) * index,
-              index,
-            })}
+
             windowSize={10}
             initialNumToRender={5}
             maxToRenderPerBatch={3}
@@ -2632,7 +2738,7 @@ function HomeScreen({
         <Text style={homeStyles.sectionTitle}>
           Popular {contentType === 'movies' ? 'Movies' : 'TV Shows'}
         </Text>
-        <Animated.FlatList
+        <FlatList
           ref={popularScrollRef}
           data={popularMovies}
           horizontal
@@ -2754,16 +2860,14 @@ function HomeScreen({
               </TouchableOpacity>
             </View>
           )}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { x: popularScrollX } } }],
-            { useNativeDriver: true }
-          )}
-          onTouchStart={() => clearInterval(autoScrollPopular.current)}
-          onTouchEnd={startPopularAutoScroll}
+          // REMOVED: onScroll animation causing unwanted movement
+          // AUTO-SCROLL DISABLED: No touch-based scrolling
+          // onTouchStart={() => clearInterval(autoScrollPopular.current)}
+          // onTouchEnd={startPopularAutoScroll}
         />
       </View>
     );
-  }, [homeStyles, popularMovies, handleMovieSelect, popularScrollX, popularScrollRef, startPopularAutoScroll, autoScrollPopular, theme, mediaType, isDarkMode, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, getRatingBorderColor]);
+  }, [homeStyles, popularMovies, handleMovieSelect, theme, mediaType, isDarkMode, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, getRatingBorderColor]);
 
   const renderWhatsOutNowSection = useCallback(() => {
     return (
@@ -2796,11 +2900,7 @@ function HomeScreen({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={homeStyles.carouselContent}
             removeClippedSubviews={false}
-            getItemLayout={(data, index) => ({
-              length: MOVIE_CARD_WIDTH + 12,
-              offset: (MOVIE_CARD_WIDTH + 12) * index,
-              index,
-            })}
+
             windowSize={10}
             initialNumToRender={5}
             maxToRenderPerBatch={3}
@@ -2829,23 +2929,25 @@ function HomeScreen({
     // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static to prevent reloading
   }, [seen.length, fetchRecentReleases, fetchPopularMovies]);
 
-  useEffect(() => {
-    if (popularMovies.length > 0 && activeTab === 'new' && contentType === 'movies') {
-      startPopularAutoScroll();
-    }
-    return () => clearInterval(autoScrollPopular.current);
-  }, [popularMovies, activeTab, contentType, startPopularAutoScroll]);
+  // AUTO-SCROLL DISABLED: Prevented unwanted scrolling when movies are removed via X button
+  // useEffect(() => {
+  //   if (popularMovies.length > 0 && activeTab === 'new' && contentType === 'movies') {
+  //     startPopularAutoScroll();
+  //   }
+  //   return () => clearInterval(autoScrollPopular.current);
+  // }, [popularMovies, activeTab, contentType, startPopularAutoScroll]);
 
-  useEffect(() => {
-    if (activeTab === 'recommendations' && recommendations.length > 0 && contentType === 'movies') {
-      startAutoScroll();
-    }
-    return () => {
-      if (autoScrollAnimation.current) {
-        autoScrollAnimation.current.stop();
-      }
-    };
-  }, [activeTab, recommendations, contentType, startAutoScroll]);
+  // AUTO-SCROLL DISABLED: Prevented unwanted scrolling when recommendations change
+  // useEffect(() => {
+  //   if (activeTab === 'recommendations' && recommendations.length > 0 && contentType === 'movies') {
+  //     startAutoScroll();
+  //   }
+  //   return () => {
+  //     if (autoScrollAnimation.current) {
+  //       autoScrollAnimation.current.stop();
+  //     }
+  //   };
+  // }, [activeTab, recommendations, contentType, startAutoScroll]);
 
   useEffect(() => {
     if (seen.length >= 3 && aiRecommendations.length === 0) {
@@ -3174,7 +3276,7 @@ function HomeScreen({
                         return (
                           <View key={provider.provider_id} style={{ alignItems: 'center', marginRight: 8 }}>
                             <Image 
-                              source={{ uri: getProviderLogoUrl(provider.logo_path) }}
+                              source={{ uri: getProviderLogoUrl(provider.logo_path, provider.provider_id) }}
                               style={[
                                 modalStyles.platformIcon,
                                 {
@@ -3270,7 +3372,7 @@ function HomeScreen({
                       standardButtonStyles.baseButton,
                       standardButtonStyles.tertiaryButton
                     ]}
-                    onPress={() => handleNotInterested(selectedMovie)}
+                    onPress={(event) => handleNotInterested(selectedMovie, event)}
                     activeOpacity={0.7}
                   >
                     <Text 
@@ -3296,7 +3398,7 @@ function HomeScreen({
                       justifyContent: 'space-between'
                     }}
                   >
-                    {Object.entries(calculateDynamicRatingCategories(seen.filter(item => (item.mediaType || 'movie') === mediaType), mediaType)).map(([categoryKey, category]) => (
+                    {Object.entries(memoizedRatingCategories).map(([categoryKey, category]) => (
                       <TouchableOpacity
                         key={categoryKey}
                         style={[

@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Import constants and theme
-import { TMDB_API_KEY, ONBOARDING_COMPLETE_KEY, STREAMING_SERVICES } from '../Constants';
+import { TMDB_API_KEY, ONBOARDING_COMPLETE_KEY, STREAMING_SERVICES_PRIORITY } from '../Constants';
 import { useTheme } from '../hooks/useTheme';
 
 // Constants
@@ -84,13 +84,13 @@ const OnboardingScreen = ({ onComplete }) => {
   }, []);
 
   // Streaming service selection logic
-  const toggleStreamingService = useCallback((serviceId) => {
+  const toggleStreamingService = useCallback((service) => {
     setSelectedStreamingServices(prev => {
-      const isSelected = prev.includes(serviceId);
+      const isSelected = prev.some(s => s.id === service.id);
       if (isSelected) {
-        return prev.filter(id => id !== serviceId);
+        return prev.filter(s => s.id !== service.id);
       } else {
-        return [...prev, serviceId];
+        return [...prev, { id: service.id, name: service.name, priority: service.priority }];
       }
     });
   }, []);
@@ -262,30 +262,36 @@ const OnboardingScreen = ({ onComplete }) => {
     );
   }, [selectedMovies, toggleMovieSelection, getPosterUrl, imageLoadErrors, handleImageError]);
 
-  // Render streaming service item
-  const renderStreamingItem = useCallback(({ item: service }) => {
-    const isSelected = selectedStreamingServices.includes(service.id);
+  // Render streaming service item (simplified modern approach)
+  const renderStreamingService = useCallback((service) => {
+    const isSelected = selectedStreamingServices.some(s => s.id === service.id);
     
     return (
       <TouchableOpacity
-        style={[styles.streamingItem, isSelected && styles.selectedStreamingItem]}
-        onPress={() => toggleStreamingService(service.id)}
+        key={service.id}
+        style={[
+          styles.streamingServiceButton,
+          isSelected && styles.selectedStreamingItem
+        ]}
+        onPress={() => toggleStreamingService(service)}
         activeOpacity={0.7}
+        accessibilityLabel={`${service.name} streaming service, ${isSelected ? 'selected' : 'not selected'}`}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isSelected }}
       >
-        <View style={[styles.streamingIconContainer, { backgroundColor: service.brandColor }]}>
-          <MaterialCommunityIcons 
-            name={service.icon} 
-            size={32} 
-            color="#FFFFFF"
-            onError={() => console.warn(`Icon ${service.icon} failed to load`)}
-          />
-          <Text style={styles.fallbackText}>{service.fallbackText}</Text>
-        </View>
-        <Text style={styles.streamingName}>{service.name}</Text>
+        <Text style={[
+          styles.streamingServiceText,
+          isSelected && styles.selectedStreamingText
+        ]}>
+          {service.name}
+        </Text>
         {isSelected && (
-          <View style={styles.streamingCheckmark}>
-            <Ionicons name="checkmark-circle" size={20} color="#FFD700" />
-          </View>
+          <Ionicons 
+            name="checkmark-circle" 
+            size={18} 
+            color="#FFD700" 
+            style={{ marginLeft: 6 }} 
+          />
         )}
       </TouchableOpacity>
     );
@@ -332,15 +338,24 @@ const OnboardingScreen = ({ onComplete }) => {
         We'll recommend content you can actually watch ({selectedStreamingServices.length} selected)
       </Text>
       
-      <FlatList
-        data={STREAMING_SERVICES}
-        renderItem={renderStreamingItem}
-        keyExtractor={(item) => item.id.toString()}
-        numColumns={2}
+      <ScrollView 
+        style={styles.streamingScrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.streamingGrid}
-        columnWrapperStyle={styles.streamingRow}
-      />
+        contentContainerStyle={styles.streamingScrollContent}
+      >
+        <View style={styles.streamingGrid}>
+          {STREAMING_SERVICES_PRIORITY.map((service) => renderStreamingService(service))}
+        </View>
+        
+        {selectedStreamingServices.length > 0 && (
+          <View style={styles.selectedCount}>
+            <Ionicons name="checkmark-circle" size={16} color="#28A745" />
+            <Text style={styles.selectedCountText}>
+              {selectedStreamingServices.length} service{selectedStreamingServices.length !== 1 ? 's' : ''} selected
+            </Text>
+          </View>
+        )}
+      </ScrollView>
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity style={styles.backButton} onPress={prevStep}>
@@ -494,55 +509,58 @@ const createStyles = (theme) => StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
-  streamingGrid: {
-    paddingBottom: 20,
-  },
-  streamingRow: {
-    justifyContent: 'space-around',
+  streamingScrollView: {
+    flex: 1,
     marginBottom: 20,
   },
-  streamingItem: {
-    width: (width - 80) / 2,
-    padding: 16,
-    borderRadius: 12,
+  streamingScrollContent: {
+    paddingBottom: 20,
+  },
+  streamingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  streamingServiceButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 25,
+    margin: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 120,
+    justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 2,
     borderColor: 'transparent',
-    alignItems: 'center',
-    position: 'relative',
   },
   selectedStreamingItem: {
     borderColor: '#FFD700',
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
   },
-  streamingIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  fallbackText: {
-    position: 'absolute',
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+  streamingServiceText: {
+    fontSize: 15,
     textAlign: 'center',
-  },
-  streamingIcon: {
-    fontSize: 32,
-  },
-  streamingName: {
     color: theme.TEXT.PRIMARY,
-    fontSize: 14,
     fontWeight: '500',
-    textAlign: 'center',
   },
-  streamingCheckmark: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
+  selectedStreamingText: {
+    color: theme.TEXT.PRIMARY,
+    fontWeight: 'bold',
+  },
+  selectedCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    paddingVertical: 8,
+  },
+  selectedCountText: {
+    fontSize: 13,
+    color: '#28A745',
+    marginLeft: 4,
+    fontWeight: '500',
   },
   buttonContainer: {
     flexDirection: 'row',
