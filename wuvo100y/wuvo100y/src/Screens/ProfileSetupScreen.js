@@ -15,10 +15,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AuthService from '../services/AuthService';
-import { STREAMING_SERVICES_PRIORITY } from '../Constants';
-import { useMediaType } from '../Navigation/TabNavigator';
-import theme from '../utils/Theme';
-import { LinearGradient } from 'expo-linear-gradient';
 
 function ProfileSetupScreen({ 
   user, 
@@ -33,11 +29,18 @@ function ProfileSetupScreen({
   const [showRatings, setShowRatings] = useState(true);
   const [showWatchlist, setShowWatchlist] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedStreamingServices, setSelectedStreamingServices] = useState([]);
 
-  // Get current media type and use theme directly (CODE_BIBLE compliance)
-  const { mediaType } = useMediaType();
-  const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
+  const colors = {
+    background: isDarkMode ? '#1C2526' : '#FFFFFF',
+    text: isDarkMode ? '#F5F5F5' : '#333',
+    subtext: isDarkMode ? '#D3D3D3' : '#666',
+    accent: isDarkMode ? '#FFD700' : '#4B0082',
+    input: isDarkMode ? '#4B0082' : '#F5F5F5',
+    inputText: isDarkMode ? '#F5F5F5' : '#333',
+    border: isDarkMode ? '#8A2BE2' : '#E0E0E0',
+    card: isDarkMode ? 'rgba(255, 215, 0, 0.1)' : 'rgba(75, 0, 130, 0.05)',
+    placeholder: isDarkMode ? '#A9A9A9' : '#999'
+  };
 
   const handleCompleteSetup = async () => {
     setIsSubmitting(true);
@@ -54,7 +57,6 @@ function ProfileSetupScreen({
           showRatings,
           showWatchlist,
           darkMode: isDarkMode,
-          streamingServices: selectedStreamingServices,
           notifications: {
             follows: true,
             ratings: true,
@@ -143,15 +145,11 @@ function ProfileSetupScreen({
   };
 
   return (
-    <LinearGradient
-      colors={colors.primaryGradient}
-      style={styles.safeArea}
-    >
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView 
-          style={styles.container}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView 
+        style={[styles.container, { backgroundColor: colors.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <Ionicons name="person-circle" size={80} color={colors.accent} />
@@ -181,15 +179,15 @@ function ProfileSetupScreen({
                     borderColor: colors.border
                   }
                 ]}
-                placeholder={mediaType === 'movie' ? "Film enthusiast from NYC. Love sci-fi and thrillers!" : "TV series addict. Currently binge-watching crime dramas!"}
-                placeholderTextColor={colors.subText}
+                placeholder="Film enthusiast from NYC. Love sci-fi and thrillers!"
+                placeholderTextColor={colors.placeholder}
                 value={bio}
                 onChangeText={setBio}
                 multiline
                 maxLength={150}
                 textAlignVertical="top"
               />
-              <Text style={[styles.characterCount, { color: colors.subText }]}>
+              <Text style={[styles.characterCount, { color: colors.subtext }]}>
                 {bio.length}/150 characters
               </Text>
             </View>
@@ -205,15 +203,15 @@ function ProfileSetupScreen({
                   <Text style={[styles.settingTitle, { color: colors.text }]}>
                     Public Profile
                   </Text>
-                  <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                  <Text style={[styles.settingDesc, { color: colors.subtext }]}>
                     Allow others to view your profile
                   </Text>
                 </View>
                 <Switch
                   value={isPublic}
                   onValueChange={setIsPublic}
-                  trackColor={{ false: colors.subText, true: colors.accent }}
-                  thumbColor={isPublic ? colors.textOnPrimary : colors.subText}
+                  trackColor={{ false: '#767577', true: colors.accent }}
+                  thumbColor={isPublic ? '#FFFFFF' : '#f4f3f4'}
                 />
               </View>
 
@@ -222,15 +220,15 @@ function ProfileSetupScreen({
                   <Text style={[styles.settingTitle, { color: colors.text }]}>
                     Discoverable
                   </Text>
-                  <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                  <Text style={[styles.settingDesc, { color: colors.subtext }]}>
                     Appear in user search results
                   </Text>
                 </View>
                 <Switch
                   value={searchable}
                   onValueChange={setSearchable}
-                  trackColor={{ false: colors.subText, true: colors.accent }}
-                  thumbColor={searchable ? colors.textOnPrimary : colors.subText}
+                  trackColor={{ false: '#767577', true: colors.accent }}
+                  thumbColor={searchable ? '#FFFFFF' : '#f4f3f4'}
                   disabled={!isPublic}
                 />
               </View>
@@ -240,15 +238,15 @@ function ProfileSetupScreen({
                   <Text style={[styles.settingTitle, { color: colors.text }]}>
                     Show Ratings
                   </Text>
-                  <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                  <Text style={[styles.settingDesc, { color: colors.subtext }]}>
                     Display your movie ratings publicly
                   </Text>
                 </View>
                 <Switch
                   value={showRatings}
                   onValueChange={setShowRatings}
-                  trackColor={{ false: colors.subText, true: colors.accent }}
-                  thumbColor={showRatings ? colors.textOnPrimary : colors.subText}
+                  trackColor={{ false: '#767577', true: colors.accent }}
+                  thumbColor={showRatings ? '#FFFFFF' : '#f4f3f4'}
                   disabled={!isPublic}
                 />
               </View>
@@ -258,111 +256,18 @@ function ProfileSetupScreen({
                   <Text style={[styles.settingTitle, { color: colors.text }]}>
                     Show Watchlist
                   </Text>
-                  <Text style={[styles.settingDesc, { color: colors.subText }]}>
+                  <Text style={[styles.settingDesc, { color: colors.subtext }]}>
                     Display your watchlist publicly
                   </Text>
                 </View>
                 <Switch
                   value={showWatchlist}
                   onValueChange={setShowWatchlist}
-                  trackColor={{ false: colors.subText, true: colors.accent }}
-                  thumbColor={showWatchlist ? colors.textOnPrimary : colors.subText}
+                  trackColor={{ false: '#767577', true: colors.accent }}
+                  thumbColor={showWatchlist ? '#FFFFFF' : '#f4f3f4'}
                   disabled={!isPublic}
                 />
               </View>
-            </View>
-
-            {/* Streaming Services Preferences */}
-            <View style={[styles.section, styles.streamingSection, { 
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              borderWidth: colors.border?.width || 1,
-              borderRadius: colors.border?.radius || 12,
-            }]}>
-              <View style={styles.streamingHeader}>
-                <Ionicons name="tv" size={24} color={colors.accent} />
-                <Text style={[styles.sectionTitle, { color: colors.text, marginLeft: 8 }]}>
-                  What streaming platforms do you have?
-                </Text>
-              </View>
-              <Text style={[styles.sectionDesc, { color: colors.subtext }]}>
-                We'll prioritize these services when showing where to watch movies and shows
-              </Text>
-              
-              <View style={styles.streamingGrid}>
-                {STREAMING_SERVICES_PRIORITY.map((service) => {
-                  const isSelected = selectedStreamingServices.some(s => s.id === service.id);
-                  
-                  return (
-                    <TouchableOpacity
-                      key={service.id}
-                      style={[
-                        styles.streamingServiceButton,
-                        {
-                          backgroundColor: isSelected ? colors.accent : colors.card,
-                          borderColor: isSelected ? colors.accent : colors.border,
-                          borderWidth: 2,
-                          shadowColor: colors.shadow?.color || '#000',
-                          shadowOffset: colors.shadow?.offset || { width: 0, height: 2 },
-                          shadowOpacity: colors.shadow?.opacity || 0.15,
-                          shadowRadius: colors.shadow?.radius || 4,
-                          elevation: colors.shadow?.elevation || 3,
-                        }
-                      ]}
-                      onPress={() => {
-                        if (isSelected) {
-                          // Remove service
-                          setSelectedStreamingServices(prev => 
-                            prev.filter(s => s.id !== service.id)
-                          );
-                        } else {
-                          // Add service
-                          setSelectedStreamingServices(prev => [
-                            ...prev,
-                            { id: service.id, name: service.name, priority: service.priority }
-                          ]);
-                        }
-                      }}
-                      activeOpacity={0.7}
-                      accessibilityLabel={`${service.name} streaming service, ${isSelected ? 'selected' : 'not selected'}`}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isSelected }}
-                      accessibilityHint={isSelected ? 'Tap to deselect this streaming service' : 'Tap to select this streaming service'}
-                    >
-                      <Text style={[
-                        styles.streamingServiceText,
-                        {
-                          color: isSelected ? colors.textOnPrimary : colors.text,
-                          fontWeight: isSelected ? 'bold' : '600',
-                          fontFamily: colors.font?.body || 'System'
-                        }
-                      ]}>
-                        {service.name}
-                      </Text>
-                      {isSelected && (
-                        <Ionicons 
-                          name="checkmark-circle" 
-                          size={18} 
-                          color={colors.textOnPrimary} 
-                          style={{ marginLeft: 6 }} 
-                        />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              
-              {selectedStreamingServices.length > 0 && (
-                <View style={styles.selectedCount}>
-                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                  <Text style={[styles.streamingNote, { color: colors.success, marginLeft: 4 }]}>
-                    {selectedStreamingServices.length} service{selectedStreamingServices.length !== 1 ? 's' : ''} selected
-                  </Text>
-                </View>
-              )}
-              <Text style={[styles.streamingNote, { color: colors.subtext }]}>
-                These will appear first when you view movie and TV show details
-              </Text>
             </View>
 
             {/* Username Display */}
@@ -399,11 +304,11 @@ function ProfileSetupScreen({
               disabled={isSubmitting}
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color={colors.textOnPrimary} />
+                <ActivityIndicator size="small" color={isDarkMode ? '#1C2526' : '#FFFFFF'} />
               ) : (
                 <Text style={[
                   styles.completeButtonText,
-                  { color: colors.textOnPrimary }
+                  { color: isDarkMode ? '#1C2526' : '#FFFFFF' }
                 ]}>
                   Complete Setup
                 </Text>
@@ -426,7 +331,6 @@ function ProfileSetupScreen({
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
-    </LinearGradient>
   );
 }
 
@@ -549,46 +453,6 @@ const styles = StyleSheet.create({
   skipButtonText: {
     fontSize: 14,
     textDecorationLine: 'underline',
-  },
-  streamingSection: {
-    padding: 20,
-    marginBottom: 20,
-  },
-  streamingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  streamingGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-    marginTop: 8,
-  },
-  streamingServiceButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 25,
-    margin: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 120,
-    justifyContent: 'center',
-  },
-  streamingServiceText: {
-    fontSize: 15,
-    textAlign: 'center',
-  },
-  selectedCount: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  streamingNote: {
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
   },
 });
 

@@ -270,7 +270,7 @@ class EnhancedRecommendationEngine {
       // Get popular content filtered by user preferences
       const endpoint = mediaType === 'movie' ? 'movie/popular' : 'tv/popular';
       const response = await fetch(
-        `https://api.themoviedb.org/3/${endpoint}?api_key=${TMDB_API_KEY}&page=1`
+        `https://api.themoviedb.org/3/${endpoint}?api_key=b401be0ea16515055d8d0bde16f80069&page=1`
       );
       
       const data = await response.json();

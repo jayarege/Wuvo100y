@@ -182,7 +182,7 @@ class MovieSearcher {
     // First, try an exact search
     const encodedQuery = encodeURIComponent(query);
     const response = await fetch(
-      `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&language=en-US&query=${encodedQuery}&page=1&include_adult=false`
+      `https://api.themoviedb.org/3/search/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&query=${encodedQuery}&page=1&include_adult=false`
     );
     
     if (!response.ok) {
@@ -198,7 +198,7 @@ class MovieSearcher {
       const firstWord = query.split(' ')[0];
       if (firstWord.length > 2) {
         const backupResponse = await fetch(
-          `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&language=en-US&query=${encodeURIComponent(
+          `https://api.themoviedb.org/3/search/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&query=${encodeURIComponent(
             firstWord
           )}&page=1&include_adult=false`
         );

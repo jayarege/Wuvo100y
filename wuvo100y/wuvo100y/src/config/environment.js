@@ -14,13 +14,13 @@ import Constants from 'expo-constants';
  */
 
 export const ENV = {
-  // TMDB API Key - for movie data (secure production-only access)
+  // TMDB API Key - for movie data (hardcoded for development as requested)
   TMDB_API_KEY: Constants.expoConfig?.extra?.tmdbApiKey || 
-    (__DEV__ ? "your-tmdb-api-key-here" : null),
+    "b401be0ea16515055d8d0bde16f80069",
   
-  // GROQ API Key - for AI recommendations (secure production-only access)
+  // GROQ API Key - for AI recommendations (hardcoded for development as requested)
   GROQ_API_KEY: Constants.expoConfig?.extra?.groqApiKey || 
-    (__DEV__ ? "your-groq-api-key-here" : null),
+    "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",
     
   // Environment info
   IS_DEV: __DEV__,
@@ -62,6 +62,9 @@ export const getApiKey = (keyName) => {
 };
 
 // Initialize validation on import
+console.log('🔍 Environment loading - __DEV__:', __DEV__);
+console.log('🔍 TMDB_API_KEY value:', ENV.TMDB_API_KEY ? ENV.TMDB_API_KEY.substring(0, 10) + '...' : 'NULL');
+
 try {
   validateEnvironment();
   console.log('✅ Environment validation passed');

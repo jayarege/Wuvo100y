@@ -91,65 +91,14 @@ function TopRatedScreen({ movies, onUpdateRating, genres, isDarkMode }) {
     }
   }, []);
 
-  const normalizeProviderName = useCallback((providerName) => {
-    const normalized = providerName.toLowerCase();
-    
-    // Remove Amazon Channel redundancies - prefer main service over channel
-    if (normalized.includes('amazon channel')) {
-      // Extract the main service name (e.g., "HBO Max Amazon Channel" -> "max")
-      if (normalized.includes('hbo') || normalized.includes('max')) return 'max';
-      if (normalized.includes('starz')) return 'starz';
-      if (normalized.includes('showtime')) return 'showtime';
-      if (normalized.includes('mgm')) return 'mgm';
-      if (normalized.includes('cinemax')) return 'cinemax';
-      if (normalized.includes('epix')) return 'epix';
-      // Skip other Amazon channels that don't have main service equivalent
-      return null;
-    }
-    
-    if (normalized.includes('netflix')) return 'netflix';
-    if (normalized.includes('prime') || normalized.includes('amazon')) return 'prime';
-    if (normalized.includes('apple')) return 'apple';
-    if (normalized.includes('hulu')) return 'hulu';
-    if (normalized.includes('disney')) return 'disney';
-    if (normalized.includes('max') || normalized.includes('hbo')) return 'max';
-    if (normalized.includes('paramount')) return 'paramount';
-    if (normalized.includes('peacock')) return 'peacock';
-    if (normalized.includes('showtime')) return 'showtime';
-    if (normalized.includes('starz')) return 'starz';
-    
-    return normalized
-      .replace(/\s*\(.*?\)/g, '')
-      .replace(/\s*(with\s+)?ads?$/gi, '')
-      .replace(/\s*premium$/gi, '')
-      .replace(/\s*plus$/gi, '')
-      .replace(/\s*\+$/gi, '')
-      .trim();
-  }, []);
-
   const deduplicateProviders = useCallback((providers) => {
     if (!providers || !Array.isArray(providers)) return [];
     
     const seen = new Set();
     const filtered = [];
     
-    const sorted = [...providers].sort((a, b) => {
-      const aHasAds = a.provider_name.toLowerCase().includes('ads');
-      const bHasAds = b.provider_name.toLowerCase().includes('ads');
-      
-      if (aHasAds && !bHasAds) return 1;
-      if (!aHasAds && bHasAds) return -1;
-      return 0;
-    });
-    
-    for (const provider of sorted) {
-      const normalizedName = normalizeProviderName(provider.provider_name);
-      
-      // Skip providers that should be filtered out (Amazon channels without main service)
-      if (normalizedName === null) {
-        continue;
-      }
-      
+    for (const provider of providers) {
+      const normalizedName = provider.provider_name.toLowerCase();
       if (!seen.has(normalizedName)) {
         seen.add(normalizedName);
         filtered.push(provider);
@@ -157,15 +106,9 @@ function TopRatedScreen({ movies, onUpdateRating, genres, isDarkMode }) {
     }
     
     return filtered;
-  }, [normalizeProviderName]);
-  const getProviderLogoUrl = useCallback((logoPath, providerId) => {
+  }, []);
+  const getProviderLogoUrl = useCallback((logoPath) => {
     if (!logoPath) return null;
-    
-    // Use blue Amazon Prime logo for better brand recognition
-    if (providerId === 9) {
-      return 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Amazon_Prime_Video_logo.svg/300px-Amazon_Prime_Video_logo.svg.png';
-    }
-    
     return `https://image.tmdb.org/t/p/w92${logoPath}`;
   }, []);
 
@@ -564,7 +507,7 @@ return (
                     .map((provider) => (
                       <Image 
                         key={provider.provider_id}
-                        source={{ uri: getProviderLogoUrl(provider.logo_path, provider.provider_id) }}
+                        source={{ uri: getProviderLogoUrl(provider.logo_path) }}
                         style={modalStyles.platformIcon}
                         resizeMode="contain"
                       />

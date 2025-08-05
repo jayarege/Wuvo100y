@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { adjustRatingWildcard } from '../../utils/ELOCalculations';
 
 // Import theme system and styling modules
 import { useMediaType } from '../../Navigation/TabNavigator';
@@ -1387,71 +1388,38 @@ function WildcardScreen({
 
  const hasActiveFilters = selectedGenres.length > 0 || selectedDecades.length > 0;
  
- const calculateKFactor = useCallback((gamesPlayed) => {
-   if (gamesPlayed < 5) return .5;
-   if (gamesPlayed < 10) return .25;
-   if (gamesPlayed < 20) return .125;
-   return .1;
- }, []);
-
+ // ✅ CONSOLIDATED: Now using centralized ELO utility instead of duplicate implementation
  const adjustRating = useCallback((winner, loser, winnerIsSeenContent) => {
    const winnerRating = winner.userRating;
    const loserRating = loser.userRating;
    
-   const ratingDifference = Math.abs(winnerRating - loserRating);
-   const expectedWinProbability = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 4));
-   
-   const winnerK = calculateKFactor(winner.gamesPlayed || 0);
-   const loserK = calculateKFactor(loser.gamesPlayed || 0);
-   
-   const winnerIncrease = Math.max(0.1, winnerK * (1 - expectedWinProbability));
-   const loserDecrease = Math.max(0.1, loserK * (1 - expectedWinProbability));
-   
-   let adjustedWinnerIncrease = winnerIncrease;
-   let adjustedLoserDecrease = loserDecrease;
-   if (winnerRating < loserRating) {
-     adjustedWinnerIncrease *= 1.2;
-   }
-   
-   const isMajorUpset = winnerRating < loserRating && ratingDifference > 3.0;
-   if (isMajorUpset) {
-     adjustedWinnerIncrease += 3.0;
-     console.log(`🚨 MAJOR UPSET! ${winner.title} (${winnerRating}) defeated ${loser.title} (${loserRating}). Adding 3.0 bonus points!`);
-   }
-   
-   const MAX_RATING_CHANGE = 0.7;
-   
-   if (isMajorUpset) {
-     adjustedLoserDecrease = Math.min(MAX_RATING_CHANGE, adjustedLoserDecrease);
-   } else {
-     adjustedWinnerIncrease = Math.min(MAX_RATING_CHANGE, adjustedWinnerIncrease);
-     adjustedLoserDecrease = Math.min(MAX_RATING_CHANGE, adjustedLoserDecrease);
-   }
-   
-   let newWinnerRating = winnerRating + adjustedWinnerIncrease;
-   let newLoserRating = loserRating - adjustedLoserDecrease;
-   
-   newWinnerRating = Math.round(Math.min(10, Math.max(1, newWinnerRating)) * 10) / 10;
-   newLoserRating = Math.round(Math.min(10, Math.max(1, newLoserRating)) * 10) / 10;
+   // Use centralized ELO calculation
+   const eloResult = adjustRatingWildcard(
+     winnerRating,
+     loserRating,
+     true, // winner won
+     winner.gamesPlayed || 0,
+     loser.gamesPlayed || 0
+   );
    
    const updatedWinner = {
      ...winner,
-     userRating: newWinnerRating,
-     eloRating: newWinnerRating * 10,
+     userRating: eloResult.updatedSeenContent,
+     eloRating: Math.round(eloResult.updatedSeenContent * 100),
      gamesPlayed: (winner.gamesPlayed || 0) + 1
    };
    
    const updatedLoser = {
      ...loser,
-     userRating: newLoserRating,
-     eloRating: newLoserRating * 10,
+     userRating: eloResult.updatedNewContent,
+     eloRating: Math.round(eloResult.updatedNewContent * 100),
      gamesPlayed: (loser.gamesPlayed || 0) + 1
    };
    
    return winnerIsSeenContent 
      ? { updatedSeenContent: updatedWinner, updatedNewContent: updatedLoser } 
      : { updatedSeenContent: updatedLoser, updatedNewContent: updatedWinner };
- }, [calculateKFactor]);
+ }, []);
 
  const handleSeenWin = useCallback(() => {
    if (isLoadingRef.current || !seenContent || !newContent || !isMountedRef.current) {

@@ -1,11 +1,15 @@
 import React, { useState, createContext, useContext } from 'react';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import HomeScreen from '../Screens/Home';
 // Removed TopRated and Watchlist screens
 import AddMovieScreen from '../Screens/AddMovie';
 import ProfileScreen from '../Screens/Profile';
+import theme from '../utils/Theme';
 // REMOVED: Firebase test screen (Phase 1 complete)
 // import FirebaseTestScreen from '../Screens/FirebaseTestScreen';
 
@@ -26,10 +30,10 @@ const Tab = createBottomTabNavigator();
 function TabNavigator({
   seen,
   unseen,
-  seenTVShows,
-  unseenTVShows,
   setSeen,
   setUnseen,
+  seenTVShows,
+  unseenTVShows,
   setSeenTVShows,
   setUnseenTVShows,
   genres,
@@ -46,12 +50,6 @@ function TabNavigator({
 }) {
   // Add media type state
   const [currentMediaType, setCurrentMediaType] = useState('movie'); // Default to movies
-
-  // Media type-aware data selection
-  const currentSeen = currentMediaType === 'movie' ? seen : seenTVShows;
-  const currentUnseen = currentMediaType === 'movie' ? unseen : unseenTVShows;
-  const currentSetSeen = currentMediaType === 'movie' ? setSeen : setSeenTVShows;
-  const currentSetUnseen = currentMediaType === 'movie' ? setUnseen : setUnseenTVShows;
 
   // Direct passthrough to central location - NO LOCAL LOGIC
   const handleAddToSeen = newMovie => {
@@ -81,6 +79,9 @@ function TabNavigator({
     onRemoveFromWatchlist(movieId);
   };
 
+  // Get safe area insets for proper positioning
+  const insets = useSafeAreaInsets();
+  
   // Media type context value
   const mediaTypeContextValue = {
     mediaType: currentMediaType,
@@ -115,7 +116,32 @@ function TabNavigator({
           tabBarInactiveTintColor: isDarkMode ? '#D3D3D3' : '#A9A9A9',
           tabBarStyle: {
             backgroundColor: isDarkMode ? '#1C2526' : '#FFFFFF',
-            borderTopColor: isDarkMode ? '#4B0082' : '#E0E0E0',
+            borderTopWidth: 1,
+            borderTopColor: 'transparent', // Make it transparent so we can overlay gradient
+          },
+          tabBarBackground: () => {
+            const themeColors = theme[currentMediaType][isDarkMode ? 'dark' : 'light'];
+            return (
+              <View style={{ flex: 1 }}>
+                <LinearGradient
+                  colors={themeColors.primaryGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 1, // Border thickness
+                  }}
+                />
+                <View style={{
+                  flex: 1,
+                  backgroundColor: isDarkMode ? '#1C2526' : '#FFFFFF',
+                  marginTop: 1, // Account for the gradient border
+                }} />
+              </View>
+            );
           },
           headerShown: false,
         })}
@@ -124,10 +150,14 @@ function TabNavigator({
           {props => (
             <HomeScreen
   {...props}
-  seen={currentSeen}
-  unseen={currentUnseen}
-  setSeen={currentSetSeen}
-  setUnseen={currentSetUnseen}
+  seen={seen}
+  unseen={unseen}
+  seenTVShows={seenTVShows}
+  unseenTVShows={unseenTVShows}
+  setSeen={setSeen}
+  setUnseen={setUnseen}
+  setSeenTVShows={setSeenTVShows}
+  setUnseenTVShows={setUnseenTVShows}
   onAddToSeen={handleAddToSeen}
   onAddToUnseen={handleAddToUnseen}
   onRemoveFromWatchlist={handleRemoveFromWatchlist}
@@ -149,8 +179,8 @@ function TabNavigator({
           {props => (
             <AddMovieScreen
               {...props}
-              seen={currentSeen}
-              unseen={currentUnseen}
+              seen={seen}
+              unseen={unseen}
               onAddToSeen={handleAddToSeen}
               onAddToUnseen={handleAddToUnseen}
               onRemoveFromWatchlist={handleRemoveFromWatchlist}
@@ -165,8 +195,10 @@ function TabNavigator({
           {props => (
             <ProfileScreen
               {...props}
-              seen={currentSeen}
-              unseen={currentUnseen}
+              seen={seen}
+              unseen={unseen}
+              seenTVShows={seenTVShows}
+              unseenTVShows={unseenTVShows}
               isDarkMode={isDarkMode}
               genres={genres}
               onUpdateRating={onUpdateRating}

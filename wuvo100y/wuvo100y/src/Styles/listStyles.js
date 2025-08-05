@@ -24,17 +24,17 @@ const getListStyles = (mediaType = 'movie', mode = 'light', theme) => {
       shadowRadius: 2,
       elevation: 2,
       // CODE_BIBLE #3: Clear 50% size reduction for mobile optimization
-      minHeight: 75,
+      minHeight: 98,
     },
     resultPoster: {
       width: 50,
-      height: 75,
-      // CODE_BIBLE #3: 50% size reduction maintains 2:3 aspect ratio
+      height: 98,
+      // CODE_BIBLE #3: 50% size reduction maintains 2:3 aspect ratio with 30% height increase
     },
     movieDetails: {
       flex: 1,
       padding: 6,
-      height: 75,
+      height: 98,
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.card,
@@ -79,7 +79,7 @@ const getListStyles = (mediaType = 'movie', mode = 'light', theme) => {
     // UPDATED: Right-side ranking container
     rankingContainer: {
       width: 30, // CODE_BIBLE #3: 50% width reduction for mobile
-      height: 75,
+      height: 98,
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: colors.primary,

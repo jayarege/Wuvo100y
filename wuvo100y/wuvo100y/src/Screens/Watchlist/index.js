@@ -112,7 +112,7 @@ const moviesByMediaType = useMemo(() => {
     try {
       const endpoint = mediaType === 'movie' ? 'movie' : 'tv';
       const response = await fetchWithTimeout(
-        `https://api.themoviedb.org/3/watch/providers/${endpoint}?api_key=${API_KEY}&watch_region=US`
+        `https://api.themoviedb.org/3/watch/providers/${endpoint}?api_key=b401be0ea16515055d8d0bde16f80069&watch_region=US`
       );
       
       if (!response.ok) {

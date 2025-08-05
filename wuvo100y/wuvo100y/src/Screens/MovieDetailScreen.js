@@ -9,7 +9,7 @@ export default function MovieDetailScreen() {
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    fetch(`https://api.themoviedb.org/3/movie/${movieId}?api_key=${ENV.TMDB_API_KEY}&language=en-US`)
+    fetch(`https://api.themoviedb.org/3/movie/${movieId}?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US`)
       .then(r => r.json())
       .then(data => setDetails(data))
       .catch(console.error)

@@ -157,25 +157,5 @@ export const selectOpponent = (seenMovies, options = {}) => {
   return selectRandomSeenOpponent(seenMovies, excludeIds);
 };
 
-/**
- * Elo calculation functions (same as Wildcard)
- */
-export const calculateKFactor = (gamesPlayed) => {
-  if (gamesPlayed < 5) return 0.1;   // Reduced from 0.5
-  if (gamesPlayed < 10) return 0.05; // Reduced from 0.25
-  if (gamesPlayed < 20) return 0.025;// Reduced from 0.125
-  return 0.02;                       // Reduced from 0.1
-};
-
-export const calculateExpectedWinProbability = (ratingA, ratingB) => {
-  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
-};
-
-export const calculateNewRating = (currentRating, gamesPlayed, actualScore, expectedScore) => {
-  const kFactor = calculateKFactor(gamesPlayed);
-  const ratingChange = kFactor * 32 * (actualScore - expectedScore); // Fixed: 800→32
-  const newRating = currentRating + ratingChange;
-  
-  // Enforce bounds: ratings must stay within 1.0-10.0 range
-  return Math.max(1.0, Math.min(10.0, newRating));
-};
+// ✅ CONSOLIDATED: ELO calculations now imported from centralized utility
+// Removed duplicate implementations - use ELOCalculations.js instead

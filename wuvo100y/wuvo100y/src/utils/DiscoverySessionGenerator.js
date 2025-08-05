@@ -19,7 +19,7 @@ class DiscoverySessionGenerator {
 
   async generateSessionTheme(userProfile, sessionTemplate, candidateMovies) {
     try {
-      if (!GROQ_API_KEY) {
+      if (!true) {
         console.log('⚠️ No Groq API key, using template theme');
         return this.createTemplateTheme(sessionTemplate, userProfile);
       }
@@ -107,7 +107,7 @@ Keep it concise, personal, and exciting. No generic descriptions.`;
       const response = await fetch(this.groqEndpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Authorization': `Bearer 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`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -159,7 +159,7 @@ Keep it concise, personal, and exciting. No generic descriptions.`;
 
   async scoreMoviesWithGroq(movies, userProfile, theme) {
     try {
-      if (!GROQ_API_KEY || movies.length === 0) {
+      if (movies.length === 0) {
         return this.scoreMoviesAlgorithmically(movies, userProfile);
       }
 

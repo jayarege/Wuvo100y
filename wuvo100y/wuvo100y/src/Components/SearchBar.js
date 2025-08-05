@@ -60,7 +60,7 @@ const SearchBar = ({
       const endpoint = mediaType === 'movie' ? 'search/movie' : 'search/tv';
       
       const response = await fetch(
-        `https://api.themoviedb.org/3/${endpoint}?api_key=${API_KEY}&language=en-US&query=${encodeURIComponent(query)}&page=1&include_adult=false`,
+        `https://api.themoviedb.org/3/${endpoint}?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&query=${encodeURIComponent(query)}&page=1&include_adult=false`,
         { signal: abortControllerRef.current.signal }
       );
       

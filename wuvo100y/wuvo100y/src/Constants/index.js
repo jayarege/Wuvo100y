@@ -45,31 +45,7 @@ export const INITIAL_GENRES = {
   10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
 };
 
-// Streaming services priority order (top 20)
-export const STREAMING_SERVICES_PRIORITY = [
-  { id: 8, name: 'Netflix', priority: 1 },
-  { id: 9, name: 'Amazon Prime Video', priority: 2 },
-  { id: 531, name: 'Paramount+', priority: 3 },
-  { id: 384, name: 'Max', priority: 4 },
-  { id: 15, name: 'Hulu', priority: 5 },
-  { id: 337, name: 'Disney+', priority: 6 },
-  { id: 387, name: 'Peacock', priority: 7 },
-  { id: 467, name: 'ESPN+', priority: 8 },
-  { id: 350, name: 'Apple TV+', priority: 9 },
-  { id: 43, name: 'Starz', priority: 10 },
-  { id: 283, name: 'Crunchyroll', priority: 11 },
-  { id: 546, name: 'Showtime', priority: 12 },
-  { id: 49, name: 'HBO Now', priority: 13 },
-  { id: 300, name: 'Pluto TV', priority: 14 },
-  { id: 279, name: 'Tubi', priority: 15 },
-  { id: 613, name: 'Plex', priority: 16 },
-  { id: 386, name: 'YouTube Premium', priority: 17 },
-  { id: 257, name: 'fuboTV', priority: 18 },
-  { id: 1796, name: 'Netflix basic with Ads', priority: 19 },
-  { id: 1899, name: 'Max Amazon Channel', priority: 20 }
-];
-
-// Legacy streaming services (keep for backward compatibility)
+// Streaming services
 export const STREAMING_SERVICES = [
   { 
     id: 8, 
@@ -127,6 +103,20 @@ export const STREAMING_SERVICES = [
     brandColor: '#00A8E1',
     fallbackText: 'AMZN'
   }
+];
+
+// Top 10 streaming services with priority for Advanced Filters
+export const STREAMING_SERVICES_PRIORITY = [
+  { id: 8, priority: 1, name: 'Netflix', logo_path: '/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg' },
+  { id: 9, priority: 2, name: 'Prime Video', logo_path: '/emthp39XA2YScoYL1p0sdbAH2WA.jpg' },
+  { id: 337, priority: 3, name: 'Disney+', logo_path: '/7rwgEs15tFwyR9NPQ5vpzxTj19Q.jpg' },
+  { id: 384, priority: 4, name: 'HBO Max', logo_path: '/aS2zvJWn9mWiCOeaVQwRrpvuCWw.jpg' },
+  { id: 15, priority: 5, name: 'Hulu', logo_path: '/giwM8XX4V2AQb9vsoN7yti82tKK.jpg' },
+  { id: 350, priority: 6, name: 'Apple TV+', logo_path: '/peURlLlr8jggOwK53fJ5wdQl05y.jpg' },
+  { id: 387, priority: 7, name: 'Peacock', logo_path: '/xbhHHa1YgtpwhC8lb1NQ3ACVcLd.jpg' },
+  { id: 531, priority: 8, name: 'Paramount+', logo_path: '/h5DcR0J2EESLitnhR8xLG1QymTE.jpg' },
+  { id: 283, priority: 9, name: 'Crunchyroll', logo_path: '/8Gt1iClBlzTeQs8WQm8UrCoIxnQ.jpg' },
+  { id: 546, priority: 10, name: 'Showtime', logo_path: '/Allhh8fH8876NNjjsQpWeEgOFOr.jpg' }
 ];
 
 // Decades for filtering

@@ -240,7 +240,7 @@ class SocialRecommendationService {
     for (const seedMovieId of seedMovies) {
       try {
         const response = await fetch(
-          `${this.baseURL}/movie/${seedMovieId}/similar?api_key=${TMDB_API_KEY}&page=1`
+          `${this.baseURL}/movie/${seedMovieId}/similar?api_key=b401be0ea16515055d8d0bde16f80069&page=1`
         );
         
         if (!response.ok) continue;
@@ -355,7 +355,7 @@ class SocialRecommendationService {
         recommendations.map(async (rec) => {
           try {
             const response = await fetch(
-              `${this.baseURL}/movie/${rec.movieId}?api_key=${TMDB_API_KEY}`
+              `${this.baseURL}/movie/${rec.movieId}?api_key=b401be0ea16515055d8d0bde16f80069`
             );
             
             if (!response.ok) return rec;

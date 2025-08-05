@@ -78,7 +78,7 @@ class DiscoverySessionEngine {
     
     // Layer 1: Try enhanced Groq-powered session
     try {
-      if (GROQ_API_KEY && userProfile.ratingsCount >= 5) {
+      if (userProfile.ratingsCount >= 5) {
         const enhancedSession = await this.createGroqEnhancedSession(userProfile, sessionTemplate, options);
         if (enhancedSession) {
           console.log('✨ Created Groq-enhanced discovery session');

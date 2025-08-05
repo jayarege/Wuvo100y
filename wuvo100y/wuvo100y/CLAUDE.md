@@ -1166,5 +1166,29 @@ Production: App Store distribution with secure environment
 
 ---
 
+---
+
+## 🚨 **AI RATE LIMITING AUDIT** (July 29, 2025)
+
+### 🎯 **AUDIT FINDINGS - COST PROTECTION CONFIRMED**
+
+#### **GROQ API CALLS**:
+- ✅ **Hard limit**: 3 sessions per user per 24 hours (DiscoverySessionEngine.js:54)
+- ✅ **Implementation**: `if (dailyLimits.sessionsUsed >= 3) return limitReached`
+- ✅ **Fallback**: TMDB-only recommendations when GROQ fails
+- ⚠️ **Security issue**: Hardcoded API key found in DiscoverySessionGenerator.js:110
+
+#### **KEY CODE PATHS**:
+1. **Discovery sessions** → GROQ call (rate limited)
+2. **AI recommendations** → TMDB only (free, unlimited within 2K daily)
+3. **Emergency fallback** → Hardcoded popular movies (no API calls)
+
+#### **CONFIRMED LIMITS**:
+- **GROQ**: Max 3 calls/user/day
+- **TMDB**: Max 2,000 calls/day total (free API)
+- **Cost protection**: ✅ Working as designed
+
+---
+
 ## Contact & Continuation
 This file ensures context preservation across Claude Code sessions. All critical functions, recent changes, and pending tasks are documented for seamless project continuation.

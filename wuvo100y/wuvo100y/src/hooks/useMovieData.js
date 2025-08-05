@@ -123,7 +123,8 @@ const handleAddToSeen = useCallback((item) => {
   }
   
   const title = item.title || item.name;
-  const isMovie = item.title && !item.name && !item.first_air_date;
+  // Use explicit mediaType if provided, otherwise fall back to heuristics
+  const isMovie = item.mediaType ? item.mediaType === 'movie' : (item.title && !item.name && !item.first_air_date);
   
   if (isMovie) {
     console.log(`🏪 CENTRAL STORE: Adding/updating movie ${title}`);
@@ -144,7 +145,8 @@ const handleAddToUnseen = useCallback((item) => {
   }
   
   const title = item.title || item.name;
-  const isMovie = item.title && !item.name && !item.first_air_date;
+  // Use explicit mediaType if provided, otherwise fall back to heuristics
+  const isMovie = item.mediaType ? item.mediaType === 'movie' : (item.title && !item.name && !item.first_air_date);
   
   if (isMovie) {
     console.log(`🏪 CENTRAL STORE: Adding movie ${title} to watchlist`);
