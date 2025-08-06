@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { adjustRatingWildcard } from '../../utils/ELOCalculations';
+import { adjustRatingWildcard } from '../Components/EnhancedRatingSystem';
 
 // Import theme system and styling modules
 import { useMediaType } from '../../Navigation/TabNavigator';

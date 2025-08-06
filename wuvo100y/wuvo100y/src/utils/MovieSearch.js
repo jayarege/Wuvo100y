@@ -22,7 +22,7 @@ class MovieSearcher {
     this.similarityAlgorithm = options.similarityAlgorithm || this.levenshteinSimilarity;
   }
   
-  // Default similarity algorithm - Levenshtein distance based similarity
+  // Enhanced similarity algorithm with fuzzy matching and stop word removal
   levenshteinSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
     
@@ -34,14 +34,39 @@ class MovieSearcher {
     if (s1 === s2) return 1; // Exact match
     if (s1.includes(s2) || s2.includes(s1)) return 0.9; // One is substring of the other
     
-    // Get individual words
-    const words1 = s1.split(/\s+/).filter(w => w.length > 1);
-    const words2 = s2.split(/\s+/).filter(w => w.length > 1);
+    // Remove common stop words and normalize
+    const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
+    const cleanWords = (str) => str.split(/\s+/)
+      .filter(w => w.length > 1 && !stopWords.includes(w))
+      .map(w => w.replace(/[^\w\s]/g, '')); // Remove punctuation
     
-    // Check for word matches
-    const commonWords = words1.filter(w => words2.some(w2 => w2.includes(w) || w.includes(w2)));
-    if (commonWords.length > 0) {
-      return 0.5 + (0.4 * commonWords.length / Math.max(words1.length, words2.length));
+    const words1 = cleanWords(s1);
+    const words2 = cleanWords(s2);
+    
+    // Handle typo tolerance (knight vs night)
+    const isTypoMatch = (w1, w2) => {
+      if (w1 === w2) return true;
+      if (Math.abs(w1.length - w2.length) > 2) return false;
+      
+      // Calculate character similarity for potential typos
+      const charSimilarity = this._calculateCharSimilarity(w1, w2);
+      return charSimilarity > 0.7; // 70% character similarity threshold
+    };
+    
+    // Check for word matches with typo tolerance
+    let commonWords = 0;
+    for (const w1 of words1) {
+      for (const w2 of words2) {
+        if (isTypoMatch(w1, w2) || w1.includes(w2) || w2.includes(w1)) {
+          commonWords++;
+          break;
+        }
+      }
+    }
+    
+    if (commonWords > 0) {
+      const wordMatchScore = commonWords / Math.max(words1.length, words2.length);
+      return 0.6 + (0.35 * wordMatchScore); // Higher base score for word matches
     }
     
     // Calculate Levenshtein distance
@@ -66,6 +91,31 @@ class MovieSearcher {
     const maxLen = Math.max(s1.length, s2.length);
     const distance = track[s2.length][s1.length];
     return 1 - (distance / maxLen);
+  }
+
+  // Helper method for character-level similarity
+  _calculateCharSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const maxLen = Math.max(len1, len2);
+    
+    let matches = 0;
+    for (let i = 0; i < Math.min(len1, len2); i++) {
+      if (str1[i] === str2[i]) matches++;
+    }
+    
+    // Add partial credit for similar character patterns
+    const char1Set = new Set(str1);
+    const char2Set = new Set(str2);
+    const intersection = new Set([...char1Set].filter(c => char2Set.has(c)));
+    const union = new Set([...char1Set, ...char2Set]);
+    
+    const characterOverlap = intersection.size / union.size;
+    const positionMatch = matches / maxLen;
+    
+    return (positionMatch * 0.6) + (characterOverlap * 0.4);
   }
   
   // Calculate user preference score based on user history

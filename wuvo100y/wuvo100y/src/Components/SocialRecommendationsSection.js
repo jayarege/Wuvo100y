@@ -22,7 +22,9 @@ function SocialRecommendationsSection({
   isLoading = false,
   onMoviePress,
   isDarkMode,
-  homeStyles
+  homeStyles,
+  mediaType,
+  theme
 }) {
   if (isLoading || socialRecommendations.length === 0) {
     return null; // Don't show section if no social data
@@ -73,6 +75,8 @@ function SocialRecommendationsSection({
                 onPress={onMoviePress}
                 isDarkMode={isDarkMode}
                 showSocialContext={true}
+                mediaType={mediaType}
+                theme={theme}
               />
             </View>
           ))}

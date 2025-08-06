@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { EnhancedRatingButton, SentimentRatingModal, calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
-import { adjustRatingWildcard } from '../../utils/ELOCalculations';
+import { adjustRatingWildcard } from '../../Components/EnhancedRatingSystem';
 import { 
   isObfuscatedAdultContent, 
   hasSuspiciousAdultStructure, 
@@ -29,8 +29,10 @@ import {
   filterSearchSuggestions, 
   filterFullSearchResults 
 } from '../../utils/ContentFiltering';
+import UnifiedSearchService from '../../services/UnifiedSearchService';
 import SearchBar from '../../Components/SearchBar';
 import MovieSearchResults from '../../Components/MovieSearchResults';
+import UserSearchResult from '../../Components/UserSearchResult';
 
 // Import theme system and styles
 import { useMediaType } from '../../Navigation/TabNavigator';
@@ -58,9 +60,18 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
   // Get theme colors for this media type and mode
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
 
+  // Initialize unified search service
+  const unifiedSearchService = useMemo(() => new UnifiedSearchService({
+    apiKey: API_KEY,
+    maxMovieResults: 15,
+    maxUserResults: 8,
+    maxTotalResults: 20
+  }), []);
+
   // State variables
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [userResults, setUserResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
@@ -83,6 +94,7 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
   useEffect(() => {
     setSearchQuery('');
     setSearchResults([]);
+    setUserResults([]);
     setError(null);
   }, [mediaType]);
 
@@ -337,7 +349,7 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
 
 
 
-  // Enhanced full search with intelligent ranking
+  // Enhanced unified search with movies and users
   const handleFullSearch = useCallback(async (query = searchQuery) => {
     if (!query || query.trim().length === 0) return;
     
@@ -346,103 +358,62 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
     setShowSuggestions(false);
     
     try {
-      const endpoint = mediaType === 'movie' ? 'search/movie' : 'search/tv';
+      console.log(`🔍 Unified search for: "${query}"`);
       
-      console.log(`🔍 Full search ${endpoint} for: "${query}"`);
+      // Search both movies/TV and users
+      const searchContext = {
+        userHistory: seen, // User's rating history for better movie recommendations
+        currentUserId: null, // TODO: Get from auth context when available
+        mediaType: mediaType
+      };
       
-      const response = await fetch(
-        `https://api.themoviedb.org/3/${endpoint}?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&query=${encodeURIComponent(query)}&page=1&include_adult=false`
-      );
+      const results = await unifiedSearchService.search(query, searchContext);
       
-      if (!response.ok) {
-        throw new Error(`Failed to search for ${mediaType === 'movie' ? 'movies' : 'TV shows'}`);
+      if (results.error) {
+        throw new Error(results.error);
       }
       
-      const data = await response.json();
-      console.log(`📺 Full search raw results:`, data.results?.length || 0);
+      // Process movie/TV results with current watchlist/seen status
+      const processedMovieResults = results.movies.map(item => ({
+        ...item,
+        alreadyRated: seen.some(sm => sm.id === item.id),
+        inWatchlist: unseen.some(um => um.id === item.id),
+        currentRating: seen.find(sm => sm.id === item.id)?.userRating,
+        media_type: item.mediaType || 'movie'
+      }));
       
-      if (data.results && data.results.length > 0) {
-        // Use moderate filtering for full search (more permissive)
-        const lightlyFiltered = filterFullSearchResults(data.results);
-        
-        console.log(`🧹 Full search after smart filtering:`, lightlyFiltered.length);
-        
-        // Log any filtered items for debugging
-        const filteredOut = data.results.filter(item => !lightlyFiltered.includes(item));
-        if (filteredOut.length > 0) {
-          console.log(`🚫 Filtered out from full search:`, filteredOut.map(item => item.title || item.name));
-        }
-        
-        const seenIds = new Set();
-        
-        const processedResults = lightlyFiltered
-          .filter(item => {
-            if (!item.poster_path) return false;
-            if (seenIds.has(item.id)) return false;
-            seenIds.add(item.id);
-            return true;
-          })
-          .map(item => {
-            const title = (item.title || item.name || '').toLowerCase();
-            const queryLower = query.toLowerCase();
-            
-            // Same scoring algorithm as suggestions but for full results
-            let score = 0;
-            
-            if (title === queryLower) score += 1000;
-            else if (title.startsWith(queryLower)) score += 500;
-            else if (title.includes(` ${queryLower} `) || title.includes(`${queryLower} `)) score += 250;
-            else if (title.includes(queryLower)) score += 100;
-            
-            const popularityBoost = Math.log10((item.vote_count || 0) + 1) * 10;
-            score += popularityBoost;
-            
-            const ratingBoost = (item.vote_average || 0) * 2;
-            score += ratingBoost;
-            
-            const year = item.release_date || item.first_air_date;
-            if (year) {
-              const releaseYear = new Date(year).getFullYear();
-              const yearBoost = Math.max(0, (releaseYear - 1990) / 10);
-              score += yearBoost;
-            }
-            
-            return {
-              id: item.id,
-              title: item.title || item.name,
-              poster_path: item.poster_path,
-              vote_average: item.vote_average,
-              vote_count: item.vote_count || 0,
-              overview: item.overview || "No overview available",
-              release_date: item.release_date || item.first_air_date || 'Unknown',
-              genre_ids: item.genre_ids || [],
-              alreadyRated: seen.some(sm => sm.id === item.id),
-              inWatchlist: unseen.some(um => um.id === item.id),
-              currentRating: seen.find(sm => sm.id === item.id)?.userRating,
-              searchScore: score
-            };
-          })
-          .sort((a, b) => b.searchScore - a.searchScore);
-        
-        console.log(`🎯 Full search top results:`, processedResults.slice(0, 5).map(r => `${r.title} (${r.searchScore.toFixed(1)})`));
-        
-        setSearchResults(processedResults);
-      } else {
-        console.log(`❌ No full search results for "${query}"`);
-        setSearchResults([]);
-      }
+      setSearchResults(processedMovieResults);
+      setUserResults(results.users);
+      
+      console.log(`✅ Unified search complete: ${processedMovieResults.length} movies/TV, ${results.users.length} users`);
+      
     } catch (err) {
-      console.error('Error searching:', err);
-      setError(`Failed to search for ${mediaType === 'movie' ? 'movies' : 'TV shows'}. Please try again.`);
+      console.error('❌ Error in unified search:', err);
+      setError(`Failed to search. Please try again.`);
       setSearchResults([]);
+      setUserResults([]);
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, seen, unseen, mediaType]);
+  }, [searchQuery, seen, unseen, mediaType, unifiedSearchService]);
 
   // Handle selecting a suggestion
   const handleSelectSuggestion = useCallback((suggestion) => {
     handleFullSearch(suggestion.title);
+  }, []);
+
+  // Handle user profile selection
+  const handleUserPress = useCallback((user) => {
+    console.log(`👤 User selected: ${user.username}`);
+    // TODO: Navigate to user profile screen
+    Alert.alert(
+      "User Profile", 
+      `${user.displayName || user.username}
+@${user.username}
+
+${user.overview || 'No bio available'}`,
+      [{ text: "OK" }]
+    );
   }, []);
 
   // Add item to watchlist
@@ -506,35 +477,124 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
           }}
         />
 
-        {/* Search results */}
+        {/* Search results - Unified display */}
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={{ flex: 1 }}>
-            <MovieSearchResults
-              searchResults={searchResults}
-              colors={colors}
-              genres={genres}
-              movieCardStyles={movieCardStyles}
-              buttonStyles={buttonStyles}
-              seen={seen}
-              unseen={unseen}
-              onAddToUnseen={addToUnseen}
-              onRateMovie={(item) => {
-                setSelectedMovieForRating(item);
-                setEmotionModalVisible(true);
-              }}
-              mediaType={mediaType}
-              loading={loading}
-              error={error}
-              searchQuery={searchQuery}
-              stateStyles={stateStyles}
-              onRetry={() => {
-                setError(null);
-                if (searchQuery.trim()) {
-                  handleFullSearch();
-                }
-              }}
-            />
-          </View>
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            
+            {/* Movie/TV Results Section */}
+            {searchResults.length > 0 && (
+              <>
+                <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+                  <Text style={[{ 
+                    fontSize: 18, 
+                    fontWeight: 'bold', 
+                    color: colors.text 
+                  }]}>
+                    {mediaType === 'movie' ? 'Movies' : 'TV Shows'} ({searchResults.length})
+                  </Text>
+                </View>
+                <MovieSearchResults
+                  searchResults={searchResults}
+                  colors={colors}
+                  genres={genres}
+                  movieCardStyles={movieCardStyles}
+                  buttonStyles={buttonStyles}
+                  seen={seen}
+                  unseen={unseen}
+                  onAddToUnseen={addToUnseen}
+                  onRateMovie={(item) => {
+                    setSelectedMovieForRating(item);
+                    setEmotionModalVisible(true);
+                  }}
+                  mediaType={mediaType}
+                  loading={loading && searchResults.length === 0}
+                  error={error}
+                  searchQuery={searchQuery}
+                  stateStyles={stateStyles}
+                  onRetry={() => {
+                    setError(null);
+                    if (searchQuery.trim()) {
+                      handleFullSearch();
+                    }
+                  }}
+                />
+              </>
+            )}
+
+            {/* User Results Section */}
+            {userResults.length > 0 && (
+              <>
+                <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+                  <Text style={[{ 
+                    fontSize: 18, 
+                    fontWeight: 'bold', 
+                    color: colors.text 
+                  }]}>
+                    Users ({userResults.length})
+                  </Text>
+                </View>
+                {userResults.map((user, index) => (
+                  <UserSearchResult
+                    key={`user-${user.id}-${index}`}
+                    user={user}
+                    onPress={handleUserPress}
+                    isDarkMode={isDarkMode}
+                    colors={colors}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* No Results State */}
+            {!loading && searchQuery.trim() && searchResults.length === 0 && userResults.length === 0 && (
+              <View style={[stateStyles.emptyState, { marginTop: 60 }]}>
+                <Ionicons name="search" size={48} color={colors.subText} />
+                <Text style={[stateStyles.emptyTitle, { color: colors.text }]}>
+                  No Results Found
+                </Text>
+                <Text style={[stateStyles.emptySubtitle, { color: colors.subText }]}>
+                  Try adjusting your search terms or check for typos.
+                </Text>
+              </View>
+            )}
+
+            {/* Loading State */}
+            {loading && (
+              <View style={[stateStyles.loadingState, { marginTop: 40 }]}>
+                <ActivityIndicator size="large" color={colors.accent} />
+                <Text style={[stateStyles.loadingText, { color: colors.text }]}>
+                  Searching...
+                </Text>
+              </View>
+            )}
+
+            {/* Error State */}
+            {error && (
+              <View style={[stateStyles.errorState, { marginTop: 40 }]}>
+                <Ionicons name="alert-circle" size={48} color={colors.secondary} />
+                <Text style={[stateStyles.errorTitle, { color: colors.text }]}>
+                  Search Error
+                </Text>
+                <Text style={[stateStyles.errorSubtitle, { color: colors.subText }]}>
+                  {error}
+                </Text>
+                <TouchableOpacity
+                  style={[buttonStyles.primary, { marginTop: 16 }]}
+                  onPress={() => {
+                    setError(null);
+                    if (searchQuery.trim()) {
+                      handleFullSearch();
+                    }
+                  }}
+                >
+                  <Text style={[buttonStyles.primaryText, { color: colors.textOnPrimary }]}>
+                    Try Again
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            
+          </ScrollView>
         </TouchableWithoutFeedback>
         
       </View>

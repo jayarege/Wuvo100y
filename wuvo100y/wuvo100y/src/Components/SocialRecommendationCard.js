@@ -20,14 +20,20 @@ function SocialRecommendationCard({
   movie,
   onPress,
   isDarkMode,
-  showSocialContext = true
+  showSocialContext = true,
+  mediaType = 'movie',
+  theme
 }) {
+  // Use theme-based primary gradient color for borders
+  const themeColors = theme?.[mediaType]?.[isDarkMode ? 'dark' : 'light'];
+  const primaryGradient = themeColors?.primaryGradient || ['#612EF0', '#6C2BD9', '#321680'];
+  
   const colors = {
     background: isDarkMode ? '#2A2F30' : '#FFFFFF',
     text: isDarkMode ? '#F5F5F5' : '#333',
     subtext: isDarkMode ? '#D3D3D3' : '#666',
     accent: isDarkMode ? '#FFD700' : '#4B0082',
-    border: isDarkMode ? '#8A2BE2' : '#E0E0E0',
+    border: primaryGradient[1] || '#6C2BD9', // Use middle color from primaryGradient
     socialBg: isDarkMode ? 'rgba(255, 215, 0, 0.1)' : 'rgba(75, 0, 130, 0.05)',
     socialText: isDarkMode ? '#FFD700' : '#4B0082'
   };

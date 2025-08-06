@@ -57,7 +57,8 @@ const SearchBar = ({
     setSuggestionLoading(true);
     
     try {
-      const endpoint = mediaType === 'movie' ? 'search/movie' : 'search/tv';
+      // **FIX: Use search/multi to find both movies AND TV shows**
+      const endpoint = 'search/multi';
       
       const response = await fetch(
         `https://api.themoviedb.org/3/${endpoint}?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&query=${encodeURIComponent(query)}&page=1&include_adult=false`,
@@ -117,7 +118,7 @@ const SearchBar = ({
           .sort((a, b) => b.searchScore - a.searchScore)
           .slice(0, 5); // Show up to 5 suggestions
 
-        // Simple mapping for UI
+        // Simple mapping for UI (now includes media_type from multi search)
         const processedResults = rankedResults.map(item => ({
           id: item.id,
           title: item.title || item.name,
@@ -126,6 +127,7 @@ const SearchBar = ({
           genre_ids: item.genre_ids || [],
           overview: item.overview || "",
           release_date: item.release_date || item.first_air_date,
+          media_type: item.media_type || (item.title ? 'movie' : 'tv'),  // **FIX: Include media_type from search/multi**
           alreadyRated: seen.some(sm => sm.id === item.id),
           inWatchlist: unseen.some(um => um.id === item.id),
           currentRating: seen.find(sm => sm.id === item.id)?.userRating,

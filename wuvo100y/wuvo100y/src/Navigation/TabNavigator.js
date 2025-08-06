@@ -100,8 +100,8 @@ function TabNavigator({
                 iconName = focused ? 'home' : 'home-outline';
                 break;
               // Removed TopRated and Watchlist icon cases
-              case 'AddMovie':
-                iconName = focused ? 'add-circle' : 'add-circle-outline';
+              case 'Search':
+                iconName = focused ? 'search' : 'search-outline';
                 break;
               case 'Profile':
                 iconName = focused ? 'person' : 'person-outline';
@@ -175,7 +175,7 @@ function TabNavigator({
 
         {/* Removed TopRated and Watchlist tabs - functionality moved to Profile screen */}
 
-        <Tab.Screen name="AddMovie" options={{ title: 'Add Movie' }}>
+        <Tab.Screen name="Search" options={{ title: 'Search' }}>
           {props => (
             <AddMovieScreen
               {...props}

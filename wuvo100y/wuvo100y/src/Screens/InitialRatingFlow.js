@@ -20,12 +20,12 @@ import { getCompareStyles } from '../Styles/compareStyles';
 import { useMediaType } from '../Navigation/TabNavigator';
 import theme from '../utils/Theme';
 import { 
-  selectPercentileOpponent, 
-  selectProximityOpponent,
   calculateKFactor,
   calculateExpectedWinProbability,
-  calculateNewRating
-} from '../utils/OpponentSelection';
+  calculateNewRating,
+  selectRandomOpponent as selectPercentileOpponent,
+  selectRandomOpponent as selectProximityOpponent
+} from '../Components/EnhancedRatingSystem';
 
 const { width, height } = Dimensions.get('window');
 

@@ -348,4 +348,4 @@ class UserSearchService {
   }
 }
 
-export default new UserSearchService();
+export default UserSearchService;

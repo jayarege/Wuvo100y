@@ -63,7 +63,7 @@ const MovieSearchResults = ({
           </Text>
         </View>
         <Text style={[movieCardStyles.genresText, { color: colors.subText }]}>
-          Genres: {item.genre_ids.map(id => genres[id] || 'Unknown').join(', ')}
+          Genres: {(item.genre_ids || []).map(id => genres[id] || 'Unknown').join(', ') || 'No genres available'}
         </Text>
         
         {item.alreadyRated && (
@@ -148,7 +148,7 @@ const MovieSearchResults = ({
   }
 
   // No results state
-  if (searchResults.length === 0 && !loading && searchQuery.trim()) {
+  if ((!searchResults || searchResults.length === 0) && !loading && searchQuery.trim()) {
     return (
       <View style={stateStyles.emptyStateContainer}>
         <Ionicons name="search-outline" size={64} color={colors.subText} />
@@ -163,7 +163,7 @@ const MovieSearchResults = ({
   }
 
   // Empty state (no search yet)
-  if (searchResults.length === 0 && !loading) {
+  if ((!searchResults || searchResults.length === 0) && !loading) {
     return (
       <View style={stateStyles.emptyStateContainer}>
         <Ionicons name="search" size={64} color={colors.subText} />
@@ -177,7 +177,7 @@ const MovieSearchResults = ({
   // Results list
   return (
     <FlatList
-      data={searchResults}
+      data={searchResults || []}
       keyExtractor={item => item.id.toString()}
       renderItem={renderMovieItem}
       contentContainerStyle={{ padding: 16 }}

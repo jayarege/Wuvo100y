@@ -53,8 +53,7 @@ import { STORAGE_KEYS } from '../../config/storageConfig';
 const getStorageKey = (mediaType) => mediaType === 'movie' ? STORAGE_KEYS.MOVIES.SEEN : STORAGE_KEYS.TV_SHOWS.SEEN;
 
 // **ENHANCED RATING SYSTEM IMPORT**
-import { calculateDynamicRatingCategories, SentimentRatingModal, ConfidenceBadge } from '../../Components/EnhancedRatingSystem';
-import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion, selectRandomOpponent, handleTooToughToDecide } from '../../utils/ELOCalculations';
+import { calculateDynamicRatingCategories, SentimentRatingModal, calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion, selectRandomOpponent, handleTooToughToDecide } from '../../Components/EnhancedRatingSystem';
 import InitialRatingFlow from '../InitialRatingFlow';
 
 // Helper functions for calculating range from percentile (moved from component)
@@ -366,6 +365,12 @@ function HomeScreen({
     }
   }, [currentSession, showDiscoverySession]);
 
+  // **CRITICAL FIX: Force reset rating flag on component mount**
+  useEffect(() => {
+    setIsRatingInProgress(false);
+    console.log('🚀 Component mounted - FORCE RESET isRatingInProgress to false');
+  }, []);
+
   // **NEW: COMPREHENSIVE DEBUG LOGGING FOR MODAL STATE**
   useEffect(() => {
     console.log('📱 Modal state changed:', {
@@ -427,7 +432,11 @@ function HomeScreen({
   
   // **AI RECOMMENDATIONS FILTERED BY CURRENT MEDIA TYPE - FIX FOR TOGGLE ISSUE**
   const currentAiRecommendations = useMemo(() => {
-    return mediaType === 'movie' ? aiMovieRecommendations : aiTvRecommendations;
+    const result = mediaType === 'movie' ? aiMovieRecommendations : aiTvRecommendations;
+    if (__DEV__) {
+      console.log(`📺 DEV - currentAiRecommendations for ${mediaType}:`, result.length);
+    }
+    return result;
   }, [mediaType, aiMovieRecommendations, aiTvRecommendations]);
 
   // **DYNAMIC CONTENT DATA BASED ON MEDIA TYPE**
@@ -767,8 +776,27 @@ function HomeScreen({
   // ============================================================================
 
   const handleContentTypeChange = useCallback((type) => {
+    console.log('🔄 Content type changed to:', type);
+    if (__DEV__) {
+      const newMediaType = type === 'movies' ? 'movie' : 'tv';
+      console.log('📺 DEV DEBUG - Media type switching to:', newMediaType);
+      console.log('📺 DEV DEBUG - Current AI recommendations:', {
+        movies: aiMovieRecommendations.length,
+        tv: aiTvRecommendations.length
+      });
+      console.log('📺 DEV DEBUG - Current popular/recent:', {
+        popular: popularMovies.length,
+        recent: recentReleases.length
+      });
+      console.log('📺 DEV DEBUG - Seen content breakdown:', {
+        totalSeen: seen.length,
+        movies: seen.filter(m => (m.mediaType || 'movie') === 'movie').length,
+        tvShows: seen.filter(m => (m.mediaType || 'movie') === 'tv').length,
+        hasBreakingBad: seen.some(m => m.name === 'Breaking Bad' || m.title === 'Breaking Bad')
+      });
+    }
     setMediaType(type === 'movies' ? 'movie' : 'tv');
-  }, [setMediaType]);
+  }, [setMediaType, aiMovieRecommendations.length, aiTvRecommendations.length, popularMovies.length, recentReleases.length, seen]);
   // **UNIFIED MOVIE REMOVAL UTILITY - CODE_BIBLE Commandment #3: Write code that's clear and obvious**
   const removeMovieFromAllSections = useCallback((movieId) => {
     console.log(`🗑️ Removing movie ${movieId} from ALL home screen sections`);
@@ -1265,7 +1293,7 @@ function HomeScreen({
         .sort((a, b) => b.weightedScore - a.weightedScore)
         .slice(0, 10);
       
-      console.log(`🎬 Popular movies updated: ${sortedFiltered.length} items (filtered out ${allResults.length - sortedFiltered.length} rated/watchlisted movies)`);
+      console.log(`🎬 Popular ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items (filtered out ${allResults.length - sortedFiltered.length} rated/watchlisted items)`);
       setPopularMovies(sortedFiltered);
       setLastDataFetch(Date.now()); // **PERFORMANCE: Update cache timestamp**
     } catch (err) {
@@ -1298,8 +1326,16 @@ function HomeScreen({
         .filter(item => item.poster_path)
         .filter(item => !skippedMovies.includes(item.id))
         .filter(item => !notInterestedMoviesRef.current.includes(item.id))
-        .filter(item => !seen.some(m => m.id === item.id)) // Remove already rated movies
-        .filter(item => !unseen.some(m => m.id === item.id)) // Remove watchlist movies
+        .filter(item => {
+          const isAlreadyRated = seen.some(m => m.id === item.id);
+          const isInWatchlist = unseen.some(m => m.id === item.id);
+          
+          if (__DEV__ && (isAlreadyRated || isInWatchlist)) {
+            console.log(`🚫 FILTERED OUT: ${item.title || item.name} - ${isAlreadyRated ? 'Already rated' : 'In watchlist'} (ID: ${item.id})`);
+          }
+          
+          return !isAlreadyRated && !isInWatchlist;
+        })
         .map(item => ({
           id: item.id,
           title: contentType === 'movies' ? item.title : item.name,
@@ -1318,7 +1354,7 @@ function HomeScreen({
           mediaType: contentType === 'movies' ? 'movie' : 'tv'
         }));
       
-      console.log(`🎬 Recent releases updated: ${recentContent.length} items (filtered out rated movies)`);
+      console.log(`🎬 Recent releases updated: ${recentContent.length} items (filtered out rated ${mediaType === 'movie' ? 'movies' : 'TV shows'})`);
       setRecentReleases(recentContent);
       setLastDataFetch(Date.now()); // **PERFORMANCE: Update cache timestamp**
       setIsLoadingRecent(false);
@@ -1607,49 +1643,33 @@ function HomeScreen({
 
   // ELO-based rating calculation using Wildcard's superior system
   const calculateRatingFromELOComparisons = useCallback((results) => {
-    // Start with an initial rating estimate (we'll refine it through ELO)
-    let currentRating = (1 + 10) / 2; // Dynamic midpoint starting rating
+    // Use centralized ELO calculation system (following CODE_BIBLE single-source-of-truth)
+    let currentRating = null; // Start with no rating, just like the confidence-based system
     
-    // Process each comparison using Wildcard's ELO logic
+    // Process each comparison using centralized ELO logic
     results.forEach((result, index) => {
       const opponent = result.winner === selectedMovie ? result.loser : result.winner;
       const newMovieWon = result.userChoice === 'new';
-      
       const opponentRating = opponent.userRating || (opponent.eloRating / 100);
-      const ratingDifference = Math.abs(currentRating - opponentRating);
-      const expectedWinProbability = 1 / (1 + Math.pow(10, (opponentRating - currentRating) / 4));
       
-      // Use Wildcard's K-factor system
-      const kFactor = index < 2 ? 0.5 : 0.25; // Higher K for early comparisons
-      const ratingChange = Math.max(0.1, kFactor * (newMovieWon ? 1 - expectedWinProbability : 0 - expectedWinProbability));
-      
-      let adjustedRatingChange = ratingChange;
-      
-      // Apply Wildcard's underdog bonus
-      if (newMovieWon && currentRating < opponentRating) {
-        adjustedRatingChange *= 1.2;
+      if (currentRating === null) {
+        // First comparison: use direct opponent-based calculation
+        currentRating = opponentRating + (newMovieWon ? 0.5 : -0.5);
+        currentRating = Math.max(1, Math.min(10, currentRating));
+      } else {
+        // Subsequent comparisons: use proper ELO calculation
+        const comparisonResult = newMovieWon ? ComparisonResults.A_WINS : ComparisonResults.B_WINS;
+        const eloResult = calculatePairwiseRating({
+          aRating: currentRating,
+          bRating: opponentRating,
+          aGames: index,
+          bGames: opponent.gamesPlayed || 5,
+          result: comparisonResult
+        });
+        currentRating = eloResult.updatedARating;
       }
       
-      // Apply Wildcard's major upset bonus
-      const upsetThreshold = (10 - 1) / 3; // Dynamic upset threshold (~3.0 for 1-10 range)
-      const isMajorUpset = newMovieWon && currentRating < opponentRating && ratingDifference > upsetThreshold;
-      if (isMajorUpset) {
-        adjustedRatingChange += upsetThreshold;
-        console.log(`🚨 MAJOR UPSET! ${selectedMovie.title} (${currentRating}) defeated ${opponent.title} (${opponentRating}). Adding ${upsetThreshold} bonus points!`);
-      }
-      
-      // Apply rating change with Wildcard's limits
-      const MAX_RATING_CHANGE = 0.7;
-      if (!isMajorUpset) {
-        adjustedRatingChange = Math.min(MAX_RATING_CHANGE, adjustedRatingChange);
-      }
-      
-      currentRating = newMovieWon ? currentRating + adjustedRatingChange : currentRating - adjustedRatingChange;
-      
-      // Enforce bounds like Wildcard
-      currentRating = Math.round(Math.min(10, Math.max(1, currentRating)) * 10) / 10;
-      
-      console.log(`📊 Comparison ${index + 1}: ${newMovieWon ? 'WIN' : 'LOSS'} vs ${opponent.title} (${opponentRating}) -> Rating: ${currentRating}`);
+      console.log(`📊 Comparison ${index + 1}: ${newMovieWon ? 'WIN' : 'LOSS'} vs ${opponent.title} (${opponentRating}) -> Rating: ${currentRating?.toFixed(2)}`);
     });
     
     return currentRating;
@@ -1659,10 +1679,14 @@ function HomeScreen({
   
   // ✅ CONSOLIDATED: Now using centralized opponent selection
   const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
-    // Filter by media type before passing to centralized function
+    // **MEDIA TYPE SEGREGATION: Only use content of the same media type for comparison**
     const filteredMovies = seenMovies.filter(movie => 
+      movie.id !== selectedMovie?.id &&
       (movie.mediaType || 'movie') === mediaType
     );
+    
+    console.log(`🎯 Available opponents for ${mediaType}:`, filteredMovies.length);
+    console.log(`🎯 Media type filter: ${mediaType}, Sample opponents:`, filteredMovies.slice(0, 3).map(m => `${m.title} (${m.mediaType || 'movie'})`));
     
     return selectOpponentFromEmotion(emotion, filteredMovies, selectedMovie?.id);
   }, [mediaType, selectedMovie?.id]);
@@ -1670,8 +1694,19 @@ function HomeScreen({
   // Handle emotion selection and start comparison process
   const handleEmotionSelected = useCallback((emotion) => {
     console.log('🎭 EMOTION SELECTED:', emotion);
-    console.log('🎭 SEEN MOVIES COUNT:', seen.length);
-    console.log('🎭 SEEN MOVIES:', seen.map(m => `${m.title}: ${m.userRating}`));
+    console.log('🎭 CURRENT MEDIA TYPE:', mediaType);
+    console.log('🎭 FILTERED CONTENT COUNT:', currentSeenContent.length);
+    console.log('🎭 FILTERED CONTENT:', currentSeenContent.map(m => `${m.title}: ${m.userRating} (${m.mediaType || 'movie'})`));
+    
+    // **MEDIA TYPE SEGREGATION: Check minimum count for current media type**
+    if (currentSeenContent.length < 3) {
+      Alert.alert(
+        '🎬 Need More Ratings', 
+        `You need at least 3 rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentSeenContent.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
     
     // **FIX: Set rating in progress to prevent unwanted movie selection during rating flow**
     setIsRatingInProgress(true);
@@ -1681,28 +1716,39 @@ function HomeScreen({
     setEmotionModalVisible(false);
     // Don't clear selectedMovie here - keep it for comparison modal
     
-    // Select first opponent from percentile - EXACT COPY FROM ADDMOVIE LOGIC
-    const firstOpponent = selectMovieFromPercentile(seen, emotion);
+    // Select first opponent from percentile - USING MEDIA-TYPE-FILTERED CONTENT
+    const firstOpponent = selectMovieFromPercentile(currentSeenContent, emotion);
     if (!firstOpponent) {
       console.log('❌ NO FIRST OPPONENT FOUND');
+      console.log('❌ DEBUG INFO:');
+      console.log('- Current media type:', mediaType);
+      console.log('- Filtered content count:', currentSeenContent.length);
+      console.log('- Emotion/sentiment:', emotion);
+      console.log('- Content with userRating:', currentSeenContent.filter(movie => movie.userRating).length);
+      console.log('- Sample filtered content:', currentSeenContent[0] ? {
+        title: currentSeenContent[0].title,
+        userRating: currentSeenContent[0].userRating,
+        mediaType: currentSeenContent[0].mediaType,
+        id: currentSeenContent[0].id
+      } : 'No content found');
+      
       Alert.alert(
         '🎬 Need More Ratings', 
-        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
+        `You need at least 3 rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentSeenContent.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
         [{ text: "OK", style: "default" }]
       );
       return;
     }
     
-    // Select second and third opponents randomly from all seen movies (for known vs known)
-    const remainingMovies = seen
-      .filter(movie => movie.id !== firstOpponent.id)
-      .filter(movie => (movie.mediaType || 'movie') === mediaType); // CRITICAL FIX: Filter by media type
+    // Select second and third opponents randomly from current media type content (for known vs known)
+    const remainingMovies = currentSeenContent
+      .filter(movie => movie.id !== firstOpponent.id);
     
     if (remainingMovies.length < 2) {
       console.log('❌ NOT ENOUGH REMAINING MOVIES');
       Alert.alert(
         '🎬 Need More Ratings', 
-        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
+        `You need at least 3 total rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentSeenContent.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
         [{ text: "OK", style: "default" }]
       );
       return;
@@ -1725,7 +1771,7 @@ function HomeScreen({
     console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
     console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
     console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
-  }, [selectedMovie, seen, selectMovieFromPercentile, mediaType]);
+  }, [selectedMovie, currentSeenContent, selectMovieFromPercentile, mediaType]);
 
 
   const handleConfirmRating = useCallback((finalRating) => {
@@ -1817,9 +1863,15 @@ function HomeScreen({
     setIsComparisonComplete(false);
     setFinalCalculatedRating(null);
     
-    // **FIX: Reset rating flag when modals are closed/cancelled**
+    // **CRITICAL FIX: Reset rating flag when modals are closed/cancelled**
     setIsRatingInProgress(false);
-    console.log('🔓 Enhanced modals closed - reset rating flag');
+    console.log('🔓 CRITICAL: Enhanced modals closed - rating flag reset to false');
+    
+    // **FORCE RESET: Ensure flag is definitely false after modal close**
+    setTimeout(() => {
+      setIsRatingInProgress(false);
+      console.log('🔓 FORCE RESET: Rating flag set to false after timeout');
+    }, 100);
     
     // Fade animation removed
     setShowSentimentButtons(false);
@@ -1831,10 +1883,13 @@ function HomeScreen({
 
   const handleMovieSelect = useCallback(async (movie) => {
     console.log('🎬 Movie selected:', movie?.title, 'Processing flag current state:', isProcessingMovieSelect);
+    console.log('🔍 CRITICAL DEBUG - isRatingInProgress state:', isRatingInProgress);
     
     // **FIX: Block movie selection during rating completion to prevent unwanted modal opening**
     if (isRatingInProgress) {
       console.log('🚫 Rating in progress, ignoring movie selection for:', movie?.title);
+      console.log('🚫 FORCE RESETTING isRatingInProgress to false');
+      setIsRatingInProgress(false);
       return;
     }
     
@@ -1842,6 +1897,21 @@ function HomeScreen({
     if (isProcessingMovieSelect) {
       console.log('⚠️ Movie selection already in progress, ignoring click for:', movie?.title);
       return;
+    }
+    
+    // **DEV-ONLY FIX: Handle undefined movie data for debugging**
+    if (__DEV__ && (!movie || !movie.id)) {
+      console.error('❌ DEV DEBUG: Invalid movie data received:', movie);
+      console.log('🛠️ DEV FIX: Attempting to recover from selectedMovie state');
+      
+      // Try to use currently selected movie from state if available
+      if (selectedMovie && selectedMovie.id) {
+        console.log('🔧 DEV: Using selectedMovie from state:', selectedMovie.title || selectedMovie.name);
+        movie = selectedMovie;
+      } else {
+        console.error('❌ DEV: No fallback movie available, aborting');
+        return;
+      }
     }
     
     // **SAFETY CHECK: Ensure movie data exists**
@@ -3013,7 +3083,7 @@ function HomeScreen({
 
   // **🏠 AUTO-REFRESH WHEN MOVIES ARE RATED**
   useEffect(() => {
-    console.log('🎬 Seen movies updated, count:', seen.length);
+    console.log(`🎬 Seen ${mediaType === 'movie' ? 'movies' : 'content'} updated, count:`, seen.length);
     // Refresh home screen data when movies are rated to remove them from display
     fetchRecentReleases();
     fetchPopularMovies();
