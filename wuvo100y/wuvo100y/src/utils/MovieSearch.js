@@ -26,6 +26,14 @@ class MovieSearcher {
   levenshteinSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
     
+    // SECURITY: Prevent complexity bomb attacks with very long strings
+    const MAX_LENGTH = 200; // Reasonable limit for movie titles
+    if (str1.length > MAX_LENGTH || str2.length > MAX_LENGTH) {
+      console.warn('String too long for similarity calculation, truncating:', str1.length, str2.length);
+      str1 = str1.substring(0, MAX_LENGTH);
+      str2 = str2.substring(0, MAX_LENGTH);
+    }
+    
     // Convert to lowercase for case-insensitive comparison
     const s1 = str1.toLowerCase();
     const s2 = str2.toLowerCase();
@@ -34,11 +42,20 @@ class MovieSearcher {
     if (s1 === s2) return 1; // Exact match
     if (s1.includes(s2) || s2.includes(s1)) return 0.9; // One is substring of the other
     
+    // SECURITY: Early exit if strings are too different to prevent complexity bomb
+    const lengthDiff = Math.abs(s1.length - s2.length);
+    const maxLength = Math.max(s1.length, s2.length);
+    if (lengthDiff > maxLength * 0.8) return 0; // Strings too different
+    
     // Remove common stop words and normalize
     const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
     const cleanWords = (str) => str.split(/\s+/)
       .filter(w => w.length > 1 && !stopWords.includes(w))
-      .map(w => w.replace(/[^\w\s]/g, '')); // Remove punctuation
+      .map(w => {
+        // SECURITY: Safe punctuation removal to prevent ReDoS attacks
+        // Remove common punctuation characters without complex regex
+        return w.replace(/[.,!?;:'"()[\]{}]/g, '').toLowerCase();
+      });
     
     const words1 = cleanWords(s1);
     const words2 = cleanWords(s2);
@@ -201,12 +218,12 @@ class MovieSearcher {
   }
   
   // Search implementation - can be replaced with other APIs
-  async searchMovies(query, userHistory = []) {
+  async searchMovies(query, userHistory = [], mediaType = 'movie') {
     if (!query || query.length < 2) return [];
     
     try {
       // Fetch initial results from TMDb (or could be replaced with other sources)
-      const results = await this._fetchFromTMDb(query);
+      const results = await this._fetchFromTMDb(query, mediaType);
       
       if (!results || results.length === 0) return [];
       
@@ -222,25 +239,35 @@ class MovieSearcher {
   }
   
   // TMDb API integration - can be replaced with other data sources
-  async _fetchFromTMDb(query) {
+  async _fetchFromTMDb(query, mediaType = 'movie') {
     const apiKey = this.options.apiKey;
     if (!apiKey) {
       console.error('No API key provided for TMDb');
       return [];
     }
     
-    // First, try an exact search
+    // Use dedicated endpoint for requested media type - CLEAR AND OBVIOUS
     const encodedQuery = encodeURIComponent(query);
+    const endpoint = mediaType === 'tv' ? 'search/tv' : 'search/movie';
     const response = await fetch(
-      `https://api.themoviedb.org/3/search/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&query=${encodedQuery}&page=1&include_adult=false`
+      `https://api.themoviedb.org/3/${endpoint}?api_key=${this.options.apiKey}&language=en-US&query=${encodedQuery}&page=1&include_adult=false`
     );
     
     if (!response.ok) {
-      throw new Error('Failed to search for movies');
+      throw new Error(`Failed to search for ${mediaType === 'tv' ? 'TV shows' : 'movies'}`);
     }
     
     const data = await response.json();
     let results = data.results || [];
+    
+    // Normalize the response for consistency (TV shows have 'name' instead of 'title')
+    // Add explicit media_type since we know exactly what type we requested
+    results = results.map(item => ({
+      ...item,
+      title: item.title || item.name,
+      release_date: item.release_date || item.first_air_date,
+      media_type: mediaType  // EXPLICIT - we know exactly what we requested
+    }));
     
     // If we have few results, try a more permissive search
     if (results.length < 3 && query.includes(' ')) {
@@ -248,7 +275,7 @@ class MovieSearcher {
       const firstWord = query.split(' ')[0];
       if (firstWord.length > 2) {
         const backupResponse = await fetch(
-          `https://api.themoviedb.org/3/search/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&query=${encodeURIComponent(
+          `https://api.themoviedb.org/3/${endpoint}?api_key=${this.options.apiKey}&language=en-US&query=${encodeURIComponent(
             firstWord
           )}&page=1&include_adult=false`
         );
@@ -257,12 +284,20 @@ class MovieSearcher {
           const backupData = await backupResponse.json();
           
           if (backupData.results && Array.isArray(backupData.results)) {
+            // Normalize backup results - we know the media type from endpoint
+            const backupFiltered = backupData.results.map(item => ({
+              ...item,
+              title: item.title || item.name,
+              release_date: item.release_date || item.first_air_date,
+              media_type: mediaType  // EXPLICIT - we know what endpoint we used
+            }));
+            
             // Only add new results that don't duplicate what we already have
             const existingIds = new Set(results.map(m => m.id));
             
-            backupData.results.forEach(movie => {
-              if (!existingIds.has(movie.id)) {
-                results.push(movie);
+            backupFiltered.forEach(item => {
+              if (!existingIds.has(item.id)) {
+                results.push(item);
               }
             });
           }
@@ -334,9 +369,13 @@ class MovieSearcher {
       title: movie.title,
       year: movie.release_date ? new Date(movie.release_date).getFullYear() : null,
       poster: movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : null,
-      voteCount: movie.vote_count,
-      score: movie.vote_average,
-      genres: movie.genre_ids,
+      poster_path: movie.poster_path, // CRITICAL FIX: Preserve original poster_path for UI components
+      vote_count: movie.vote_count, // CRITICAL FIX: Keep original field name for UI compatibility
+      vote_average: movie.vote_average, // CRITICAL FIX: Keep original field name for UI compatibility
+      genre_ids: movie.genre_ids, // CRITICAL FIX: Keep original field name for UI compatibility
+      overview: movie.overview, // CRITICAL FIX: Keep original field name for UI compatibility
+      release_date: movie.release_date, // CRITICAL FIX: Keep original field name for UI compatibility
+      media_type: movie.media_type, // CRITICAL FIX: Keep media type for proper categorization
       similarity: movie.titleSimilarity,
       relevance: movie.finalScore
     }));

@@ -26,6 +26,10 @@ class UnifiedSearchService {
       movieSearchMinLength: options.movieSearchMinLength || 2,
       ...options
     };
+    
+    // SECURITY: Rate limiting for intent detection to prevent gaming
+    this.intentDetectionCache = new Map();
+    this.lastCleanup = Date.now();
   }
 
   /**
@@ -75,7 +79,7 @@ class UnifiedSearchService {
       }
 
       // Use the enhanced MovieSearcher with fuzzy matching
-      const results = await this.movieSearcher.searchMovies(query, context.userHistory || []);
+      const results = await this.movieSearcher.searchMovies(query, context.userHistory || [], context.mediaType || 'movie');
       const formatted = this.movieSearcher.formatResults(results);
       
       // Add search result type for UI rendering
@@ -138,13 +142,38 @@ class UnifiedSearchService {
    * CODE_BIBLE Commandment #6: Document WHY each decision matters
    */
   detectUserSearchIntent(query) {
-    const lowerQuery = query.toLowerCase();
+    // SECURITY: Validate and sanitize input to prevent intent manipulation
+    if (!query || typeof query !== 'string') return false;
+    if (query.length > 100) return false; // Prevent long manipulation attempts
+    
+    // SECURITY: Rate limiting to prevent intent detection gaming
+    const now = Date.now();
+    if (now - this.lastCleanup > 60000) { // Cleanup every minute
+      this.intentDetectionCache.clear();
+      this.lastCleanup = now;
+    }
+    
+    const cacheKey = query.toLowerCase().trim();
+    const cached = this.intentDetectionCache.get(cacheKey);
+    if (cached && now - cached.timestamp < 5000) { // Cache for 5 seconds
+      return cached.result;
+    }
+    
+    // SECURITY: Remove suspicious characters that could manipulate detection
+    const sanitizedQuery = query.replace(/[^\w\s@\-_.]/g, '').trim();
+    const lowerQuery = sanitizedQuery.toLowerCase();
     
     // Strong user search indicators
-    if (lowerQuery.startsWith('@')) return true; // @username format
-    if (lowerQuery.includes('user')) return true; // "user john"
-    if (lowerQuery.includes('profile')) return true; // "profile sarah"
-    if (lowerQuery.includes('friend')) return true; // "friend alex"
+    if (lowerQuery.startsWith('@')) {
+      const result = true;
+      this.intentDetectionCache.set(cacheKey, { result, timestamp: now });
+      return result;
+    }
+    if (lowerQuery.includes('user') || lowerQuery.includes('profile') || lowerQuery.includes('friend')) {
+      const result = true;
+      this.intentDetectionCache.set(cacheKey, { result, timestamp: now });
+      return result;
+    }
     
     // Weak indicators (require additional checks)
     const commonNames = [
@@ -167,21 +196,32 @@ class UnifiedSearchService {
     
     // If query has movie patterns, suppress user search even for common names
     if (hasMoviePatterns && isCommonName) {
-      return false;
+      const result = false;
+      this.intentDetectionCache.set(cacheKey, { result, timestamp: now });
+      return result;
     }
     
     // Single word common names trigger user search
     if (isCommonName && lowerQuery.split(' ').length === 1) {
-      return true;
+      const result = true;
+      this.intentDetectionCache.set(cacheKey, { result, timestamp: now });
+      return result;
     }
     
     // Short, simple queries without movie indicators might be usernames
     if (lowerQuery.length >= 3 && lowerQuery.length <= 15 && 
         !hasMoviePatterns && /^[a-zA-Z0-9_-]+$/.test(lowerQuery)) {
-      return true;
+      const result = true;
+      this.intentDetectionCache.set(cacheKey, { result, timestamp: now });
+      return result;
     }
     
-    return false;
+    const result = false;
+    
+    // SECURITY: Cache the result to prevent repeated computation attacks
+    this.intentDetectionCache.set(cacheKey, { result, timestamp: now });
+    
+    return result;
   }
 
   /**

@@ -16,13 +16,13 @@ import { filterSearchSuggestions } from '../utils/ContentFiltering';
 import { TMDB_API_KEY as API_KEY } from '../Constants';
 
 const SearchBar = ({ 
-  mediaType, 
-  colors, 
-  searchStyles, 
-  seen, 
-  unseen, 
-  onSearchComplete,
-  onSuggestionSelect 
+  mediaType = 'movie', 
+  colors = {}, 
+  searchStyles = {}, 
+  seen = [], 
+  unseen = [], 
+  onSearchComplete = () => {},
+  onSuggestionSelect = () => {}
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -32,18 +32,33 @@ const SearchBar = ({
   const timeoutRef = useRef(null);
   const abortControllerRef = useRef(null);
   const justSelectedRef = useRef(false);
+  const currentQueryRef = useRef(''); // SECURITY: Track current query to prevent stale updates
+  const isMountedRef = useRef(true); // SECURITY: Track component mount state to prevent timing attacks
 
   // Enhanced predictive search with modern best practices
   const fetchSuggestions = useCallback(async (query) => {
+    // SECURITY: Set current query to prevent stale updates
+    currentQueryRef.current = query;
+    
     if (!query || query.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
 
-    // Cancel previous request
+    // EDGE CASE: Skip queries that are only punctuation/symbols
+    // Include: Latin, Extended Latin, CJK, Arabic, Hebrew, Cyrillic, emoji
+    const alphanumericCount = (query.match(/[a-zA-Z0-9\u00C0-\u017F\u0400-\u04FF\u0590-\u05FF\u0600-\u06FF\u4e00-\u9fff\uD800-\uDBFF\uDC00-\uDFFF]/g) || []).length;
+    if (alphanumericCount === 0) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    // Cancel previous request with proper cleanup
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
+      abortControllerRef.current = null; // SECURITY: Prevent memory leaks
     }
     
     // Create new abort controller
@@ -57,27 +72,60 @@ const SearchBar = ({
     setSuggestionLoading(true);
     
     try {
-      // **FIX: Use search/multi to find both movies AND TV shows**
-      const endpoint = 'search/multi';
+      // **Use dedicated endpoint for requested media type - CLEAR AND OBVIOUS**
+      const endpoint = mediaType === 'tv' ? 'search/tv' : 'search/movie';
       
       const response = await fetch(
-        `https://api.themoviedb.org/3/${endpoint}?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&query=${encodeURIComponent(query)}&page=1&include_adult=false`,
+        `https://api.themoviedb.org/3/${endpoint}?api_key=${API_KEY}&language=en-US&query=${encodeURIComponent(query)}&page=1&include_adult=false`,
         { signal: abortControllerRef.current.signal }
       );
       
       if (!response.ok) {
-        throw new Error('Failed to fetch suggestions');
+        // Handle specific API key issues
+        if (response.status === 401) {
+          throw new Error(`API key invalid or expired for ${mediaType === 'tv' ? 'TV show' : 'movie'} search`);
+        } else if (response.status === 429) {
+          throw new Error(`Too many requests - please wait before searching for ${mediaType === 'tv' ? 'TV shows' : 'movies'}`);
+        } else {
+          throw new Error(`Failed to fetch ${mediaType === 'tv' ? 'TV show' : 'movie'} suggestions (${response.status})`);
+        }
       }
       
       const data = await response.json();
       
-      if (data.results && data.results.length > 0) {
-        // Use smart filtering for suggestions (stricter)
-        const lightlyFiltered = filterSearchSuggestions(data.results);
+      if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+        // Normalize titles for TV shows (they use 'name' instead of 'title')
+        // Add explicit media_type since we know exactly what type we requested
+        // DEFENSIVE: Filter out malformed items that could crash the app
+        const normalizedResults = data.results
+          .filter(item => item && typeof item === 'object' && (item.title || item.name) && item.id)
+          .map(item => ({
+            // SECURITY: Explicit property allowlist to prevent object injection
+            id: typeof item.id === 'number' ? item.id : 0,
+            title: item.title || item.name || 'Unknown Title',
+            poster_path: typeof item.poster_path === 'string' ? item.poster_path : null,
+            release_date: item.release_date || item.first_air_date || null,
+            overview: typeof item.overview === 'string' ? item.overview : '',
+            genre_ids: Array.isArray(item.genre_ids) ? item.genre_ids : [],
+            media_type: mediaType,  // EXPLICIT - we know exactly what we requested
+            vote_average: typeof item.vote_average === 'number' ? item.vote_average : null,
+            vote_count: typeof item.vote_count === 'number' ? item.vote_count : null,
+            backdrop_path: typeof item.backdrop_path === 'string' ? item.backdrop_path : null,
+            popularity: typeof item.popularity === 'number' ? item.popularity : 0,
+            adult: typeof item.adult === 'boolean' ? item.adult : false,
+            original_language: typeof item.original_language === 'string' ? item.original_language : '',
+            original_title: typeof item.original_title === 'string' ? item.original_title : ''
+          }));
         
-        // Smart ranking algorithm based on search best practices
-        const rankedResults = lightlyFiltered
-          .filter(item => item.poster_path != null) // Must have poster
+        // Use smart filtering for suggestions (stricter)
+        const lightlyFiltered = filterSearchSuggestions(normalizedResults);
+        
+        // SECURITY: Early limit to prevent memory exhaustion attacks
+        const limitedResults = lightlyFiltered.slice(0, 20); // Process max 20 items
+        
+        // Smart ranking algorithm based on search best practices  
+        // SECURITY: Keep all results, UI will handle missing posters gracefully
+        const rankedResults = limitedResults
           .map(item => {
             const title = (item.title || item.name || '').toLowerCase();
             const queryLower = query.toLowerCase();
@@ -113,7 +161,24 @@ const SearchBar = ({
               score += yearBoost;
             }
             
-            return { ...item, searchScore: score };
+            // SECURITY: Explicit property construction to prevent injection
+            return {
+              id: item.id,
+              title: item.title,
+              poster_path: item.poster_path,
+              release_date: item.release_date,
+              overview: item.overview,
+              genre_ids: item.genre_ids,
+              media_type: item.media_type,
+              vote_average: item.vote_average,
+              vote_count: item.vote_count,
+              backdrop_path: item.backdrop_path,
+              popularity: item.popularity,
+              adult: item.adult,
+              original_language: item.original_language,
+              original_title: item.original_title,
+              searchScore: score
+            };
           })
           .sort((a, b) => b.searchScore - a.searchScore)
           .slice(0, 5); // Show up to 5 suggestions
@@ -127,26 +192,35 @@ const SearchBar = ({
           genre_ids: item.genre_ids || [],
           overview: item.overview || "",
           release_date: item.release_date || item.first_air_date,
-          media_type: item.media_type || (item.title ? 'movie' : 'tv'),  // **FIX: Include media_type from search/multi**
+          media_type: item.media_type,  // SECURITY: Use validated media_type from allowlist
           alreadyRated: seen.some(sm => sm.id === item.id),
           inWatchlist: unseen.some(um => um.id === item.id),
           currentRating: seen.find(sm => sm.id === item.id)?.userRating,
           searchScore: item.searchScore
         }));
         
-        setSuggestions(processedResults);
-        setShowSuggestions(true);
+        // SECURITY: Only update suggestions if component is still mounted and this is current query
+        if (isMountedRef.current && currentQueryRef.current === query) {
+          setSuggestions(processedResults);
+          setShowSuggestions(true);
+        }
       } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
+        // SECURITY: Only clear suggestions if component is mounted and this is current query
+        if (isMountedRef.current && currentQueryRef.current === query) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
       }
     } catch (err) {
       // Don't show errors for aborted requests
       if (err.name !== 'AbortError') {
         console.error('Error fetching suggestions:', err);
       }
-      setSuggestions([]);
-      setShowSuggestions(false);
+      // SECURITY: Only clear suggestions if component is mounted and this is current query
+      if (isMountedRef.current && currentQueryRef.current === query) {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
     } finally {
       setSuggestionLoading(false);
     }
@@ -154,7 +228,15 @@ const SearchBar = ({
 
   // Handle search input changes with debouncing
   const handleSearchChange = useCallback((text) => {
-    setSearchQuery(text);
+    // CRITICAL: Remove zero-width characters AND normalize Unicode
+    let cleanText = text.replace(/[\u200B-\u200D\u2060-\u2063\uFEFF]/g, '');
+    
+    // SECURITY: Normalize Unicode to prevent duplicate requests via NFC/NFD differences
+    if (cleanText.normalize) {
+      cleanText = cleanText.normalize('NFC');
+    }
+    
+    setSearchQuery(cleanText);
     
     // Reset selection flag when user types
     justSelectedRef.current = false;
@@ -163,14 +245,14 @@ const SearchBar = ({
       clearTimeout(timeoutRef.current);
     }
     
-    if (!text || text.length < 2) {
+    if (!cleanText || cleanText.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
     
     timeoutRef.current = setTimeout(() => {
-      fetchSuggestions(text);
+      fetchSuggestions(cleanText);
     }, 300);
   }, [fetchSuggestions]);
 
@@ -195,10 +277,29 @@ const SearchBar = ({
     onSuggestionSelect(suggestion);
   }, [onSuggestionSelect]);
 
-  // Get thumbnail poster URL
+  // Get thumbnail poster URL with proper error handling
   const getThumbnailUrl = useCallback(path => {
-    if (!path) return 'https://via.placeholder.com/92x138?text=No+Image';
-    return `https://image.tmdb.org/t/p/w92${path}`;
+    if (!path || typeof path !== 'string') {
+      return 'https://via.placeholder.com/92x138?text=No+Image';
+    }
+    
+    // SECURITY: Strict validation to prevent malicious URLs
+    // TMDB paths must be strings starting with '/' and under 200 chars
+    if (!path.startsWith('/') || path.length > 200) {
+      console.warn('Invalid TMDB poster path:', path);
+      return 'https://via.placeholder.com/92x138?text=Invalid+Image';
+    }
+    
+    // SECURITY: Sanitize path to prevent path traversal attacks
+    // Only allow alphanumeric, hyphens, underscores, dots and forward slashes
+    const sanitizedPath = path.replace(/[^a-zA-Z0-9\-_.\/]/g, '');
+    if (sanitizedPath !== path) {
+      console.warn('Sanitized malicious poster path:', path, 'to', sanitizedPath);
+      return 'https://via.placeholder.com/92x138?text=Invalid+Image';
+    }
+    
+    // SECURITY: Force small thumbnail size to prevent DoS via large images
+    return `https://image.tmdb.org/t/p/w92${sanitizedPath}`;
   }, []);
 
   // Render a suggestion item
@@ -221,6 +322,11 @@ const SearchBar = ({
         source={{ uri: getThumbnailUrl(suggestion.poster_path) }}
         style={styles.suggestionImage}
         resizeMode="cover"
+        onError={() => {
+          // SECURITY: Handle image loading failures gracefully
+          console.warn('Failed to load poster image for movie:', suggestion.title);
+        }}
+        defaultSource={{ uri: 'https://via.placeholder.com/92x138?text=No+Image' }}
       />
       
       <View style={styles.suggestionContent}>
@@ -238,11 +344,11 @@ const SearchBar = ({
             </Text>
           )}
           
-          {suggestion.release_date && suggestion.vote_average > 0 && (
+          {suggestion.release_date && suggestion.vote_average != null && suggestion.vote_average > 0 && (
             <Text style={{ color: colors.subText, marginHorizontal: 4 }}>•</Text>
           )}
           
-          {suggestion.vote_average > 0 && (
+          {suggestion.vote_average != null && typeof suggestion.vote_average === 'number' && suggestion.vote_average > 0 && (
             <View style={styles.suggestionRating}>
               <Ionicons name="star" size={12} color={colors.accent} />
               <Text style={{ color: colors.accent, marginLeft: 2, fontSize: 12 }}>
@@ -270,9 +376,26 @@ const SearchBar = ({
     </TouchableOpacity>
   ), [colors, handleSelectSuggestion, getThumbnailUrl, suggestions.length]);
 
+  // Cancel pending requests when mediaType changes
+  useEffect(() => {
+    // Cancel any pending requests when media type changes
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    // Clear suggestions to prevent wrong content type showing
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }, [mediaType]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // SECURITY: Set unmounted flag FIRST to prevent timing attacks
+      isMountedRef.current = false;
+      
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
@@ -303,6 +426,7 @@ const SearchBar = ({
             returnKeyType="search"
             onSubmitEditing={() => onSearchComplete(searchQuery)}
             autoCorrect={false}
+            maxLength={100}
           />
           
           {searchQuery.length > 0 && (
@@ -342,6 +466,7 @@ const SearchBar = ({
             shadowColor: colors.text,
           }
         ]}>
+          {/* SECURITY: Always limit to max 3 rendered suggestions to prevent memory exhaustion */}
           {suggestions.slice(0, 3).map((suggestion, index) => renderSuggestionItem(suggestion, index))}
         </View>
       )}

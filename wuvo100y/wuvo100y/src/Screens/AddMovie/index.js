@@ -47,9 +47,18 @@ import theme from '../../utils/Theme';
 
 import { TMDB_API_KEY as API_KEY } from '../../Constants';
 
-function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFromWatchlist, onUpdateRating, genres, isDarkMode }) {
+function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen, onAddToUnseen, onRemoveFromWatchlist, onUpdateRating, genres, isDarkMode }) {
   // Use media type context
   const { mediaType } = useMediaType();
+  
+  // Helper functions to get appropriate arrays based on media type
+  const getCurrentSeen = () => {
+    return mediaType === 'movie' ? seen : (seenTVShows || []);
+  };
+  
+  const getCurrentUnseen = () => {
+    return mediaType === 'movie' ? unseen : (unseenTVShows || []);
+  };
   
   // Get all themed styles
   const headerStyles = getHeaderStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
@@ -131,15 +140,15 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
   // Handle emotion selection and start comparison process
   const handleEmotionSelected = useCallback((emotion) => {
     console.log('🎭 EMOTION SELECTED:', emotion);
-    console.log('🎭 SEEN MOVIES COUNT:', seen.length);
-    console.log('🎭 SEEN MOVIES:', seen.map(m => `${m.title}: ${m.userRating}`));
+    console.log('🎭 CURRENT SEEN COUNT:', getCurrentSeen().length);
+    console.log('🎭 CURRENT SEEN ITEMS:', getCurrentSeen().map(m => `${m.title}: ${m.userRating}`));
     
     setSelectedEmotion(emotion);
     setEmotionModalVisible(false);
     
-    // Filter seen movies by current media type before opponent selection
-    const currentMediaMovies = seen.filter(item => (item.mediaType || 'movie') === mediaType);
-    console.log('🎭 FILTERED MOVIES COUNT:', currentMediaMovies.length);
+    // Get current seen movies based on media type (use appropriate array)
+    const currentMediaMovies = getCurrentSeen();
+    console.log('🎭 CURRENT MEDIA MOVIES COUNT:', currentMediaMovies.length);
     
     // Select first opponent from percentile (same media type only)
     const firstOpponent = selectMovieFromPercentile(currentMediaMovies, emotion);
@@ -183,7 +192,7 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
     console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
     console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
     console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
-  }, [selectedMovieForRating, seen, selectMovieFromPercentile]);
+  }, [selectedMovieForRating, getCurrentSeen, selectMovieFromPercentile]);
 
 
   const handleComparison = useCallback((winner) => {
@@ -362,7 +371,7 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
       
       // Search both movies/TV and users
       const searchContext = {
-        userHistory: seen, // User's rating history for better movie recommendations
+        userHistory: getCurrentSeen(), // User's rating history for better movie recommendations
         currentUserId: null, // TODO: Get from auth context when available
         mediaType: mediaType
       };
@@ -376,9 +385,9 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
       // Process movie/TV results with current watchlist/seen status
       const processedMovieResults = results.movies.map(item => ({
         ...item,
-        alreadyRated: seen.some(sm => sm.id === item.id),
-        inWatchlist: unseen.some(um => um.id === item.id),
-        currentRating: seen.find(sm => sm.id === item.id)?.userRating,
+        alreadyRated: getCurrentSeen().some(sm => sm.id === item.id),
+        inWatchlist: getCurrentUnseen().some(um => um.id === item.id),
+        currentRating: getCurrentSeen().find(sm => sm.id === item.id)?.userRating,
         media_type: item.mediaType || 'movie'
       }));
       
@@ -395,12 +404,12 @@ function AddMovieScreen({ seen, unseen, onAddToSeen, onAddToUnseen, onRemoveFrom
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, seen, unseen, mediaType, unifiedSearchService]);
+  }, [searchQuery, getCurrentSeen, getCurrentUnseen, mediaType, unifiedSearchService]);
 
   // Handle selecting a suggestion
   const handleSelectSuggestion = useCallback((suggestion) => {
     handleFullSearch(suggestion.title);
-  }, []);
+  }, [handleFullSearch]);
 
   // Handle user profile selection
   const handleUserPress = useCallback((user) => {
@@ -418,7 +427,7 @@ ${user.overview || 'No bio available'}`,
 
   // Add item to watchlist
   const addToUnseen = useCallback((item) => {
-    if (seen.some(m => m.id === item.id)) {
+    if (getCurrentSeen().some(m => m.id === item.id)) {
       return;
     }
     
@@ -447,7 +456,7 @@ ${user.overview || 'No bio available'}`,
           : m
       )
     );
-  }, [onAddToUnseen, onRemoveFromWatchlist, seen, unseen, mediaType]);
+  }, [onAddToUnseen, onRemoveFromWatchlist, getCurrentSeen, getCurrentUnseen, mediaType]);
 
 
 
@@ -499,8 +508,8 @@ ${user.overview || 'No bio available'}`,
                   genres={genres}
                   movieCardStyles={movieCardStyles}
                   buttonStyles={buttonStyles}
-                  seen={seen}
-                  unseen={unseen}
+                  seen={getCurrentSeen()}
+                  unseen={getCurrentUnseen()}
                   onAddToUnseen={addToUnseen}
                   onRateMovie={(item) => {
                     setSelectedMovieForRating(item);
@@ -611,7 +620,7 @@ ${user.overview || 'No bio available'}`,
           handleEmotionSelected(categoryKey);
         }}
         colors={colors}
-        userMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
+        userMovies={getCurrentSeen()}
       />
 
       {/* **WILDCARD COMPARISON MODAL - EXACT COPY FROM HOME SCREEN** */}

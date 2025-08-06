@@ -181,6 +181,8 @@ function TabNavigator({
               {...props}
               seen={seen}
               unseen={unseen}
+              seenTVShows={seenTVShows}
+              unseenTVShows={unseenTVShows}
               onAddToSeen={handleAddToSeen}
               onAddToUnseen={handleAddToUnseen}
               onRemoveFromWatchlist={handleRemoveFromWatchlist}
