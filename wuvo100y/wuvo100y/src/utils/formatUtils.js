@@ -48,7 +48,27 @@ export const formatUtils = {
   },
 
   formatImageUrl(path, size = 'w500') {
-    if (!path) return null;
-    return `https://image.tmdb.org/t/p/${size}${path}`;
+    if (!path || typeof path !== 'string') return null;
+    
+    // SECURITY: Validate image path and size to prevent attacks
+    const cleanPath = path.trim();
+    const cleanSize = size.trim();
+    
+    // Validate path format
+    if (cleanPath.includes('..') || cleanPath.includes('<') || cleanPath.includes('>') || 
+        cleanPath.includes('script') || cleanPath.includes('javascript:') ||
+        cleanPath.length > 100 || !cleanPath.startsWith('/')) {
+      console.warn('🚨 SECURITY: Suspicious image path blocked:', cleanPath);
+      return null;
+    }
+    
+    // Validate size parameter
+    const allowedSizes = ['w92', 'w154', 'w185', 'w342', 'w500', 'w780', 'original'];
+    if (!allowedSizes.includes(cleanSize)) {
+      console.warn('🚨 SECURITY: Invalid image size blocked:', cleanSize);
+      return null;
+    }
+    
+    return `https://image.tmdb.org/t/p/${cleanSize}${cleanPath}`;
   }
 };

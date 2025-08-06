@@ -377,10 +377,20 @@ const UserProfileScreen = ({ route, navigation, isDarkMode = false, genres = {} 
                     {index + 1}
                   </Text>
                 </LinearGradient>
-                <Image
-                  source={{ uri: getPosterUrl(movie.poster_path) }}
-                  style={listStyles.resultPoster}
-                />
+                <LinearGradient
+                  colors={colors.primaryGradient}
+                  style={{
+                    padding: 1,
+                    borderRadius: 4,
+                    width: 50,
+                    height: 75
+                  }}
+                >
+                  <Image
+                    source={{ uri: getPosterUrl(movie.poster_path) }}
+                    style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                  />
+                </LinearGradient>
                 <View style={[listStyles.movieDetails, { flexDirection: 'row' }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={[listStyles.resultTitle, { color: colors.text }]} numberOfLines={2}>

@@ -1127,7 +1127,7 @@ function HomeScreen({
       setIsLoadingRecommendations(false);
       setIsRefreshingAI(false);
     }
-  }, [currentSeenContent, currentUnseenContent, skippedMovies, dismissedInSession, mediaType]); // Same dependencies as popular movies
+  }, [currentSeenContent, currentUnseenContent, skippedMovies, dismissedInSession, mediaType]); // Dependencies: currentSeenContent already includes seen/unseen changes
 
   // **PERFORMANCE OPTIMIZATION: Firebase error caching**
   const [firebaseErrorCache, setFirebaseErrorCache] = useState(new Map());
@@ -1299,7 +1299,7 @@ function HomeScreen({
     } catch (err) {
       console.warn(`Failed fetching popular ${contentType}`, err);
     }
-  }, [currentSeenContent, currentUnseenContent, contentType, skippedMovies]); // CODE_BIBLE Fix: Removed notInterestedMovies dependency
+  }, [currentSeenContent, currentUnseenContent, contentType, skippedMovies]); // Dependencies: currentSeenContent already includes seen/unseen changes
   
   const fetchRecentReleases = useCallback(async () => {
     try {
@@ -2207,8 +2207,13 @@ function HomeScreen({
     // **CODE_BIBLE Fix: Remove rated movie from ALL home screen sections**
     removeMovieFromAllSections(selectedMovie.id);
     
+    // **AI RECOMMENDATIONS REFRESH: Manual refresh needed since auto-refresh is disabled**
+    setTimeout(() => {
+      fetchAIRecommendations(true); // Force refresh AI recommendations after rating
+    }, 100); // Brief delay for React state updates to propagate
+    
     closeRatingModal();
-  }, [ratingInput, selectedMovie, onAddToSeen, removeMovieFromAllSections, closeRatingModal, contentType]);
+  }, [ratingInput, selectedMovie, onAddToSeen, removeMovieFromAllSections, closeRatingModal, contentType, fetchAIRecommendations]); // Added fetchAIRecommendations for manual refresh
 
   const handleWatchlistToggle = useCallback(() => {
     if (!selectedMovie) return;

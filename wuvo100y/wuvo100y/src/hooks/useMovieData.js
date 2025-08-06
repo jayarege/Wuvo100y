@@ -126,12 +126,24 @@ const handleAddToSeen = useCallback((item) => {
   // Use explicit mediaType if provided, otherwise fall back to heuristics
   const isMovie = item.mediaType ? item.mediaType === 'movie' : (item.title && !item.name && !item.first_air_date);
   
+  // CRITICAL DEBUG: Log the decision process
+  console.log('🔍 CENTRAL STORE DEBUG:', {
+    title: title,
+    'item.mediaType': item.mediaType,
+    'item.title': item.title,
+    'item.name': item.name,
+    'item.first_air_date': item.first_air_date,
+    'item.release_date': item.release_date,
+    'calculated.isMovie': isMovie,
+    'will_save_to': isMovie ? 'seen (movies)' : 'seenTVShows (tv)'
+  });
+  
   if (isMovie) {
-    console.log(`🏪 CENTRAL STORE: Adding/updating movie ${title}`);
+    console.log(`🏪 CENTRAL STORE: Adding/updating movie ${title} to SEEN MOVIES array`);
     setSeen(prev => [...prev.filter(m => m.id !== item.id), item]);
     setUnseen(prev => prev.filter(m => m.id !== item.id));
   } else {
-    console.log(`🏪 CENTRAL STORE: Adding/updating TV show ${title}`);
+    console.log(`🏪 CENTRAL STORE: Adding/updating TV show ${title} to SEEN TV SHOWS array`);
     setSeenTVShows(prev => [...prev.filter(m => m.id !== item.id), item]);
     setUnseenTVShows(prev => prev.filter(m => m.id !== item.id));
   }

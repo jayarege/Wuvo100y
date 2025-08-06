@@ -26,10 +26,26 @@ const MovieSearchResults = ({
   stateStyles,
   onRetry
 }) => {
-  // Get poster URL
+  // Get poster URL with security validation
   const getPosterUrl = useCallback(path => {
-    if (!path) return 'https://via.placeholder.com/342x513?text=No+Poster';
-    return `https://image.tmdb.org/t/p/w342${path}`;
+    if (!path || typeof path !== 'string') {
+      return 'https://via.placeholder.com/342x513?text=No+Poster';
+    }
+    
+    // SECURITY: Validate poster path to prevent directory traversal and XSS
+    const cleanPath = path.trim();
+    
+    // Reject suspicious paths
+    if (cleanPath.includes('..') || cleanPath.includes('<') || cleanPath.includes('>') || 
+        cleanPath.includes('script') || cleanPath.includes('javascript:') ||
+        cleanPath.length > 100 || !cleanPath.startsWith('/')) {
+      console.warn('🚨 SECURITY: Suspicious poster path blocked:', cleanPath);
+      return 'https://via.placeholder.com/342x513?text=Invalid+Poster';
+    }
+    
+    // SECURITY: Only allow TMDB image domain and valid image sizes
+    const allowedSizes = ['w92', 'w154', 'w185', 'w342', 'w500', 'w780', 'original'];
+    return `https://image.tmdb.org/t/p/w342${cleanPath}`;
   }, []);
 
   // Render an item (movie or TV show)

@@ -362,13 +362,38 @@ class MovieSearcher {
     return scoredResults;
   }
   
+  // SECURITY: Secure poster URL generation with validation
+  _getSecurePosterUrl(path, size = 'w92') {
+    if (!path || typeof path !== 'string') return null;
+    
+    const cleanPath = path.trim();
+    const cleanSize = size.trim();
+    
+    // Validate path format
+    if (cleanPath.includes('..') || cleanPath.includes('<') || cleanPath.includes('>') || 
+        cleanPath.includes('script') || cleanPath.includes('javascript:') ||
+        cleanPath.length > 100 || !cleanPath.startsWith('/')) {
+      console.warn('🚨 SECURITY: Suspicious poster path blocked in MovieSearch:', cleanPath);
+      return null;
+    }
+    
+    // Validate size parameter
+    const allowedSizes = ['w92', 'w154', 'w185', 'w342', 'w500', 'w780', 'original'];
+    if (!allowedSizes.includes(cleanSize)) {
+      console.warn('🚨 SECURITY: Invalid image size blocked in MovieSearch:', cleanSize);
+      return null;
+    }
+    
+    return `https://image.tmdb.org/t/p/${cleanSize}${cleanPath}`;
+  }
+  
   // Process results into a UI-friendly format
   formatResults(results) {
     return results.map(movie => ({
       id: movie.id,
       title: movie.title,
       year: movie.release_date ? new Date(movie.release_date).getFullYear() : null,
-      poster: movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : null,
+      poster: movie.poster_path ? this._getSecurePosterUrl(movie.poster_path, 'w92') : null,
       poster_path: movie.poster_path, // CRITICAL FIX: Preserve original poster_path for UI components
       vote_count: movie.vote_count, // CRITICAL FIX: Keep original field name for UI compatibility
       vote_average: movie.vote_average, // CRITICAL FIX: Keep original field name for UI compatibility

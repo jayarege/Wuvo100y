@@ -51,13 +51,55 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
   // Use media type context
   const { mediaType } = useMediaType();
   
-  // Helper functions to get appropriate arrays based on media type
-  const getCurrentSeen = () => {
-    return mediaType === 'movie' ? seen : (seenTVShows || []);
-  };
+  // CRITICAL FIX: Ensure all props are valid arrays to prevent crashes
+  const safeSeen = Array.isArray(seen) ? seen : [];
+  const safeUnseen = Array.isArray(unseen) ? unseen : [];
+  const safeSeenTVShows = Array.isArray(seenTVShows) ? seenTVShows : [];
+  const safeUnseenTVShows = Array.isArray(unseenTVShows) ? unseenTVShows : [];
   
+  // CRITICAL DEBUG: Check what props are being received
+  console.log('🔍 ADD MOVIE SCREEN PROPS DEBUG:', {
+    'seen.length': seen?.length || 'undefined',
+    'unseen.length': unseen?.length || 'undefined', 
+    'seenTVShows.length': seenTVShows?.length || 'undefined',
+    'unseenTVShows.length': unseenTVShows?.length || 'undefined',
+    'current mediaType': mediaType,
+    'SAFETY CHECK - safeSeen.length': safeSeen.length,
+    'SAFETY CHECK - safeSeenTVShows.length': safeSeenTVShows.length
+  });
+  
+  // CRITICAL ERROR TRACKING: Log if any props are invalid
+  if (!Array.isArray(seenTVShows)) {
+    console.error('❌ CRITICAL ERROR: seenTVShows prop is not an array!', {
+      type: typeof seenTVShows,
+      value: seenTVShows,
+      mediaType: mediaType
+    });
+  }
+  
+  // CRITICAL FIX: Helper functions to get appropriate arrays based on media type
+  // This matches the pattern used in Home screen and other components
+  const getCurrentSeen = () => {
+    console.log(`🎭 getCurrentSeen() called with mediaType: ${mediaType}`);
+    
+    // CRITICAL FIX: Use the safety-checked arrays
+    let result;
+    if (mediaType === 'movie') {
+      result = safeSeen;
+      console.log(`🎭 Using safeSeen array with ${result.length} items`);
+    } else {
+      result = safeSeenTVShows;
+      console.log(`🎭 Using safeSeenTVShows array with ${result.length} items`);
+    }
+    
+    console.log(`🎭 getCurrentSeen() returning array with ${result.length} items:`, result.map(m => m.title || m.name));
+    return result;
+  };
+
   const getCurrentUnseen = () => {
-    return mediaType === 'movie' ? unseen : (unseenTVShows || []);
+    const result = mediaType === 'movie' ? safeUnseen : safeUnseenTVShows;
+    console.log(`🎭 getCurrentUnseen() - mediaType: ${mediaType}, array length: ${result.length}`);
+    return result;
   };
   
   // Get all themed styles
@@ -113,6 +155,27 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
 
   // Select movie from percentile based on emotion (from InitialRatingFlow logic)
   const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
+    // ENHANCED DEBUG: Safety check for undefined arrays with detailed logging
+    console.log(`🔍 selectMovieFromPercentile called with:`, { 
+      seenMoviesType: typeof seenMovies, 
+      seenMoviesIsArray: Array.isArray(seenMovies), 
+      seenMoviesLength: seenMovies?.length,
+      emotion: emotion,
+      mediaType: mediaType
+    });
+    
+    if (!seenMovies || !Array.isArray(seenMovies)) {
+      console.error('❌ selectMovieFromPercentile: seenMovies is invalid:', seenMovies);
+      console.error(`❌ Current media type: ${mediaType}`);
+      console.error('❌ Props received:', { 
+        seenLength: seen?.length || 'undefined', 
+        seenTVShowsLength: seenTVShows?.length || 'undefined',
+        safeSeenLength: safeSeen.length,
+        safeSeenTVShowsLength: safeSeenTVShows.length
+      });
+      return null;
+    }
+    
     const percentileRanges = {
       LOVED: [0.0, 0.25],      // Top 25%
       LIKED: [0.25, 0.50],     // Upper-middle 25-50% 
@@ -140,15 +203,20 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
   // Handle emotion selection and start comparison process
   const handleEmotionSelected = useCallback((emotion) => {
     console.log('🎭 EMOTION SELECTED:', emotion);
+    console.log('🎭 CURRENT MEDIA TYPE:', mediaType);
+    console.log('🎭 SEEN MOVIES ARRAY LENGTH:', safeSeen.length);
+    console.log('🎭 SEEN TV SHOWS ARRAY LENGTH:', safeSeenTVShows.length);
     console.log('🎭 CURRENT SEEN COUNT:', getCurrentSeen().length);
-    console.log('🎭 CURRENT SEEN ITEMS:', getCurrentSeen().map(m => `${m.title}: ${m.userRating}`));
+    console.log('🎭 CURRENT SEEN ITEMS:', getCurrentSeen().map(m => `${m.title}: ${m.userRating} (mediaType: ${m.mediaType})`));
     
     setSelectedEmotion(emotion);
     setEmotionModalVisible(false);
     
     // Get current seen movies based on media type (use appropriate array)
+    console.log('🎭 About to call getCurrentSeen()...');
     const currentMediaMovies = getCurrentSeen();
-    console.log('🎭 CURRENT MEDIA MOVIES COUNT:', currentMediaMovies.length);
+    console.log('🎭 getCurrentSeen() returned:', currentMediaMovies);
+    console.log('🎭 CURRENT MEDIA MOVIES COUNT:', currentMediaMovies?.length || 'undefined');
     
     // Select first opponent from percentile (same media type only)
     const firstOpponent = selectMovieFromPercentile(currentMediaMovies, emotion);
@@ -192,7 +260,7 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
     console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
     console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
-  }, [selectedMovieForRating, getCurrentSeen, selectMovieFromPercentile]);
+  }, [selectedMovieForRating, getCurrentSeen, selectMovieFromPercentile, safeSeen, safeSeenTVShows, mediaType]);
 
 
   const handleComparison = useCallback((winner) => {
@@ -298,6 +366,18 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     console.log('🎯 SETTING finalCalculatedRating to:', finalRating);
     setFinalCalculatedRating(finalRating);
     
+    // CRITICAL FIX: Use the media_type from the search result, or fall back to current context
+    // This ensures TV shows from search results get properly categorized
+    const itemMediaType = selectedMovieForRating.media_type || selectedMovieForRating.mediaType || mediaType;
+    
+    console.log('🔍 MEDIA TYPE DEBUG:', {
+      'selectedMovie.media_type': selectedMovieForRating.media_type,
+      'selectedMovie.mediaType': selectedMovieForRating.mediaType,
+      'context.mediaType': mediaType,
+      'final.itemMediaType': itemMediaType,
+      'movie.title': selectedMovieForRating.title || selectedMovieForRating.name
+    });
+    
     const ratedMovie = {
       id: selectedMovieForRating.id,
       title: selectedMovieForRating.title || selectedMovieForRating.name,
@@ -314,9 +394,11 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
       eloRating: finalRating * 100,
       comparisonHistory: [],
       comparisonWins: 0,
-      mediaType: mediaType,
+      mediaType: itemMediaType, // CRITICAL FIX: Use the determined media type
       ratingCategory: selectedCategory
     };
+    
+    console.log(`🎬 FINAL RATED MOVIE OBJECT: ${ratedMovie.title} - mediaType: ${ratedMovie.mediaType}`);
     
     onAddToSeen(ratedMovie);
     
@@ -339,7 +421,7 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     
     Alert.alert(
       "Rating Added!", 
-      `You rated "${selectedMovieForRating.title}" (${finalRating.toFixed(1)}/10)`,
+      `You rated "${selectedMovieForRating.title || selectedMovieForRating.name}" (${finalRating.toFixed(1)}/10)`,
       [{ text: "OK" }]
     );
   }, [selectedMovieForRating, selectedCategory, onAddToSeen, mediaType]);
@@ -474,8 +556,8 @@ ${user.overview || 'No bio available'}`,
           mediaType={mediaType}
           colors={colors}
           searchStyles={searchStyles}
-          seen={seen}
-          unseen={unseen}
+          seen={getCurrentSeen()}
+          unseen={getCurrentUnseen()}
           onSearchComplete={(query) => {
             setSearchQuery(query);
             handleFullSearch(query);

@@ -97,8 +97,8 @@ import UserSearchModal from '../../Components/UserSearchModal';
 import { useAuth } from '../../hooks/useAuth';
 import FirebaseAuthTest from '../../Components/FirebaseAuthTest';
 import { RatingModal } from '../../Components/RatingModal';
-import { SentimentRatingModal, calculateDynamicRatingCategories } from '../Components/EnhancedRatingSystem';
-import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion } from '../Components/EnhancedRatingSystem';
+import { SentimentRatingModal, calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
+import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion } from '../../Components/EnhancedRatingSystem';
 import { filterAdultContent } from '../../utils/ContentFiltering';
 import { TMDB_API_KEY, API_TIMEOUT, STREAMING_SERVICES, DECADES, STREAMING_SERVICES_PRIORITY } from '../../Constants';
 import { ENV } from '../../config/environment';
@@ -515,10 +515,34 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     return filtered;
   }, []);
 
-  const getProviderLogoUrl = useCallback((logoPath) => {
-    if (!logoPath) return null;
-    return `https://image.tmdb.org/t/p/w92${logoPath}`;
+  // SECURITY: Secure image URL generation with validation
+  const getSecureImageUrl = useCallback((path, size = 'w92') => {
+    if (!path || typeof path !== 'string') return null;
+    
+    const cleanPath = path.trim();
+    const cleanSize = size.trim();
+    
+    // Validate path format
+    if (cleanPath.includes('..') || cleanPath.includes('<') || cleanPath.includes('>') || 
+        cleanPath.includes('script') || cleanPath.includes('javascript:') ||
+        cleanPath.length > 100 || !cleanPath.startsWith('/')) {
+      console.warn('🚨 SECURITY: Suspicious image path blocked in Profile:', cleanPath);
+      return null;
+    }
+    
+    // Validate size parameter
+    const allowedSizes = ['w92', 'w154', 'w185', 'w342', 'w500', 'w780', 'original'];
+    if (!allowedSizes.includes(cleanSize)) {
+      console.warn('🚨 SECURITY: Invalid image size blocked in Profile:', cleanSize);
+      return null;
+    }
+    
+    return `https://image.tmdb.org/t/p/${cleanSize}${cleanPath}`;
   }, []);
+
+  const getProviderLogoUrl = useCallback((logoPath) => {
+    return getSecureImageUrl(logoPath, 'w92');
+  }, [getSecureImageUrl]);
 
   // Watchlist helper functions
   const fetchStreamingProviders = useCallback(async () => {
@@ -542,7 +566,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
             id: provider.provider_id,
             name: serviceInfo?.name || provider.provider_name,
             logo_path: provider.logo_path,
-            logo_url: `https://image.tmdb.org/t/p/w92${provider.logo_path}`
+            logo_url: getSecureImageUrl(provider.logo_path, 'w92')
           };
         });
       
@@ -562,9 +586,17 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
 
   const getPosterUrl = (path) => {
     if (!path) return 'https://via.placeholder.com/342x513/333/fff?text=No+Poster';
-    // If path already includes https:// it's a full URL
-    if (path.startsWith('http')) return path;
-    return `https://image.tmdb.org/t/p/w342${path}`;
+    // If path already includes https:// it's a full URL (but validate it)
+    if (path.startsWith('http')) {
+      // SECURITY: Only allow trusted domains
+      if (path.startsWith('https://image.tmdb.org/') || path.startsWith('https://via.placeholder.com/')) {
+        return path;
+      } else {
+        console.warn('🚨 SECURITY: Untrusted image URL blocked:', path);
+        return 'https://via.placeholder.com/342x513/333/fff?text=Invalid+URL';
+      }
+    }
+    return getSecureImageUrl(path, 'w342');
   };
 
   // Universal movie selection handler with context
@@ -1330,11 +1362,21 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                         {index + 1}
                       </Text>
                     </LinearGradient>
-                    <Image
-                      source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
-                      style={listStyles.resultPoster}
-                      resizeMode="cover"
-                    />
+                    <LinearGradient
+                      colors={colors.primaryGradient}
+                      style={{
+                        padding: 1,
+                        borderRadius: 4,
+                        width: 50,
+                        height: 75
+                      }}
+                    >
+                      <Image
+                        source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
+                        style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                        resizeMode="cover"
+                      />
+                    </LinearGradient>
                     <View style={[listStyles.movieDetails, { backgroundColor: colors.card }]}>
                       <View style={{ flex: 1 }}>
                         <Text
@@ -1542,11 +1584,21 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       {index + 1}
                     </Text>
                   </LinearGradient>
-                  <Image
-                    source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
-                    style={listStyles.resultPoster}
-                    resizeMode="cover"
-                  />
+                  <LinearGradient
+                    colors={colors.primaryGradient}
+                    style={{
+                      padding: 1,
+                      borderRadius: 4,
+                      width: 50,
+                      height: 75
+                    }}
+                  >
+                    <Image
+                      source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
+                      style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                      resizeMode="cover"
+                    />
+                  </LinearGradient>
                   <View style={[listStyles.movieDetails, { backgroundColor: colors.card }]}>
                     <View style={{ flex: 1 }}>
                       <Text
@@ -1766,11 +1818,23 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                     </Text>
                   </View>
                   
-                  <Image
-                    source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
-                    style={{ width: MOVIE_CARD_WIDTH - 6, height: MOVIE_CARD_WIDTH * 1.5 - 6, marginTop: 3, marginLeft: 3, borderRadius: 8 }}
-                    resizeMode="cover"
-                  />
+                  <LinearGradient
+                    colors={colors.primaryGradient}
+                    style={{
+                      padding: 1,
+                      borderRadius: 8,
+                      width: MOVIE_CARD_WIDTH - 4,
+                      height: MOVIE_CARD_WIDTH * 1.5 - 4,
+                      marginTop: 2,
+                      marginLeft: 2
+                    }}
+                  >
+                    <Image
+                      source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
+                      style={{ width: '100%', height: '100%', borderRadius: 7 }}
+                      resizeMode="cover"
+                    />
+                  </LinearGradient>
                   <View style={{ width: MOVIE_CARD_WIDTH - 6, minHeight: 80, padding: 8, backgroundColor: colors.card }}>
                     <Text
                       style={{ fontSize: 16, lineHeight: 18, marginBottom: 2, color: colors.text, fontWeight: '600' }}
@@ -1840,11 +1904,23 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                     </Text>
                   </View>
                   
-                  <Image
-                    source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
-                    style={{ width: MOVIE_CARD_WIDTH - 6, height: MOVIE_CARD_WIDTH * 1.5 - 6, marginTop: 3, marginLeft: 3, borderRadius: 8 }}
-                    resizeMode="cover"
-                  />
+                  <LinearGradient
+                    colors={colors.primaryGradient}
+                    style={{
+                      padding: 1,
+                      borderRadius: 8,
+                      width: MOVIE_CARD_WIDTH - 4,
+                      height: MOVIE_CARD_WIDTH * 1.5 - 4,
+                      marginTop: 2,
+                      marginLeft: 2
+                    }}
+                  >
+                    <Image
+                      source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
+                      style={{ width: '100%', height: '100%', borderRadius: 7 }}
+                      resizeMode="cover"
+                    />
+                  </LinearGradient>
                   <View style={{ width: MOVIE_CARD_WIDTH - 6, minHeight: 80, padding: 8, backgroundColor: colors.card }}>
                     <Text
                       style={{ fontSize: 16, lineHeight: 18, marginBottom: 2, color: colors.text, fontWeight: '600' }}
@@ -1925,7 +2001,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
             style={modalStyles.detailModalContent}
           >
             <Image 
-              source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path || selectedMovie?.poster}` }} 
+              source={{ uri: getSecureImageUrl(selectedMovie?.poster_path || selectedMovie?.poster, 'w500') || 'https://via.placeholder.com/500x750/333/fff?text=No+Poster' }} 
               style={modalStyles.detailPoster}
               resizeMode="cover" 
             />
@@ -2283,11 +2359,21 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                         {index + 1}
                       </Text>
                     </LinearGradient>
-                    <Image
-                      source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
-                      style={listStyles.resultPoster}
-                      resizeMode="cover"
-                    />
+                    <LinearGradient
+                      colors={colors.primaryGradient}
+                      style={{
+                        padding: 1,
+                        borderRadius: 4,
+                        width: 50,
+                        height: 75
+                      }}
+                    >
+                      <Image
+                        source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
+                        style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                        resizeMode="cover"
+                      />
+                    </LinearGradient>
                     <View style={[listStyles.movieDetails, { backgroundColor: colors.card }]}>
                       <View style={{ flex: 1 }}>
                         <Text
@@ -2587,11 +2673,21 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                         {index + 1}
                       </Text>
                     </LinearGradient>
-                    <Image
-                      source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
-                      style={listStyles.resultPoster}
-                      resizeMode="cover"
-                    />
+                    <LinearGradient
+                      colors={colors.primaryGradient}
+                      style={{
+                        padding: 1,
+                        borderRadius: 4,
+                        width: 50,
+                        height: 75
+                      }}
+                    >
+                      <Image
+                        source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
+                        style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                        resizeMode="cover"
+                      />
+                    </LinearGradient>
                     <View style={[listStyles.movieDetails, { backgroundColor: colors.card }]}>
                       <View style={{ flex: 1 }}>
                         <Text
@@ -2690,7 +2786,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                     activeOpacity={0.8}
                   >
                     <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path || selectedMovie?.poster}` }}
+                      source={{ uri: getSecureImageUrl(selectedMovie?.poster_path || selectedMovie?.poster, 'w500') || 'https://via.placeholder.com/500x750/333/fff?text=No+Poster' }}
                       style={styles.comparisonPoster}
                       resizeMode="cover"
                     />
@@ -2713,7 +2809,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                     activeOpacity={0.8}
                   >
                     <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w500${comparisonMovies[currentComparison]?.poster_path}` }}
+                      source={{ uri: getSecureImageUrl(comparisonMovies[currentComparison]?.poster_path, 'w500') || 'https://via.placeholder.com/500x750/333/fff?text=No+Poster' }}
                       style={styles.comparisonPoster}
                       resizeMode="cover"
                     />
@@ -3122,7 +3218,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                      activeOpacity={0.7}
                    >
                      <Image
-                       source={{ uri: `https://image.tmdb.org/t/p/w92${service.logo_path}` }}
+                       source={{ uri: getSecureImageUrl(service.logo_path, 'w92') || 'https://via.placeholder.com/92x92/333/fff?text=?' }}
                        style={{ width: 24, height: 24, marginRight: 8, borderRadius: 4 }}
                        resizeMode="contain"
                      />
