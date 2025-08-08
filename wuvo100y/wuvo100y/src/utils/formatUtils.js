@@ -70,5 +70,36 @@ export const formatUtils = {
     }
     
     return `https://image.tmdb.org/t/p/${cleanSize}${cleanPath}`;
+  },
+
+  // Standardized error handling functions
+  showStandardError(message = 'Something went wrong', actionHint = 'Please try again') {
+    const { Alert } = require('react-native');
+    Alert.alert('Error', `${message}. ${actionHint}.`);
+  },
+
+  showNetworkError() {
+    const { Alert } = require('react-native');
+    Alert.alert('Network Error', 'Unable to connect. Please check your internet connection and try again.');
+  },
+
+  showAuthError() {
+    const { Alert } = require('react-native');
+    Alert.alert('Authentication Error', 'Please log in again to continue.');
+  },
+
+  logAndShowError(error, userMessage = 'An error occurred', actionHint = 'Please try again') {
+    console.error('❌ Error:', error);
+    this.showStandardError(userMessage, actionHint);
+  },
+
+  // Standardized minimum rating error for consistent user experience
+  getMinimumRatingError(currentCount, mediaType = 'movie', required = 3) {
+    const contentType = mediaType === 'movie' ? 'movies' : 'TV shows';
+    return {
+      title: '🎬 Need More Ratings',
+      message: `You need at least ${required} rated ${contentType} to use this feature.\n\nCurrently you have: ${currentCount} rated ${contentType}.\n\nPlease rate a few more ${contentType} first!`,
+      buttons: [{ text: "OK", style: "default" }]
+    };
   }
 };

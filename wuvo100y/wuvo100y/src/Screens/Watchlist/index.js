@@ -29,7 +29,7 @@ import { getMovieCardStyles } from '../../Styles/movieCardStyles';
 import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RatingModal } from '../../Components/RatingModal';
+import { EnhancedRatingButton } from '../../Components/EnhancedRatingSystem';
 import { filterAdultContent } from '../../utils/ContentFiltering';
  
 
@@ -77,8 +77,6 @@ function WatchlistScreen({ movies, genres, isDarkMode, onAddToSeen, onRemoveFrom
   // State
 
   const [selectedMovie, setSelectedMovie] = useState(null);
-  const [ratingModalVisible, setRatingModalVisible] = useState(false);
-  const [ratingInput, setRatingInput] = useState('');
   const [selectedGenreId, setSelectedGenreId] = useState(null);
   const slideAnim = useRef(new Animated.Value(300)).current;
   
@@ -293,50 +291,7 @@ const moviesByMediaType = useMemo(() => {
   // Check if any filters are active
   const hasActiveFilters = selectedGenres.length > 0 || selectedDecades.length > 0 || selectedStreamingServices.length > 0;
 
-  const openRatingModal = useCallback((movie) => {
-    setSelectedMovie(movie);
-    setRatingInput('');
-    setRatingModalVisible(true);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, [slideAnim]);
-
-  const closeRatingModal = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: 300,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setRatingModalVisible(false);
-      setSelectedMovie(null);
-    });
-  }, [slideAnim]);
-
-  const handleRatingSubmit = useCallback(() => {
-    const rating = parseFloat(ratingInput);
-    if (!isNaN(rating) && rating >= 1 && rating <= 10) {
-      onAddToSeen({
-        ...selectedMovie,
-        userRating: rating,
-        eloRating: rating * 100,
-        comparisonWins: 0,
-        gamesPlayed: 0,
-        comparisonHistory: [],
-      });
-      closeRatingModal();
-    } else {
-      // Shake animation for invalid input
-      Animated.sequence([
-        Animated.timing(slideAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [ratingInput, selectedMovie, onAddToSeen, closeRatingModal, slideAnim]);
+  // Enhanced rating system handles rating logic internally
 
   const handleRemoveFromWatchlist = useCallback((movie) => {
     onRemoveFromWatchlist(movie.id);
@@ -516,15 +471,18 @@ const moviesByMediaType = useMemo(() => {
               : 'Unknown'}
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.editButton, { backgroundColor: colors.primary }]}
-          onPress={() => openRatingModal(item)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.editButtonText, { color: colors.accent }]}>
-            Watched
-          </Text>
-        </TouchableOpacity>
+        <EnhancedRatingButton
+          size="small"
+          variant="compact"
+          movie={item}
+          onRatingUpdate={(updatedMovie) => {
+            onAddToSeen(updatedMovie);
+            // Remove from watchlist after rating
+            onRemoveFromWatchlist(updatedMovie.id);
+          }}
+          showRatingValue={false}
+          mediaType={mediaType}
+        />
       </View>
     </View>
   ))}
@@ -737,20 +695,7 @@ const moviesByMediaType = useMemo(() => {
          </View>
        </Modal>
 
-     {/* Rating Modal */}
-       <RatingModal
-         visible={ratingModalVisible}
-         onClose={closeRatingModal}
-         onSubmit={handleRatingSubmit}
-         movie={selectedMovie}
-         ratingInput={ratingInput}
-         setRatingInput={setRatingInput}
-         slideAnim={slideAnim}
-         mediaType={mediaType}
-         isDarkMode={isDarkMode}
-         theme={theme}
-         genres={genres}
-       />
+      {/* Enhanced rating system handles modals internally */}
    </View>
  );
 }

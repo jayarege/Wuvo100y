@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import firebase from '../config/firebase';
+import theme from '../utils/Theme';
 
 /**
  * SocialPrivacyModal - User consent and privacy controls for social features
@@ -40,15 +41,17 @@ function SocialPrivacyModal({
   const [isSaving, setIsSaving] = useState(false);
   const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
 
+  // Use centralized theme instead of hardcoded colors
+  const themeColors = theme.movie[isDarkMode ? 'dark' : 'light'];
   const colors = {
-    background: isDarkMode ? '#1C2526' : '#FFFFFF',
-    modal: isDarkMode ? '#2A2F30' : '#F8F9FA',
-    text: isDarkMode ? '#F5F5F5' : '#333',
-    subtext: isDarkMode ? '#D3D3D3' : '#666',
-    accent: isDarkMode ? '#FFD700' : '#4B0082',
+    background: themeColors.background,
+    modal: themeColors.card,
+    text: themeColors.text,
+    subtext: themeColors.subText,
+    accent: themeColors.accent,
     card: isDarkMode ? 'rgba(255, 215, 0, 0.1)' : 'rgba(75, 0, 130, 0.05)',
-    border: isDarkMode ? '#8A2BE2' : '#E0E0E0',
-    success: '#4CAF50',
+    border: themeColors.border.color,
+    success: themeColors.success,
     warning: '#FF9800',
     danger: '#F44336'
   };

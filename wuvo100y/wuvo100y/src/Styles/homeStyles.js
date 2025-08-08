@@ -47,11 +47,13 @@ export const getHomeStyles = (mediaType, mode, theme) => {
       backgroundColor: 'transparent',
     },
     enhancedCard: {
-      borderWidth: 1.5,
+      borderWidth: 0.5,
       borderColor: colors.primaryGradient[1],
       borderRadius: 12,
       overflow: 'hidden',
       backgroundColor: colors.card,
+      alignItems: 'center',
+      justifyContent: 'flex-start',
     },
     movieInfoBox: {
       padding: 6,

@@ -8,13 +8,15 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
-  ActivityIndicator,
-  Alert
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import ActivityFeedService from '../services/ActivityFeedService';
 import CommentModal from '../Components/CommentModal';
+import { dateUtils } from '../utils/dateUtils';
+import { formatUtils } from '../utils/formatUtils';
+import theme from '../utils/Theme';
 
 function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
   const [activities, setActivities] = useState([]);
@@ -26,15 +28,17 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState(null);
 
+  // Use theme colors for consistency
+  const themeColors = theme.movie[isDarkMode ? 'dark' : 'light'];
   const colors = {
-    background: isDarkMode ? '#1C2526' : '#FFFFFF',
-    text: isDarkMode ? '#F5F5F5' : '#333',
-    subtext: isDarkMode ? '#D3D3D3' : '#666',
-    accent: isDarkMode ? '#FFD700' : '#4B0082',
+    background: themeColors.background,
+    text: themeColors.text,
+    subtext: themeColors.subText,
+    accent: themeColors.accent,
     card: isDarkMode ? 'rgba(255, 215, 0, 0.1)' : 'rgba(75, 0, 130, 0.05)',
-    border: isDarkMode ? '#8A2BE2' : '#E0E0E0',
+    border: themeColors.border.color,
     like: '#FF6B6B',
-    gradient: isDarkMode ? ['#4B0082', '#8A2BE2'] : ['#9370DB', '#8A2BE2']
+    gradient: themeColors.primaryGradient.slice(0, 2)
   };
 
   const loadFeed = useCallback(async (refresh = false) => {
@@ -69,7 +73,7 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
       console.log(`✅ Loaded ${result.activities.length} activities`);
     } catch (error) {
       console.error('❌ Error loading feed:', error);
-      Alert.alert('Error', 'Failed to load activity feed. Please try again.');
+      formatUtils.logAndShowError(error, 'Failed to load activity feed');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -130,7 +134,7 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
 
     } catch (error) {
       console.error('❌ Error liking activity:', error);
-      Alert.alert('Error', 'Failed to like activity. Please try again.');
+      formatUtils.logAndShowError(error, 'Failed to like activity');
     }
   };
 
@@ -156,22 +160,6 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
     loadFeed(true);
   }, []);
 
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return 'Recently';
-    
-    const now = new Date();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days}d ago`;
-    return timestamp.toLocaleDateString();
-  };
 
   const renderActivityIcon = (activityType) => {
     const iconProps = { size: 20, color: colors.accent };
@@ -230,7 +218,7 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
         <View style={styles.activityMeta}>
           {renderActivityIcon(activity.type)}
           <Text style={[styles.timestamp, { color: colors.subtext }]}>
-            {formatTimestamp(activity.timestamp)}
+            {dateUtils.formatTimestamp(activity.timestamp)}
           </Text>
         </View>
       </View>

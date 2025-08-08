@@ -96,10 +96,13 @@ import theme from '../../utils/Theme';
 import UserSearchModal from '../../Components/UserSearchModal';
 import { useAuth } from '../../hooks/useAuth';
 import FirebaseAuthTest from '../../Components/FirebaseAuthTest';
-import { RatingModal } from '../../Components/RatingModal';
+// RatingModal replaced with EnhancedRatingSystem components
 import { SentimentRatingModal, calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
 import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion } from '../../Components/EnhancedRatingSystem';
 import { filterAdultContent } from '../../utils/ContentFiltering';
+import { movieUtils } from '../../utils/movieUtils';
+import { formatUtils } from '../../utils/formatUtils';
+import { StreamingProviders } from '../../Components/StreamingProviders';
 import { TMDB_API_KEY, API_TIMEOUT, STREAMING_SERVICES, DECADES, STREAMING_SERVICES_PRIORITY } from '../../Constants';
 import { ENV } from '../../config/environment';
 
@@ -141,13 +144,11 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const [selectedRankingType, setSelectedRankingType] = useState('user'); // 'user', 'average', 'imdb'
   const [showUnwatchedMovies, setShowUnwatchedMovies] = useState(false);
   
-  // TopRated functionality state
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [newRating, setNewRating] = useState('');
+  // TopRated functionality - now uses EnhancedRatingButton instead of modal
   const [selectedGenreId, setSelectedGenreId] = useState(null);
   
   // Watchlist functionality state
-  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  // Removed ratingModalVisible - watchlist now uses EnhancedRatingButton
   const [ratingInput, setRatingInput] = useState('');
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   
@@ -288,11 +289,11 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
 
   // Calculate stats
   const stats = useMemo(() => {
-    const totalRated = currentSeen.length;
+    const totalRated = movieUtils.getMovieCount(currentSeen);
     const averageRating = totalRated > 0 
       ? currentSeen.reduce((sum, item) => sum + (item.userRating || 0), 0) / totalRated 
       : 0;
-    const watchlistSize = currentUnseen.length;
+    const watchlistSize = movieUtils.getMovieCount(currentUnseen);
 
     return {
       posts: totalRated,
@@ -644,32 +645,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     }).start();
   }, [slideAnim]);
 
-  const closeEditModal = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: 300,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setEditModalVisible(false);
-      setSelectedMovie(null);
-      setNewRating('');
-    });
-  }, [slideAnim]);
-
-  const updateRating = useCallback(() => {
-    const rating = parseFloat(newRating);
-    if (isNaN(rating) || rating < 1 || rating > 10) {
-      Animated.sequence([
-        Animated.timing(slideAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-      ]).start();
-      return;
-    }
-    onUpdateRating(selectedMovie.id, rating);
-    closeEditModal();
-  }, [newRating, selectedMovie, onUpdateRating, closeEditModal, slideAnim]);
+  // Removed closeEditModal and updateRating - now handled by EnhancedRatingButton components
 
   const displayRating = useCallback((movie) => {
     // For friend profiles, show rating based on selected ranking type
@@ -711,49 +687,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   }, []);
 
   // Watchlist handlers
-  const openRatingModal = useCallback((movie) => {
-    setSelectedMovie(movie);
-    setRatingInput('');
-    setRatingModalVisible(true);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, [slideAnim]);
-
-  const closeRatingModal = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: 300,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setRatingModalVisible(false);
-      setSelectedMovie(null);
-    });
-  }, [slideAnim]);
-
-  const handleRatingSubmit = useCallback(() => {
-    const rating = parseFloat(ratingInput);
-    if (!isNaN(rating) && rating >= 1 && rating <= 10) {
-      onAddToSeen({
-        ...selectedMovie,
-        userRating: rating,
-        eloRating: rating * 100,
-        comparisonWins: 0,
-        gamesPlayed: 0,
-        comparisonHistory: [],
-      });
-      closeRatingModal();
-    } else {
-      Animated.sequence([
-        Animated.timing(slideAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [ratingInput, selectedMovie, onAddToSeen, closeRatingModal, slideAnim]);
+  // Removed openRatingModal, closeRatingModal, handleRatingSubmit - watchlist now uses EnhancedRatingButton
 
   const handleRemoveFromWatchlist = useCallback((movie) => {
     onRemoveFromWatchlist(movie.id);
@@ -886,11 +820,12 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     const firstOpponent = selectMovieFromPercentile(seen, emotion);
     if (!firstOpponent) {
       console.log('❌ NO FIRST OPPONENT FOUND');
-      Alert.alert(
-        '🎬 Need More Ratings', 
-        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
-        [{ text: "OK", style: "default" }]
+      const errorData = formatUtils.getMinimumRatingError(
+        movieUtils.getMovieCount(seen, 'movie'),
+        'movie',
+        3
       );
+      Alert.alert(errorData.title, errorData.message, errorData.buttons);
       return;
     }
     
@@ -899,11 +834,12 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     
     if (remainingMovies.length < 2) {
       console.log('❌ NOT ENOUGH REMAINING MOVIES');
-      Alert.alert(
-        '🎬 Need More Ratings', 
-        `You need at least 3 rated movies to use this feature.\n\nCurrently you have: ${seen.length} rated movies.\n\nPlease rate a few more movies first!`,
-        [{ text: "OK", style: "default" }]
+      const errorData = formatUtils.getMinimumRatingError(
+        movieUtils.getMovieCount(seen, 'movie'),
+        'movie',
+        3
       );
+      Alert.alert(errorData.title, errorData.message, errorData.buttons);
       return;
     }
     
@@ -2035,21 +1971,11 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
               {selectedMovie?.overview || 'No description available.'}
             </Text>
             
-            <View style={modalStyles.streamingRow}>
-              {movieProviders && movieProviders.length > 0 ? (
-                deduplicateProviders(movieProviders)
-                  .filter(provider => provider.logo_path)
-                  .slice(0, 5)
-                  .map((provider) => (
-                    <Image 
-                      key={provider.provider_id}
-                      source={{ uri: getProviderLogoUrl(provider.logo_path) }}
-                      style={modalStyles.platformIcon}
-                      resizeMode="contain"
-                    />
-                  ))
-              ) : null}
-            </View>
+            <StreamingProviders
+              movie={selectedMovie}
+              visible={movieDetailModalVisible}
+              style={{ marginVertical: 12 }}
+            />
             
             <View style={modalStyles.buttonRow}>
               {/* Dynamic buttons based on context */}
@@ -2178,20 +2104,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         />
       )}
       
-      {/* TopRated Edit Modal */}
-      <RatingModal
-        visible={editModalVisible}
-        onClose={closeEditModal}
-        onSubmit={updateRating}
-        movie={selectedMovie}
-        ratingInput={newRating}
-        setRatingInput={setNewRating}
-        slideAnim={slideAnim}
-        mediaType={mediaType}
-        isDarkMode={isDarkMode}
-        theme={theme}
-        genres={genres}
-      />
+      {/* TopRated Edit Modal - now uses EnhancedRatingButton components */}
       
       {/* Top Movies Modal */}
       <Modal visible={topMoviesModalVisible} transparent animationType="fade">
@@ -2732,19 +2645,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       </Modal>
 
       {/* Watchlist Rating Modal */}
-      <RatingModal
-        visible={ratingModalVisible}
-        onClose={closeRatingModal}
-        onSubmit={handleRatingSubmit}
-        movie={selectedMovie}
-        ratingInput={ratingInput}
-        setRatingInput={setRatingInput}
-        slideAnim={slideAnim}
-        mediaType={mediaType}
-        isDarkMode={isDarkMode}
-        theme={theme}
-        genres={genres}
-      />
+      {/* Watchlist RatingModal removed - now uses EnhancedRatingButton */}
       
       {/* Enhanced Emotion Selection Modal */}
       <SentimentRatingModal

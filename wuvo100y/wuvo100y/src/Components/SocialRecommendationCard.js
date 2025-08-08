@@ -7,6 +7,7 @@ import {
   StyleSheet
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import defaultTheme from '../utils/Theme';
 
 /**
  * SocialRecommendationCard - Movie recommendation with social context
@@ -22,20 +23,21 @@ function SocialRecommendationCard({
   isDarkMode,
   showSocialContext = true,
   mediaType = 'movie',
-  theme
+  theme,
+  homeStyles
 }) {
-  // Use theme-based primary gradient color for borders
-  const themeColors = theme?.[mediaType]?.[isDarkMode ? 'dark' : 'light'];
-  const primaryGradient = themeColors?.primaryGradient || ['#612EF0', '#6C2BD9', '#321680'];
+  // Use centralized theme instead of hardcoded colors
+  const currentTheme = theme || defaultTheme;
+  const themeColors = currentTheme[mediaType][isDarkMode ? 'dark' : 'light'];
   
   const colors = {
-    background: isDarkMode ? '#2A2F30' : '#FFFFFF',
-    text: isDarkMode ? '#F5F5F5' : '#333',
-    subtext: isDarkMode ? '#D3D3D3' : '#666',
-    accent: isDarkMode ? '#FFD700' : '#4B0082',
-    border: primaryGradient[1] || '#6C2BD9', // Use middle color from primaryGradient
+    background: themeColors.card,
+    text: themeColors.text,
+    subtext: themeColors.subText,
+    accent: themeColors.accent,
+    border: themeColors.border.color,
     socialBg: isDarkMode ? 'rgba(255, 215, 0, 0.1)' : 'rgba(75, 0, 130, 0.05)',
-    socialText: isDarkMode ? '#FFD700' : '#4B0082'
+    socialText: themeColors.accent
   };
 
   const formatYear = (releaseDate) => {
@@ -62,7 +64,7 @@ function SocialRecommendationCard({
 
   return (
     <TouchableOpacity
-      style={[styles.container, { backgroundColor: colors.background, borderColor: colors.border }]}
+      style={[homeStyles?.enhancedCard || styles.container, { backgroundColor: colors.background, borderColor: colors.border }]}
       onPress={() => onPress(movie)}
       activeOpacity={0.7}
     >
@@ -148,7 +150,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     marginHorizontal: 16,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 0.5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

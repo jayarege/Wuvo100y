@@ -7,13 +7,15 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   Image,
   Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import CommentService from '../services/CommentService';
+import { dateUtils } from '../utils/dateUtils';
+import { formatUtils } from '../utils/formatUtils';
+import theme from '../utils/Theme';
 
 /**
  * CommentModal - Friend-Only Comment Interface
@@ -38,16 +40,18 @@ function CommentModal({
   const [replyToComment, setReplyToComment] = useState(null);
   const [likedComments, setLikedComments] = useState(new Set());
 
+  // Use centralized theme instead of hardcoded colors
+  const themeColors = theme.movie[isDarkMode ? 'dark' : 'light'];
   const colors = {
-    background: isDarkMode ? '#1C2526' : '#FFFFFF',
-    modal: isDarkMode ? '#2A2F30' : '#F8F9FA',
-    text: isDarkMode ? '#F5F5F5' : '#333',
-    subtext: isDarkMode ? '#D3D3D3' : '#666',
-    accent: isDarkMode ? '#FFD700' : '#4B0082',
+    background: themeColors.background,
+    modal: themeColors.card,
+    text: themeColors.text,
+    subtext: themeColors.subText,
+    accent: themeColors.accent,
     input: isDarkMode ? '#3D4344' : '#F0F0F0',
-    border: isDarkMode ? '#8A2BE2' : '#E0E0E0',
+    border: themeColors.border.color,
     danger: '#FF6B6B',
-    success: '#4CAF50',
+    success: themeColors.success,
     warning: '#FF9800'
   };
 
@@ -95,7 +99,7 @@ function CommentModal({
 
     } catch (error) {
       console.error('❌ Error loading comments:', error);
-      Alert.alert('Error', 'Failed to load comments. Please try again.');
+      formatUtils.logAndShowError(error, 'Failed to load comments');
     } finally {
       setIsLoading(false);
     }
@@ -155,7 +159,7 @@ function CommentModal({
       } else if (error.message.includes('characters')) {
         Alert.alert('Comment Too Long', 'Comments cannot exceed 1000 characters.');
       } else {
-        Alert.alert('Error', 'Failed to post comment. Please try again.');
+        formatUtils.logAndShowError(error, 'Failed to post comment');
       }
     } finally {
       setIsSubmitting(false);
@@ -193,7 +197,7 @@ function CommentModal({
 
     } catch (error) {
       console.error('❌ Error liking comment:', error);
-      Alert.alert('Error', 'Failed to like comment. Please try again.');
+      formatUtils.logAndShowError(error, 'Failed to like comment');
     }
   };
 
@@ -202,22 +206,6 @@ function CommentModal({
     setNewComment(`@${comment.user.username || comment.user.displayName} `);
   };
 
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return 'Recently';
-    
-    const now = new Date();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days}d ago`;
-    return timestamp.toLocaleDateString();
-  };
 
   const renderComment = (comment, isReply = false) => (
     <View
@@ -253,7 +241,7 @@ function CommentModal({
               </Text>
             )}
             <Text style={[styles.timestamp, { color: colors.subtext }]}>
-              {formatTimestamp(comment.timestamp)}
+              {dateUtils.formatTimestamp(comment.timestamp)}
             </Text>
           </View>
           

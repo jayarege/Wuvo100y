@@ -52,9 +52,10 @@ When in doubt, read the code. If it’s unclear, fix the clarity.
 - Use `/slash` commands for repeatable workflows.
 - Run tests locally before pushing.
 - Ask questions early and often.
-- Request current docs — don’t trust outdated memory.
+- Request current docs — don't trust outdated memory.
 - Use visual input for UI/UX debugging.
 - Refactor aggressively, but not blindly.
+- After completing changes, respond with ONLY the list of modified files.
 
 ---
 

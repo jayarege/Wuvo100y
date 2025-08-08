@@ -42,6 +42,8 @@ import { getSearchStyles } from '../../Styles/searchStyles';
 import { getMovieCardStyles } from '../../Styles/movieCardStyles';
 import { getButtonStyles, ThemedButton } from '../../Styles/buttonStyles';
 import { getModalStyles } from '../../Styles/modalStyles';
+import { movieUtils } from '../../utils/movieUtils';
+import { formatUtils } from '../../utils/formatUtils';
 import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
 
@@ -59,7 +61,7 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
   
   // CRITICAL DEBUG: Check what props are being received
   console.log('🔍 ADD MOVIE SCREEN PROPS DEBUG:', {
-    'seen.length': seen?.length || 'undefined',
+    'seen.length': movieUtils.getMovieCount(seen || []),
     'unseen.length': unseen?.length || 'undefined', 
     'seenTVShows.length': seenTVShows?.length || 'undefined',
     'unseenTVShows.length': unseenTVShows?.length || 'undefined',
@@ -222,11 +224,8 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     const firstOpponent = selectMovieFromPercentile(currentMediaMovies, emotion);
     if (!firstOpponent) {
       console.log('❌ NO FIRST OPPONENT FOUND');
-      Alert.alert(
-        '🎬 Need More Ratings', 
-        `You need at least 3 rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentMediaMovies.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
-        [{ text: "OK", style: "default" }]
-      );
+      const errorData = formatUtils.getMinimumRatingError(movieUtils.getMovieCount(currentMediaMovies, 'all', { rated: true }), mediaType);
+      Alert.alert(errorData.title, errorData.message, errorData.buttons);
       return;
     }
     
@@ -235,11 +234,8 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     
     if (remainingMovies.length < 2) {
       console.log('❌ NOT ENOUGH REMAINING MOVIES');
-      Alert.alert(
-        '🎬 Need More Ratings', 
-        `You need at least 3 rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentMediaMovies.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
-        [{ text: "OK", style: "default" }]
-      );
+      const errorData = formatUtils.getMinimumRatingError(movieUtils.getMovieCount(currentMediaMovies, 'all', { rated: true }), mediaType);
+      Alert.alert(errorData.title, errorData.message, errorData.buttons);
       return;
     }
     

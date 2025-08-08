@@ -40,9 +40,12 @@ import SocialRecommendationsSection from '../../Components/SocialRecommendations
 import { useDiscoverySessions } from '../../hooks/useDiscoverySessions';
 import { getCurrentSessionType } from '../../config/discoveryConfig';
 import { useAuth } from '../../hooks/useAuth';
-import { RatingModal } from '../../Components/RatingModal';
+// RatingModal replaced with SentimentRatingModal from EnhancedRatingSystem
 import { ActivityIndicator } from 'react-native';
 import { TMDB_API_KEY as API_KEY, STREAMING_SERVICES_PRIORITY } from '../../Constants';
+import { movieUtils } from '../../utils/movieUtils';
+import { formatUtils } from '../../utils/formatUtils';
+import { StreamingProviders } from '../../Components/StreamingProviders';
 import { filterAdultContent, isContentSafe } from '../../utils/ContentFiltering';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -245,7 +248,7 @@ function HomeScreen({
   const [activeTab, setActiveTab] = useState('new');
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieDetailModalVisible, setMovieDetailModalVisible] = useState(false);
-  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  // Removed ratingModalVisible - now uses SentimentRatingModal
   const [initialRatingFlowVisible, setInitialRatingFlowVisible] = useState(false);
   const [ratingInput, setRatingInput] = useState('');
   const [recentReleases, setRecentReleases] = useState([]);
@@ -535,7 +538,7 @@ function HomeScreen({
       setDismissedInSession([]);
       
       console.log('🎯 DEBUG: About to call fetchAIRecommendations with force refresh');
-      console.log('🎯 DEBUG: Current media type:', contentType, 'Seen movies count:', seen.length);
+      console.log('🎯 DEBUG: Current media type:', contentType, 'Seen movies count:', movieUtils.getMovieCount(seen));
       
       // Force fresh recommendations with enhanced filtering
       await fetchAIRecommendations(true); // Pass forceRefresh=true for debugging
@@ -1700,11 +1703,8 @@ function HomeScreen({
     
     // **MEDIA TYPE SEGREGATION: Check minimum count for current media type**
     if (currentSeenContent.length < 3) {
-      Alert.alert(
-        '🎬 Need More Ratings', 
-        `You need at least 3 rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentSeenContent.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
-        [{ text: "OK", style: "default" }]
-      );
+      const errorData = formatUtils.getMinimumRatingError(movieUtils.getMovieCount(currentSeenContent, 'all', { rated: true }), mediaType);
+      Alert.alert(errorData.title, errorData.message, errorData.buttons);
       return;
     }
     
@@ -1732,11 +1732,8 @@ function HomeScreen({
         id: currentSeenContent[0].id
       } : 'No content found');
       
-      Alert.alert(
-        '🎬 Need More Ratings', 
-        `You need at least 3 rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentSeenContent.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
-        [{ text: "OK", style: "default" }]
-      );
+      const errorData = formatUtils.getMinimumRatingError(movieUtils.getMovieCount(currentSeenContent, 'all', { rated: true }), mediaType);
+      Alert.alert(errorData.title, errorData.message, errorData.buttons);
       return;
     }
     
@@ -2004,8 +2001,8 @@ function HomeScreen({
       // Get user profile for GROQ learning
       const userProfile = {
         topGenres: seen.map(m => m.genre_ids || []).flat(),
-        averageUserRating: seen.reduce((sum, m) => sum + m.userRating, 0) / seen.length,
-        totalRated: seen.length,
+        averageUserRating: seen.reduce((sum, m) => sum + m.userRating, 0) / movieUtils.getMovieCount(seen, 'all', { rated: true }),
+        totalRated: movieUtils.getMovieCount(seen, 'all', { rated: true }),
         // Add more context as needed
       };
       
@@ -2102,21 +2099,9 @@ function HomeScreen({
     }
   }, [contentType, mediaType, seen.length, recordNotInterested, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, setSocialRecommendations, setNotInterestedMovies, selectedMovie, closeDetailModal]);
 
-  const openRatingModal = useCallback(() => {
-    // Fade animation removed
-    setShowSentimentButtons(true);
-  }, []);
-  
-  const cancelSentimentSelection = useCallback(() => {
-    // Fade animation removed
-    setShowSentimentButtons(false);
-  }, []);
+  // Removed openRatingModal and cancelSentimentSelection - handled by SentimentRatingModal
 
-  const closeRatingModal = useCallback(() => {
-    // Slide animation removed
-    setRatingModalVisible(false);
-    setRatingInput('');
-  }, []);
+  // Removed closeRatingModal - now uses SentimentRatingModal
 
   const closeDetailModal = useCallback((preserveForRating = false) => {
     setMovieDetailModalVisible(false);
@@ -2170,50 +2155,7 @@ function HomeScreen({
     );
   }, [onAddToSeen, removeMovieFromAllSections]);
   
-  const submitRating = useCallback(() => {
-    const rating = parseFloat(ratingInput);
-    if (isNaN(rating) || rating < 1 || rating > 10) {
-      return;
-    }
-    
-    const ratedMovie = {
-      id: selectedMovie.id,
-      title: selectedMovie.title || selectedMovie.name,
-      poster: selectedMovie.poster_path || selectedMovie.poster,
-      poster_path: selectedMovie.poster_path,
-      score: selectedMovie.vote_average || selectedMovie.score || 0,
-      vote_average: selectedMovie.vote_average,
-      voteCount: selectedMovie.vote_count || 0,
-      release_date: selectedMovie.release_date || selectedMovie.first_air_date,
-      genre_ids: selectedMovie.genre_ids || [],
-      overview: selectedMovie.overview || "",
-      adult: selectedMovie.adult || false,
-      userRating: rating,
-      eloRating: rating * 100,
-      comparisonHistory: [],
-      comparisonWins: 0,
-      mediaType: contentType === 'movies' ? 'movie' : 'tv',
-      // Add confidence metadata if available (from adaptive rating system)
-      confidence: selectedMovie.confidence || null
-    };
-    
-    onAddToSeen(ratedMovie);
-    
-    // **Enhanced Preference Learning - Issue #8**
-    recordUserRating(ratedMovie, rating, mediaType).catch(error => {
-      console.error('Failed to record rating for preference learning:', error);
-    });
-    
-    // **CODE_BIBLE Fix: Remove rated movie from ALL home screen sections**
-    removeMovieFromAllSections(selectedMovie.id);
-    
-    // **AI RECOMMENDATIONS REFRESH: Manual refresh needed since auto-refresh is disabled**
-    setTimeout(() => {
-      fetchAIRecommendations(true); // Force refresh AI recommendations after rating
-    }, 100); // Brief delay for React state updates to propagate
-    
-    closeRatingModal();
-  }, [ratingInput, selectedMovie, onAddToSeen, removeMovieFromAllSections, closeRatingModal, contentType, fetchAIRecommendations]); // Added fetchAIRecommendations for manual refresh
+  // Removed submitRating - now handled by SentimentRatingModal
 
   const handleWatchlistToggle = useCallback(() => {
     if (!selectedMovie) return;
@@ -2865,10 +2807,10 @@ function HomeScreen({
                       source={{
                         uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
                       }}
-                      style={[styles.moviePoster, { width: MOVIE_CARD_WIDTH - 6, height: MOVIE_CARD_WIDTH * 1.5 - 6 }]}
+                      style={[styles.moviePoster, { width: MOVIE_CARD_WIDTH - 3, height: MOVIE_CARD_WIDTH * 1.5 - 3 }]}
                       resizeMode="cover"
                     />
-                    <View style={[homeStyles.movieInfoBox, { width: MOVIE_CARD_WIDTH - 6, minHeight: 80 }]}>
+                    <View style={[homeStyles.movieInfoBox, { width: MOVIE_CARD_WIDTH - 3, minHeight: 80 }]}>
                       <Text
                         style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18, marginBottom: 2 }]}
                         numberOfLines={1}
@@ -2968,7 +2910,7 @@ function HomeScreen({
                     style={[styles.moviePoster, { width: MOVIE_CARD_WIDTH - 6, height: MOVIE_CARD_WIDTH * 1.5 - 6 }]}
                     resizeMode="cover"
                   />
-                  <View style={[homeStyles.movieInfoBox, { width: MOVIE_CARD_WIDTH - 6, minHeight: 80 }]}>
+                  <View style={[homeStyles.movieInfoBox, { width: MOVIE_CARD_WIDTH - 3, minHeight: 80 }]}>
                     <Text
                       style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18, marginBottom: 2 }]}
                       numberOfLines={1}
@@ -3088,7 +3030,7 @@ function HomeScreen({
 
   // **🏠 AUTO-REFRESH WHEN MOVIES ARE RATED**
   useEffect(() => {
-    console.log(`🎬 Seen ${mediaType === 'movie' ? 'movies' : 'content'} updated, count:`, seen.length);
+    console.log(`🎬 Seen ${mediaType === 'movie' ? 'movies' : 'content'} updated, count:`, movieUtils.getMovieCount(seen));
     // Refresh home screen data when movies are rated to remove them from display
     fetchRecentReleases();
     fetchPopularMovies();
@@ -3448,44 +3390,11 @@ function HomeScreen({
                 {selectedMovie?.overview || 'No description available.'}
               </Text>
               
-              <View style={modalStyles.streamingRow}>
-                {isLoadingMovieDetails ? (
-                  <Text style={[modalStyles.detailActors, { fontSize: 12, color: colors.subText }]}>
-                    Loading streaming providers...
-                  </Text>
-                ) : (
-                  movieProviders && movieProviders.length > 0 ? (
-                    prioritizeStreamingProviders(movieProviders, currentUser?.profile?.preferences?.streamingServices || [])
-                      .filter(provider => provider.logo_path)
-                      .map((provider) => {
-                        const paymentType = getProviderPaymentType(provider.provider_id);
-                        return (
-                          <View key={provider.provider_id} style={{ alignItems: 'center', marginRight: 8 }}>
-                            <Image 
-                              source={{ uri: getProviderLogoUrl(provider.logo_path, provider.provider_id) }}
-                              style={[
-                                modalStyles.platformIcon,
-                                {
-                                  borderColor: paymentType === 'paid' ? '#FF4444' : '#22C55E',
-                                  borderWidth: 0.5,
-                                }
-                              ]}
-                              resizeMode="contain"
-                            />
-                            <Text style={{
-                              fontSize: 8,
-                              color: paymentType === 'paid' ? '#FF4444' : '#22C55E',
-                              fontWeight: 'bold',
-                              marginTop: 2
-                            }}>
-                              {paymentType === 'paid' ? '$' : 'FREE'}
-                            </Text>
-                          </View>
-                        );
-                      })
-                  ) : null
-                )}
-              </View>
+              <StreamingProviders
+                movie={selectedMovie}
+                visible={movieDetailModalVisible}
+                style={{ marginVertical: 12 }}
+              />
               
               <View style={modalStyles.buttonRow}>
                 {/* **ACTION BUTTONS** */}
@@ -3812,19 +3721,7 @@ function HomeScreen({
           </View>
         </Modal>
 
-        {/* **LEGACY RATING MODAL (FALLBACK)** */}
-        <RatingModal
-          visible={ratingModalVisible}
-          onClose={closeRatingModal}
-          onSubmit={submitRating}
-          movie={selectedMovie}
-          ratingInput={ratingInput}
-          setRatingInput={setRatingInput}
-          mediaType={mediaType}
-          isDarkMode={isDarkMode}
-          theme={theme}
-          genres={genres}
-        />
+        {/* Legacy RatingModal removed - now uses SentimentRatingModal from EnhancedRatingSystem */}
 
         {/* **INITIAL RATING FLOW MODAL** */}
         <InitialRatingFlow

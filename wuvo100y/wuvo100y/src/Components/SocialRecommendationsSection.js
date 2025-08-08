@@ -77,6 +77,7 @@ function SocialRecommendationsSection({
                 showSocialContext={true}
                 mediaType={mediaType}
                 theme={theme}
+                homeStyles={homeStyles}
               />
             </View>
           ))}

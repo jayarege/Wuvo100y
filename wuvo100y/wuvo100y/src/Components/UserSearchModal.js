@@ -9,12 +9,13 @@ import {
   Image,
   StyleSheet,
   SafeAreaView,
-  ActivityIndicator,
-  Alert
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import UserSearchService from '../services/UserSearchService';
 import FollowService from '../services/FollowService';
+import { formatUtils } from '../utils/formatUtils';
+import theme from '../utils/Theme';
 
 
 // Simple debounce function
@@ -44,15 +45,17 @@ const UserSearchModal = ({
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
   const [followingStatus, setFollowingStatus] = useState({}); // Track follow status for each user
 
+  // Use centralized theme instead of hardcoded colors
+  const themeColors = theme.movie[isDarkMode ? 'dark' : 'light'];
   const colors = {
-    background: isDarkMode ? '#1C2526' : '#FFFFFF',
-    card: isDarkMode ? '#4B0082' : '#F8F9FA',
-    text: isDarkMode ? '#F5F5F5' : '#333333',
-    subText: isDarkMode ? '#D3D3D3' : '#666666',
-    accent: isDarkMode ? '#FFD700' : '#4B0082',
-    border: isDarkMode ? '#8A2BE2' : '#E0E0E0',
+    background: themeColors.background,
+    card: themeColors.card,
+    text: themeColors.text,
+    subText: themeColors.subText,
+    accent: themeColors.accent,
+    border: themeColors.border.color,
     placeholder: isDarkMode ? '#A9A9A9' : '#999999',
-    success: '#4CAF50',
+    success: themeColors.success,
     error: '#F44336'
   };
 
@@ -150,7 +153,7 @@ const UserSearchModal = ({
       }
     } catch (error) {
       console.error('Error following/unfollowing user:', error);
-      Alert.alert('Error', 'Failed to update follow status. Please try again.');
+      formatUtils.logAndShowError(error, 'Failed to update follow status');
     }
   };
 

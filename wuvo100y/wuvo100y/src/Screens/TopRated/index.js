@@ -24,12 +24,13 @@ import { getListStyles } from '../../Styles/listStyles';
 import { getModalStyles } from '../../Styles/modalStyles';
 import { getButtonStyles } from '../../Styles/buttonStyles';
 import { getMovieCardStyles } from '../../Styles/movieCardStyles';
-import { RatingModal } from '../../Components/RatingModal';
+import { EnhancedRatingButton } from '../../Components/EnhancedRatingSystem';
 import stateStyles from '../../Styles/StateStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '../../utils/Theme';
 import { TMDB_API_KEY } from '../../Constants';
 import { filterAdultContent } from '../../utils/ContentFilter';
+import { StreamingProviders } from '../../Components/StreamingProviders';
 
 const API_KEY = TMDB_API_KEY;
 
@@ -54,9 +55,7 @@ function TopRatedScreen({ movies, onUpdateRating, genres, isDarkMode }) {
   const [movieCredits, setMovieCredits] = useState(null);
   const [movieProviders, setMovieProviders] = useState(null);
 
-  // Edit modal state
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [newRating, setNewRating] = useState('');
+  // Enhanced rating system handles edit modal internally
   const [selectedGenreId, setSelectedGenreId] = useState(null);
   const slideAnim = useRef(new Animated.Value(300)).current;
 
@@ -188,47 +187,7 @@ function TopRatedScreen({ movies, onUpdateRating, genres, isDarkMode }) {
     return filtered.slice(0, 10);
   }, [mediaFilteredMovies, selectedGenreId, mediaType]);
 
-  const openEditModal = useCallback((movie) => {
-    setSelectedMovie(movie);
-    // Use userRating if available, otherwise convert from eloRating
-    const initialRating = movie.userRating !== undefined
-      ? movie.userRating.toFixed(1)
-      : (movie.eloRating / 100).toFixed(1);
-    setNewRating(initialRating);
-    setEditModalVisible(true);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, [slideAnim]);
-
-  const closeEditModal = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: 300,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setEditModalVisible(false);
-      setSelectedMovie(null);
-      setNewRating('');
-    });
-  }, [slideAnim]);
-
-  const updateRating = useCallback(() => {
-    const rating = parseFloat(newRating);
-    if (isNaN(rating) || rating < 1 || rating > 10) {
-      Animated.sequence([
-        Animated.timing(slideAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-      ]).start();
-      return;
-    }
-    onUpdateRating(selectedMovie.id, rating);
-    closeEditModal();
-  }, [newRating, selectedMovie, onUpdateRating, closeEditModal, slideAnim]);
+  // Enhanced rating system handles rating updates internally
 
   // Function to display rating correctly
   const displayRating = useCallback((movie) => {
@@ -409,15 +368,16 @@ return (
                 : 'Unknown'}
             </Text>
           </View>
-          <TouchableOpacity
-            style={[styles.editButton, { backgroundColor: colors.primary }]}
-            onPress={() => openEditModal(movie)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.editButtonText, { color: colors.accent }]}>
-              Edit Rating
-            </Text>
-          </TouchableOpacity>
+          <EnhancedRatingButton
+            size="small"
+            variant="edit"
+            movie={movie}
+            onRatingUpdate={(updatedMovie) => {
+              onUpdateRating(updatedMovie.id, updatedMovie.userRating);
+            }}
+            showRatingValue={true}
+            mediaType={mediaType}
+          />
         </View>
       </View>
     ))}
@@ -439,20 +399,7 @@ return (
         </View>
       )}
       
-  {/* Rating Edit Modal */}
-      <RatingModal
-        visible={editModalVisible}
-        onClose={closeEditModal}
-        onSubmit={updateRating}
-        movie={selectedMovie}
-        ratingInput={newRating}
-        setRatingInput={setNewRating}
-        slideAnim={slideAnim}
-        mediaType={mediaType}
-        isDarkMode={isDarkMode}
-        theme={theme}
-        genres={genres}
-      />
+      {/* Enhanced rating system handles edit modals internally */}
     {/* Movie Detail Modal */}
         <Modal
           visible={movieDetailModalVisible}
@@ -499,32 +446,24 @@ return (
                 {selectedMovie?.overview || 'No description available.'}
               </Text>
               
-              <View style={modalStyles.streamingRow}>
-                {movieProviders && movieProviders.length > 0 ? (
-                  deduplicateProviders(movieProviders)
-                    .filter(provider => provider.logo_path)
-                    .slice(0, 5)
-                    .map((provider) => (
-                      <Image 
-                        key={provider.provider_id}
-                        source={{ uri: getProviderLogoUrl(provider.logo_path) }}
-                        style={modalStyles.platformIcon}
-                        resizeMode="contain"
-                      />
-                    ))
-                ) : null}
-              </View>
+              <StreamingProviders
+                movie={selectedMovie}
+                visible={movieDetailModalVisible}
+                style={{ marginVertical: 12 }}
+              />
               
               <View style={modalStyles.buttonRow}>
-                <TouchableOpacity 
-                  style={modalStyles.actionButton}
-                  onPress={() => {
+                <EnhancedRatingButton
+                  size="small"
+                  variant="edit"
+                  movie={selectedMovie}
+                  onRatingUpdate={(updatedMovie) => {
+                    onUpdateRating(updatedMovie.id, updatedMovie.userRating);
                     closeDetailModal();
-                    openEditModal(selectedMovie);
                   }}
-                >
-                  <Text style={modalStyles.actionButtonText}>Edit Rating</Text>
-                </TouchableOpacity>
+                  showRatingValue={true}
+                  mediaType={mediaType}
+                />
                 
                 <TouchableOpacity 
                   style={modalStyles.actionButton}

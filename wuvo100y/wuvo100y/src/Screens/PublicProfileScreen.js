@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import UserSearchService from '../services/UserSearchService';
 import FollowService from '../services/FollowService';
+import theme from '../utils/Theme';
 
 function PublicProfileScreen({ 
   route, 
@@ -33,15 +34,17 @@ function PublicProfileScreen({
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
 
+  // Use centralized theme instead of hardcoded colors
+  const themeColors = theme.movie[isDarkMode ? 'dark' : 'light'];
   const colors = {
-    background: isDarkMode ? '#1C2526' : '#FFFFFF',
-    text: isDarkMode ? '#F5F5F5' : '#333',
-    subtext: isDarkMode ? '#D3D3D3' : '#666',
-    accent: isDarkMode ? '#FFD700' : '#4B0082',
+    background: themeColors.background,
+    text: themeColors.text,
+    subtext: themeColors.subText,
+    accent: themeColors.accent,
     card: isDarkMode ? 'rgba(255, 215, 0, 0.1)' : 'rgba(75, 0, 130, 0.05)',
-    border: isDarkMode ? '#8A2BE2' : '#E0E0E0',
-    button: isDarkMode ? '#FFD700' : '#4B0082',
-    buttonText: isDarkMode ? '#1C2526' : '#FFFFFF'
+    border: themeColors.border.color,
+    button: themeColors.accent,
+    buttonText: themeColors.textOnPrimary
   };
 
   const loadUserProfile = useCallback(async () => {
