@@ -1,0 +1,140 @@
+import React from 'react';
+import { View, Text, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { getHomeStyles } from '../../Styles/homeStyles';
+import theme from '../../utils/Theme';
+
+const { width } = Dimensions.get('window');
+const MOVIE_CARD_WIDTH = (width - 48) / 2.2;
+
+/**
+ * MovieCard - EXACT copy of AI recommendations from Home screen (lines 2756-2840)
+ * CODE_BIBLE Commandment #3: Write obvious code - this is a direct extraction
+ */
+const MovieCard = ({ 
+  item, 
+  handleMovieSelect, 
+  handleNotInterested,
+  mediaType = 'movie',
+  isDarkMode = false,
+  currentSession = null,
+  getRatingBorderColor = () => 'transparent'
+}) => {
+  const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
+  const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
+
+  // EXACT copy from Home screen lines 2757-2840
+  return (
+    <View style={[
+      homeStyles.movieCardBorder,
+      { 
+        borderColor: getRatingBorderColor(item),
+        borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0
+      }
+    ]}>
+      <TouchableOpacity
+        style={{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }}
+        activeOpacity={0.7}
+        onPress={() => handleMovieSelect(item)}
+      >
+        <View style={[homeStyles.enhancedCard, { width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }]}>
+          <View style={[
+            styles.aiRecommendationBadge, 
+            { 
+              backgroundColor: (item.discoverySession || currentSession) ? colors.secondary : colors.success, 
+              top: 12 
+            }
+          ]}>
+            <Text style={[styles.rankingNumber, { color: colors.textOnPrimary }]}>
+              {(() => {
+                if (item.discoveryScore) return Math.round(item.discoveryScore);
+                if (item.discoverySession || currentSession) return 'DS';
+                return 'AI';
+              })()}
+            </Text>
+          </View>
+          
+          {/* NOT INTERESTED X BUTTON - TOP RIGHT */}
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.6)',
+              borderRadius: 15,
+              width: 30,
+              height: 30,
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10
+            }}
+            onPress={(event) => handleNotInterested(item, event)}
+            activeOpacity={0.8}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={18} color="white" />
+          </TouchableOpacity>
+          
+          <Image
+            source={{
+              uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
+            }}
+            style={[styles.moviePoster, { width: MOVIE_CARD_WIDTH - 3, height: MOVIE_CARD_WIDTH * 1.5 - 3 }]}
+            resizeMode="cover"
+          />
+          
+          <View style={[homeStyles.movieInfoBox, { width: MOVIE_CARD_WIDTH - 3, minHeight: 80 }]}>
+            <Text
+              style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18, marginBottom: 2 }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {item.title}
+            </Text>
+            <View style={homeStyles.ratingRow}>
+              <View style={homeStyles.ratingLine}>
+                <Ionicons name="star" size={12} color={colors.accent} />
+                <Text style={homeStyles.tmdbText}>
+                  TMDb {item.vote_average ? item.vote_average.toFixed(1) : '?'}
+                </Text>
+              </View>
+              <View style={homeStyles.ratingLine}>
+                <Ionicons name="people" size={12} color={colors.success} />
+                <Text style={[homeStyles.friendsText, { color: colors.success }]}>
+                  Friends {item.friendsRating ? item.friendsRating.toFixed(1) : 'N/A'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// Local styles matching Home screen exactly (colors from theme)
+const styles = {
+  moviePoster: {
+    width: '100%',
+    height: MOVIE_CARD_WIDTH * 1.5,
+    borderRadius: 8,
+  },
+  aiRecommendationBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    zIndex: 1,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  rankingNumber: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+};
+
+export default MovieCard;
+export { MOVIE_CARD_WIDTH };
