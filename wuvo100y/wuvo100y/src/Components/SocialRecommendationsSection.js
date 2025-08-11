@@ -69,17 +69,16 @@ function SocialRecommendationsSection({
           contentContainerStyle={styles.scrollContent}
         >
           {socialRecommendations.map((movie, index) => (
-            <View key={`social-${movie.id}-${index}`} style={styles.cardContainer}>
-              <SocialRecommendationCard
-                movie={movie}
-                onPress={onMoviePress}
-                isDarkMode={isDarkMode}
-                showSocialContext={true}
-                mediaType={mediaType}
-                theme={theme}
-                homeStyles={homeStyles}
-              />
-            </View>
+            <SocialRecommendationCard
+              key={`social-${movie.id}-${index}`}
+              movie={movie}
+              onPress={onMoviePress}
+              isDarkMode={isDarkMode}
+              showSocialContext={true}
+              mediaType={mediaType}
+              theme={theme}
+              homeStyles={homeStyles}
+            />
           ))}
         </ScrollView>
       )}
@@ -118,12 +117,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   scrollContent: {
-    paddingHorizontal: 0,
+    paddingHorizontal: 8,
     paddingBottom: 16,
-  },
-  cardContainer: {
-    marginRight: 12,
-    width: 280, // Fixed width for consistent card sizing
+    gap: 8,
   },
 });
 

@@ -124,16 +124,16 @@ const styles = StyleSheet.create({
   },
   providerItem: {
     alignItems: 'center',
-    marginRight: 4,
+    marginRight: 8,
   },
   providerLogo: {
-    width: 16,
-    height: 16,
-    borderRadius: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 4,
   },
   paymentIndicator: {
-    fontSize: 6,
+    fontSize: 10,
     fontWeight: 'bold',
-    marginTop: 1,
+    marginTop: 2,
   },
 });

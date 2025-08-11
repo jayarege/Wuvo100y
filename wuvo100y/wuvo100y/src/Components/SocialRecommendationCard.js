@@ -4,10 +4,14 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  StyleSheet
+  StyleSheet,
+  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import defaultTheme from '../utils/Theme';
+
+const { width } = Dimensions.get('window');
+const MOVIE_CARD_WIDTH = (width - 48) / 2.2;
 
 /**
  * SocialRecommendationCard - Movie recommendation with social context
@@ -17,7 +21,7 @@ import defaultTheme from '../utils/Theme';
  * - Social reason clearly displayed with friend context
  * - Obvious tap target for movie details
  */
-function SocialRecommendationCard({
+const SocialRecommendationCard = React.memo(({
   movie,
   onPress,
   isDarkMode,
@@ -25,7 +29,7 @@ function SocialRecommendationCard({
   mediaType = 'movie',
   theme,
   homeStyles
-}) {
+}) => {
   // Use centralized theme instead of hardcoded colors
   const currentTheme = theme || defaultTheme;
   const themeColors = currentTheme[mediaType][isDarkMode ? 'dark' : 'light'];
@@ -63,182 +67,136 @@ function SocialRecommendationCard({
   };
 
   return (
-    <TouchableOpacity
-      style={[homeStyles?.enhancedCard || styles.container, { backgroundColor: colors.background, borderColor: colors.border }]}
-      onPress={() => onPress(movie)}
-      activeOpacity={0.7}
-    >
-      {/* Movie Poster */}
-      <View style={styles.posterContainer}>
+    <View style={[
+      homeStyles?.movieCardBorder || styles.cardBorder,
+      {
+        borderColor: movie.userRating ? themeColors.primaryGradient[1] : 'transparent',
+        borderWidth: movie.userRating ? 1 : 0
+      }
+    ]}>
+      <TouchableOpacity
+        style={[
+          homeStyles?.enhancedCard || styles.container, 
+          { 
+            backgroundColor: colors.background,
+            borderColor: themeColors.primaryGradient[1]
+          }
+        ]}
+        onPress={() => onPress(movie)}
+        activeOpacity={0.7}
+      >
+        {/* Movie Poster - Vertical Layout */}
         {movie.poster_path ? (
           <Image
-            source={{ uri: `https://image.tmdb.org/t/p/w154${movie.poster_path}` }}
+            source={{ uri: `https://image.tmdb.org/t/p/w500${movie.poster_path}` }}
             style={styles.poster}
             resizeMode="cover"
           />
         ) : (
           <View style={[styles.posterPlaceholder, { backgroundColor: colors.border }]}>
-            <Ionicons name="film" size={24} color={colors.subtext} />
-          </View>
-        )}
-        
-        {/* TMDB Rating Badge */}
-        {movie.vote_average > 0 && (
-          <View style={[styles.ratingBadge, { backgroundColor: colors.accent }]}>
-            <Ionicons name="star" size={10} color="#FFFFFF" />
-            <Text style={styles.ratingText}>
-              {formatRating(movie.vote_average)}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Movie Info */}
-      <View style={styles.movieInfo}>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
-          {movie.title}
-        </Text>
-        
-        <View style={styles.movieMeta}>
-          {movie.release_date && (
-            <Text style={[styles.year, { color: colors.subtext }]}>
-              {formatYear(movie.release_date)}
-            </Text>
-          )}
-          
-          {movie.genre_ids && movie.genre_ids.length > 0 && (
-            <Text style={[styles.genres, { color: colors.subtext }]} numberOfLines={1}>
-              • {movie.genres?.map(g => g.name).join(', ') || 'Multiple genres'}
-            </Text>
-          )}
-        </View>
-
-        {/* Social Context */}
-        {showSocialContext && movie.socialContext && (
-          <View style={[styles.socialContext, { backgroundColor: colors.socialBg }]}>
-            <Ionicons
-              name={getSocialIcon(movie.socialContext.strategy)}
-              size={14}
-              color={colors.socialText}
-            />
-            <Text style={[styles.socialReason, { color: colors.socialText }]} numberOfLines={2}>
-              {movie.socialContext.reason}
-            </Text>
+            <Ionicons name="film" size={40} color={colors.subtext} />
           </View>
         )}
 
-        {/* Movie Overview Preview */}
-        {movie.overview && (
-          <Text style={[styles.overview, { color: colors.subtext }]} numberOfLines={3}>
-            {movie.overview}
+        {/* Movie Info Box - Below Poster */}
+        <View style={homeStyles?.movieInfoBox || styles.movieInfoBox}>
+          <Text
+            style={homeStyles?.genreName || styles.title}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.7}
+            ellipsizeMode="tail"
+          >
+            {movie.title}
           </Text>
-        )}
-      </View>
-
-      {/* Action Indicator */}
-      <View style={styles.actionIndicator}>
-        <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
-      </View>
-    </TouchableOpacity>
+          
+          {/* Rating Row */}
+          <View style={homeStyles?.ratingRow || styles.ratingRow}>
+            <View style={homeStyles?.ratingLine || styles.ratingLine}>
+              <Ionicons name="star" size={12} color={colors.accent} />
+              <Text style={homeStyles?.tmdbText || styles.ratingText}>
+                TMDb {movie.vote_average ? movie.vote_average.toFixed(1) : '?'}
+              </Text>
+            </View>
+            
+            {/* Social Context as Second Rating */}
+            {showSocialContext && movie.socialContext && (
+              <View style={homeStyles?.ratingLine || styles.ratingLine}>
+                <Ionicons
+                  name={getSocialIcon(movie.socialContext.strategy)}
+                  size={12}
+                  color={colors.socialText}
+                />
+                <Text style={homeStyles?.friendsText || styles.socialText} numberOfLines={1}>
+                  {movie.socialContext.reason.split(' ').slice(0, 2).join(' ')}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    padding: 12,
-    marginVertical: 6,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  posterContainer: {
-    position: 'relative',
+  cardBorder: {
+    borderWidth: 0,
+    borderRadius: 0,
+    marginHorizontal: 0,
+    marginVertical: 0,
+    padding: 0,
+    backgroundColor: 'transparent',
+    width: MOVIE_CARD_WIDTH,
     marginRight: 12,
   },
+  container: {
+    borderWidth: 0.5,
+    borderRadius: 12,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
   poster: {
-    width: 80,
-    height: 120,
-    borderRadius: 8,
+    width: MOVIE_CARD_WIDTH,
+    height: MOVIE_CARD_WIDTH * 1.5,
   },
   posterPlaceholder: {
-    width: 80,
-    height: 120,
-    borderRadius: 8,
+    width: MOVIE_CARD_WIDTH,
+    height: MOVIE_CARD_WIDTH * 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ratingBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
+  movieInfoBox: {
+    padding: 6,
+    width: '100%',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  ratingRow: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 36,
     justifyContent: 'center',
   },
   ratingText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginLeft: 2,
-  },
-  movieInfo: {
-    flex: 1,
-    justifyContent: 'flex-start',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  movieMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    flexWrap: 'wrap',
-  },
-  year: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  genres: {
-    fontSize: 12,
+    fontSize: 11,
     marginLeft: 4,
-    flex: 1,
   },
-  socialContext: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  socialReason: {
-    fontSize: 12,
+  socialText: {
+    fontSize: 11,
+    marginLeft: 4,
     fontWeight: '600',
-    marginLeft: 6,
-    flex: 1,
-    lineHeight: 16,
-  },
-  overview: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  actionIndicator: {
-    alignSelf: 'center',
-    marginLeft: 8,
   },
 });
 

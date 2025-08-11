@@ -66,4 +66,6 @@ When in doubt, read the code. If it’s unclear, fix the clarity.
 
 ---
 
-_This file shall be reviewed after **every** update to ensure compliance._
+_This file shall be reviewed after **every** update to ensure compliance.
+
+list **every** file name that were modified, added or deleted. Just the file name, nothing more
