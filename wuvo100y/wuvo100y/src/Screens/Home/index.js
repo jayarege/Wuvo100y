@@ -3076,16 +3076,16 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
         <Modal visible={comparisonModalVisible} transparent animationType="none">
           <View style={styles.modalOverlay}>
             <LinearGradient
-              colors={colors.primaryGradient || ['#667eea', '#764ba2']}
+              colors={getModalColors(false).primaryGradient || ['#667eea', '#764ba2']}
               style={styles.comparisonModalContent}
             >
               {!isComparisonComplete ? (
                 <>
                   <View style={styles.comparisonHeader}>
-                    <Text style={[styles.modalTitle, { color: colors.text }]}>
+                    <Text style={[styles.modalTitle, { color: getModalColors(false).text }]}>
                       🎬 Comparison {currentComparison + 1}/3
                     </Text>
-                    <Text style={[styles.comparisonSubtitle, { color: colors.subText }]}>
+                    <Text style={[styles.comparisonSubtitle, { color: getModalColors(false).subText }]}>
                       Which one do you prefer?
                     </Text>
                   </View>
@@ -3102,17 +3102,17 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
                         style={styles.comparisonPoster}
                         resizeMode="cover"
                       />
-                      <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                      <Text style={[styles.movieCardName, { color: getModalColors(false).text }]} numberOfLines={2}>
                         {selectedMovie?.title || selectedMovie?.name}
                       </Text>
-                      <Text style={[styles.movieCardYear, { color: colors.subText }]}>
+                      <Text style={[styles.movieCardYear, { color: getModalColors(false).subText }]}>
                         {selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 'N/A'}
                       </Text>
                     </TouchableOpacity>
                     
                     {/* VS Indicator */}
                     <View style={styles.vsIndicator}>
-                      <Text style={[styles.vsText, { color: colors.accent }]}>VS</Text>
+                      <Text style={[styles.vsText, { color: getModalColors(false).accent }]}>VS</Text>
                     </View>
                     
                     {/* Comparison Movie */}
@@ -3127,13 +3127,13 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
                           style={styles.comparisonPoster}
                           resizeMode="cover"
                         />
-                        <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                        <Text style={[styles.movieCardName, { color: getModalColors(false).text }]} numberOfLines={2}>
                           {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
                         </Text>
-                        <Text style={[styles.movieCardYear, { color: colors.subText }]}>
+                        <Text style={[styles.movieCardYear, { color: getModalColors(false).subText }]}>
                           {comparisonMovies[currentComparison]?.release_date ? new Date(comparisonMovies[currentComparison].release_date).getFullYear() : 'N/A'}
                         </Text>
-                        <View style={[styles.ratingBadge, { backgroundColor: colors.accent }]}>
+                        <View style={[styles.ratingBadge, { backgroundColor: getModalColors(false).accent }]}>
                           <Text style={styles.ratingText}>
                             {comparisonMovies[currentComparison]?.userRating?.toFixed(1)}
                           </Text>
@@ -3150,7 +3150,7 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
                         style={[
                           styles.progressDot,
                           { 
-                            backgroundColor: index <= currentComparison ? colors.accent : colors.border?.color || '#ccc'
+                            backgroundColor: index <= currentComparison ? getModalColors(false).accent : getModalColors(false).border?.color || '#ccc'
                           }
                         ]}
                       />
@@ -3159,14 +3159,14 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
 
                   {/* Too Tough to Decide Button */}
                   <TouchableOpacity 
-                    style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+                    style={[styles.cancelButton, { borderColor: getModalColors(false).border?.color || '#ccc' }]}
                     onPress={() => {
                       console.log('User selected: Too tough to decide');
                       // Use unified pairwise calculation for TIE result
                       handleComparison('tie');
                     }}
                   >
-                    <Text style={[styles.cancelButtonText, { color: colors.subText }]}>Too Tough to Decide</Text>
+                    <Text style={[styles.cancelButtonText, { color: getModalColors(false).subText }]}>Too Tough to Decide</Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -3191,7 +3191,7 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
                   </Text>
                   
                   {/* Final Score */}
-                  <Text style={[styles.finalRatingScore, { color: colors.secondary }]}>
+                  <Text style={[styles.finalRatingScore, { color: getModalColors(false).secondary }]}>
                     {(() => {
                       console.log('🔍 Rendering final score, finalCalculatedRating is:', finalCalculatedRating);
                       return finalCalculatedRating?.toFixed(1) || 'test';
@@ -3201,10 +3201,10 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
               )}
               
               <TouchableOpacity 
-                style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+                style={[styles.cancelButton, { borderColor: getModalColors(false).border?.color || '#ccc' }]}
                 onPress={handleCloseEnhancedModals}
               >
-                <Text style={[styles.cancelButtonText, { color: colors.subText }]}>
+                <Text style={[styles.cancelButtonText, { color: getModalColors(false).subText }]}>
                   {isComparisonComplete ? 'Close' : 'Cancel'}
                 </Text>
               </TouchableOpacity>

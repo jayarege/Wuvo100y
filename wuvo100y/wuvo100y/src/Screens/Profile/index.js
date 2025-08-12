@@ -127,8 +127,17 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
   const standardButtonStyles = getStandardizedButtonStyles(colors);
   
-  // Always use movie theme colors for comparison modal to maintain consistency
-  const comparisonModalColors = theme.movie[isDarkMode ? 'dark' : 'light'];
+  /**
+   * Helper function to get modal colors with optional theme override
+   * @param {boolean} forceMovieTheme - If true, always use movie theme colors for consistency
+   * @returns {object} Color theme object
+   */
+  const getModalColors = (forceMovieTheme = false) => {
+    if (forceMovieTheme) {
+      return theme.movie[isDarkMode ? 'dark' : 'light'];
+    }
+    return colors; // Exact same object reference to prevent unnecessary re-renders
+  };
   
   // Detect if viewing friend's profile
   const friendProfile = route?.params?.user;
@@ -2415,16 +2424,16 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       <Modal visible={comparisonModalVisible} transparent animationType="none">
         <View style={styles.modalOverlay}>
           <LinearGradient
-            colors={theme.movie[isDarkMode ? 'dark' : 'light'].primaryGradient || ['#667eea', '#764ba2']}
+            colors={getModalColors(true).primaryGradient || ['#667eea', '#764ba2']}
             style={styles.comparisonModalContent}
           >
             {!isComparisonComplete ? (
               <>
                 <View style={styles.comparisonHeader}>
-                  <Text style={[styles.modalTitle, { color: comparisonModalColors.text }]}>
+                  <Text style={[styles.modalTitle, { color: getModalColors(true).text }]}>
                     🎬 Comparison {currentComparison + 1}/3
                   </Text>
-                  <Text style={[styles.comparisonSubtitle, { color: comparisonModalColors.subText }]}>
+                  <Text style={[styles.comparisonSubtitle, { color: getModalColors(true).subText }]}>
                     Which one do you prefer?
                   </Text>
                 </View>
@@ -2441,17 +2450,17 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       style={styles.comparisonPoster}
                       resizeMode="cover"
                     />
-                    <Text style={[styles.movieCardName, { color: comparisonModalColors.text }]} numberOfLines={2}>
+                    <Text style={[styles.movieCardName, { color: getModalColors(true).text }]} numberOfLines={2}>
                       {selectedMovie?.title || selectedMovie?.name}
                     </Text>
-                    <Text style={[styles.movieCardYear, { color: comparisonModalColors.subText }]}>
+                    <Text style={[styles.movieCardYear, { color: getModalColors(true).subText }]}>
                       {selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 'N/A'}
                     </Text>
                   </TouchableOpacity>
                   
                   {/* VS Indicator */}
                   <View style={styles.vsIndicator}>
-                    <Text style={[styles.vsText, { color: comparisonModalColors.accent }]}>VS</Text>
+                    <Text style={[styles.vsText, { color: getModalColors(true).accent }]}>VS</Text>
                   </View>
                   
                   {/* Comparison Movie */}
@@ -2466,13 +2475,13 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                         style={styles.comparisonPoster}
                         resizeMode="cover"
                       />
-                      <Text style={[styles.movieCardName, { color: comparisonModalColors.text }]} numberOfLines={2}>
+                      <Text style={[styles.movieCardName, { color: getModalColors(true).text }]} numberOfLines={2}>
                         {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
                       </Text>
-                      <Text style={[styles.movieCardYear, { color: comparisonModalColors.subText }]}>
+                      <Text style={[styles.movieCardYear, { color: getModalColors(true).subText }]}>
                         {comparisonMovies[currentComparison]?.release_date ? new Date(comparisonMovies[currentComparison].release_date).getFullYear() : 'N/A'}
                       </Text>
-                      <View style={[styles.ratingBadge, { backgroundColor: comparisonModalColors.accent }]}>
+                      <View style={[styles.ratingBadge, { backgroundColor: getModalColors(true).accent }]}>
                         <Text style={styles.ratingText}>
                           {comparisonMovies[currentComparison]?.userRating?.toFixed(1)}
                         </Text>
@@ -2489,7 +2498,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       style={[
                         styles.progressDot,
                         { 
-                          backgroundColor: index <= currentComparison ? comparisonModalColors.accent : comparisonModalColors.border?.color || '#ccc'
+                          backgroundColor: index <= currentComparison ? getModalColors(true).accent : getModalColors(true).border?.color || '#ccc'
                         }
                       ]}
                     />
@@ -2498,14 +2507,14 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
 
                 {/* Too Tough to Decide Button */}
                 <TouchableOpacity 
-                  style={[styles.cancelButton, { borderColor: comparisonModalColors.border?.color || '#ccc' }]}
+                  style={[styles.cancelButton, { borderColor: getModalColors(true).border?.color || '#ccc' }]}
                   onPress={() => {
                     console.log('User selected: Too tough to decide');
                     // Use unified pairwise calculation for TIE result
                     handleComparison('tie');
                   }}
                 >
-                  <Text style={[styles.cancelButtonText, { color: comparisonModalColors.subText }]}>Too Tough to Decide</Text>
+                  <Text style={[styles.cancelButtonText, { color: getModalColors(true).subText }]}>Too Tough to Decide</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -2530,7 +2539,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                 </Text>
                 
                 {/* Final Score */}
-                <Text style={[styles.finalRatingScore, { color: comparisonModalColors.secondary }]}>
+                <Text style={[styles.finalRatingScore, { color: getModalColors(true).secondary }]}>
                   {(() => {
                     console.log('🔍 Rendering final score, finalCalculatedRating is:', finalCalculatedRating);
                     return finalCalculatedRating?.toFixed(1) || 'test';
@@ -2540,10 +2549,10 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
             )}
             
             <TouchableOpacity 
-              style={[styles.cancelButton, { borderColor: comparisonModalColors.border?.color || '#ccc' }]}
+              style={[styles.cancelButton, { borderColor: getModalColors(true).border?.color || '#ccc' }]}
               onPress={handleCloseEnhancedModals}
             >
-              <Text style={[styles.cancelButtonText, { color: comparisonModalColors.subText }]}>
+              <Text style={[styles.cancelButtonText, { color: getModalColors(true).subText }]}>
                 {isComparisonComplete ? 'Close' : 'Cancel'}
               </Text>
             </TouchableOpacity>

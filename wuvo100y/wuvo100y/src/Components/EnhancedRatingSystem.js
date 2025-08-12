@@ -2460,7 +2460,7 @@ export const calculateNewRating = (currentRating, gamesPlayed, actualScore, expe
  * Consolidated ELO calculation function used by all screens
  * Replaces duplicate implementations in Home/Wildcard/Profile screens
  */
-export const calculateRatingFromELOComparisons = (results, selectedMovie) => {
+const calculateRatingFromELOComparisons = (results, selectedMovie) => {
   // Use centralized ELO calculation system (following CODE_BIBLE single-source-of-truth)
   let currentRating = null; // Start with no rating, just like the confidence-based system
   
