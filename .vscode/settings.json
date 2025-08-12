@@ -1,0 +1,10 @@
+{
+  "task.autoDetect": "off",
+  "npm.autoDetect": "off",
+  "typescript.tsc.autoDetect": "off",
+  "debug.javascript.autoAttachFilter": "disabled",
+  "liveServer.settings.donotShowInfoMsg": true,
+  "liveServer.settings.donotVerifyTags": true,
+  "remote.autoForwardPorts": false,
+  "remote.autoForwardPortsSource": "process"
+}
