@@ -14,18 +14,19 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { calculateDynamicRatingCategories } from '../Components/EnhancedRatingSystem';
-import { getModalStyles } from '../Styles/modalStyles';
-import { getCompareStyles } from '../Styles/compareStyles';
-import { useMediaType } from '../Navigation/TabNavigator';
-import theme from '../utils/Theme';
 import { 
+  calculateDynamicRatingCategories,
+  selectMovieFromPercentileUnified,
   calculateKFactor,
   calculateExpectedWinProbability,
   calculateNewRating,
   selectRandomOpponent as selectPercentileOpponent,
   selectRandomOpponent as selectProximityOpponent
 } from '../Components/EnhancedRatingSystem';
+import { getModalStyles } from '../Styles/modalStyles';
+import { getCompareStyles } from '../Styles/compareStyles';
+import { useMediaType } from '../Navigation/TabNavigator';
+import theme from '../utils/Theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -98,21 +99,14 @@ const getGenreName = (genreIds) => {
   return genreIds.map(id => genreMap[id] || 'Unknown').join(', ');
 };
 
-// Phase 1: Percentile-based selection for initial emotion
+// Phase 1: Percentile-based selection for initial emotion - NOW USING UNIFIED FUNCTION
 const selectMovieFromPercentile = (seenMovies, emotion, usedOpponentIds = []) => {
-  // Map emotions to percentile ranges (corrected for descending sort order)
-  const percentileRanges = {
-    LOVED: [0.0, 0.25],      // Top 25% - indices 0-25% in descending sorted array
-    LIKED: [0.25, 0.50],     // Upper-middle 25-50% 
-    AVERAGE: [0.50, 0.75],   // Lower-middle 50-75%
-    DISLIKED: [0.75, 1.0]    // Bottom 25% - indices 75-100% in descending sorted array
-  };
+  console.log(`🎯 Phase 1 - Emotion: ${emotion}, Total movies: ${seenMovies.length}`);
   
-  const range = percentileRanges[emotion] || [0.25, 0.75];
-  
-  console.log(`🎯 Phase 1 - Emotion: ${emotion}, Total movies: ${seenMovies.length}, Percentile range: [${range[0]*100}%, ${range[1]*100}%]`);
-  
-  const selectedMovie = selectPercentileOpponent(seenMovies, range, usedOpponentIds);
+  // Use unified percentile selection function
+  const selectedMovie = selectMovieFromPercentileUnified(seenMovies, emotion, {
+    enhancedLogging: true
+  });
   
   if (selectedMovie) {
     console.log(`✅ Selected opponent: ${selectedMovie.title || selectedMovie.name} (Rating: ${selectedMovie.userRating})`);

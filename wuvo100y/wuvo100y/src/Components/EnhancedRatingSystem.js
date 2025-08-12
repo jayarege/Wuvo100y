@@ -2453,6 +2453,178 @@ export const calculateNewRating = (currentRating, gamesPlayed, actualScore, expe
   return Math.max(1.0, Math.min(10.0, newRating));
 };
 
+// **CONSOLIDATED CALCULATION FUNCTIONS** 
+// Following CODE_BIBLE: Single source of truth for all rating calculations
+
+/**
+ * Consolidated ELO calculation function used by all screens
+ * Replaces duplicate implementations in Home/Wildcard/Profile screens
+ */
+export const calculateRatingFromELOComparisons = (results, selectedMovie) => {
+  // Use centralized ELO calculation system (following CODE_BIBLE single-source-of-truth)
+  let currentRating = null; // Start with no rating, just like the confidence-based system
+  
+  // Process each comparison using centralized ELO logic
+  results.forEach((result, index) => {
+    const opponent = result.winner === selectedMovie ? result.loser : result.winner;
+    const newMovieWon = result.userChoice === 'new';
+    const opponentRating = opponent.userRating || (opponent.eloRating / 100);
+    
+    if (currentRating === null) {
+      // First comparison: use direct opponent-based calculation
+      currentRating = opponentRating + (newMovieWon ? 0.5 : -0.5);
+      currentRating = Math.max(1, Math.min(10, currentRating));
+    } else {
+      // Subsequent comparisons: use proper ELO calculation
+      const comparisonResult = newMovieWon ? ComparisonResults.A_WINS : ComparisonResults.B_WINS;
+      const eloResult = calculatePairwiseRating({
+        aRating: currentRating,
+        bRating: opponentRating,
+        aGames: index,
+        bGames: opponent.gamesPlayed || 5,
+        result: comparisonResult
+      });
+      currentRating = eloResult.updatedARating;
+    }
+    
+    console.log(`📊 Comparison ${index + 1}: ${newMovieWon ? 'WIN' : 'LOSS'} vs ${opponent.title} (${opponentRating}) -> Rating: ${currentRating?.toFixed(2)}`);
+  });
+  
+  return currentRating;
+};
+
+/**
+ * Unified opponent selection with media type filtering support
+ * Consolidates all selectMovieFromPercentile implementations
+ */
+export const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => {
+  const { 
+    mediaType = null, 
+    excludeMovieId = null,
+    enableMediaTypeFilter = false,
+    enhancedLogging = false 
+  } = options;
+
+  const percentileRanges = ENHANCED_RATING_CONFIG.PERCENTILE_RANGES;
+
+  if (!seenMovies || seenMovies.length === 0) {
+    if (enhancedLogging) console.log('🚨 No seen movies available');
+    return null;
+  }
+
+  // Apply media type filtering if enabled
+  let filteredMovies = seenMovies;
+  if (enableMediaTypeFilter && mediaType) {
+    filteredMovies = seenMovies.filter(movie => 
+      movie.id !== excludeMovieId &&
+      (movie.mediaType || 'movie') === mediaType
+    );
+    
+    if (enhancedLogging) {
+      console.log(`🎯 Available opponents for ${mediaType}:`, filteredMovies.length);
+      console.log(`🎯 Media type filter: ${mediaType}, Sample opponents:`, 
+        filteredMovies.slice(0, 3).map(m => `${m.title} (${m.mediaType || 'movie'})`));
+    }
+  } else {
+    // Standard filtering without media type
+    filteredMovies = seenMovies.filter(movie => movie.id !== excludeMovieId);
+  }
+
+  // Sort movies by rating to establish percentile ranges
+  const sortedMovies = [...filteredMovies].sort((a, b) => (a.userRating || 0) - (b.userRating || 0));
+  const [minPercent, maxPercent] = percentileRanges[emotion] || [0.5, 0.75];
+  
+  const startIndex = Math.floor(sortedMovies.length * minPercent);
+  const endIndex = Math.min(Math.floor(sortedMovies.length * maxPercent), sortedMovies.length - 1);
+  
+  if (enhancedLogging) {
+    console.log(`🎯 ${emotion} percentile [${minPercent}-${maxPercent}]: indices ${startIndex}-${endIndex}`);
+  }
+  
+  const percentileMovies = sortedMovies.slice(startIndex, endIndex + 1);
+  if (percentileMovies.length === 0) return sortedMovies[0]; // Fallback
+  
+  // Random selection from percentile
+  const selectedMovie = percentileMovies[Math.floor(Math.random() * percentileMovies.length)];
+  
+  if (enhancedLogging) {
+    console.log(`🎬 Selected from ${emotion} percentile: ${selectedMovie.title} (Rating: ${selectedMovie.userRating})`);
+  }
+  
+  return selectedMovie;
+};
+
+/**
+ * Unified comparison handling for all screens
+ * Consolidates handleComparison logic with screen-specific behavior
+ */
+export const handleComparisonUnified = async (screenConfig, comparisonParams) => {
+  const {
+    winner,
+    currentComparison,
+    comparisonMovies,
+    selectedMovie,
+    mediaType,
+    setCurrentMovieRating,
+    updateMovieInStorage
+  } = comparisonParams;
+
+  const currentComparisonMovie = comparisonMovies[currentComparison];
+  
+  if (currentComparison === 0) {
+    // FIRST COMPARISON: Unknown vs Known (use unified pairwise calculation)
+    const opponentRating = currentComparisonMovie.userRating;
+    let result;
+    
+    if (winner === 'new') {
+      result = ComparisonResults.A_WINS;
+    } else if (winner === 'comparison') {
+      result = ComparisonResults.B_WINS;
+    } else if (winner === 'tie') {
+      result = ComparisonResults.TIE;
+    }
+    
+    const pairwiseResult = calculatePairwiseRating({
+      aRating: null, // New movie has no rating yet
+      bRating: opponentRating, // Opponent rating
+      aGames: 0, // New movie has no games
+      bGames: currentComparisonMovie.gamesPlayed || 5,
+      result: result
+    });
+    
+    const derivedRating = pairwiseResult.updatedARating;
+    const opponentNewRating = pairwiseResult.updatedBRating;
+    
+    setCurrentMovieRating(derivedRating);
+    
+    // Update opponent rating if it changed
+    if (opponentNewRating !== opponentRating && updateMovieInStorage) {
+      currentComparisonMovie.userRating = opponentNewRating;
+      await updateMovieInStorage(currentComparisonMovie, opponentNewRating);
+    }
+    
+    console.log(`🎯 Round 1 result: ${winner} -> Derived rating: ${derivedRating?.toFixed(2)}, Opponent updated: ${opponentNewRating?.toFixed(2)}`);
+    
+    return {
+      derivedRating,
+      opponentNewRating,
+      isComplete: false
+    };
+  }
+  
+  // Subsequent comparisons handled by existing logic
+  return null;
+};
+
+/**
+ * Simple utility for calculating average ratings
+ * Used in "Too Tough to Decide" scenarios
+ */
+export const calculateAverageRating = (rating1, rating2) => {
+  const avg = (rating1 + rating2) / 2;
+  return Math.max(1, Math.min(10, avg));
+};
+
 export { 
   EnhancedRatingButton, 
   QuickRatingButton, 
@@ -2465,5 +2637,10 @@ export {
   updateRatingWithConfidence,
   calculateConfidenceInterval,
   hasTargetConfidence,
-  CONFIDENCE_RATING_CONFIG
+  CONFIDENCE_RATING_CONFIG,
+  // Consolidated calculation functions
+  calculateRatingFromELOComparisons,
+  selectMovieFromPercentileUnified,
+  handleComparisonUnified,
+  calculateAverageRating
 };
