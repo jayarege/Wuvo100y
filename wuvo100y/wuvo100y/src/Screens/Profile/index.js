@@ -98,6 +98,8 @@ import { useAuth } from '../../hooks/useAuth';
 import FirebaseAuthTest from '../../Components/FirebaseAuthTest';
 // RatingModal replaced with EnhancedRatingSystem components
 import { SentimentRatingModal, calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
+import MovieCard, { MOVIE_CARD_WIDTH } from '../../Components/MovieCard/MovieCard';
+import MovieDetailModal from '../../Components/MovieDetailModal/MovieDetailModal';
 import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion } from '../../Components/EnhancedRatingSystem';
 import { filterAdultContent } from '../../utils/ContentFiltering';
 import { movieUtils } from '../../utils/movieUtils';
@@ -774,6 +776,16 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     // Add to skipped movies if function exists
     closeDetailModal();
   }, [closeDetailModal]);
+
+  const handleCloseEnhancedModals = useCallback(() => {
+    setComparisonModalVisible(false);
+    setSelectedCategory(null);
+    setComparisonMovies([]);
+    setCurrentComparison(0);
+    setComparisonResults([]);
+    setIsComparisonComplete(false);
+    setFinalCalculatedRating(null);
+  }, []);
   
   // Select movie from percentile based on emotion (from Home screen logic)
   const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
@@ -1733,69 +1745,14 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
             keyExtractor={item => item.id.toString()}
             removeClippedSubviews={false}
             renderItem={({ item, index }) => (
-              <TouchableOpacity
-                style={{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }}
-                activeOpacity={0.7}
-                onPress={() => handleMovieSelect(item, 'toppicks-grid')}
-              >
-                <View style={{ width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.card }}>
-                  <View style={{
-                    position: 'absolute',
-                    top: 8,
-                    left: 8,
-                    backgroundColor: colors.accent,
-                    borderRadius: 12,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    zIndex: 10
-                  }}>
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
-                      #{index + 1}
-                    </Text>
-                  </View>
-                  
-                  <LinearGradient
-                    colors={colors.primaryGradient}
-                    style={{
-                      padding: 1,
-                      borderRadius: 8,
-                      width: MOVIE_CARD_WIDTH - 4,
-                      height: MOVIE_CARD_WIDTH * 1.5 - 4,
-                      marginTop: 2,
-                      marginLeft: 2
-                    }}
-                  >
-                    <Image
-                      source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
-                      style={{ width: '100%', height: '100%', borderRadius: 7 }}
-                      resizeMode="cover"
-                    />
-                  </LinearGradient>
-                  <View style={{ width: MOVIE_CARD_WIDTH - 6, minHeight: 80, padding: 8, backgroundColor: colors.card }}>
-                    <Text
-                      style={{ fontSize: 16, lineHeight: 18, marginBottom: 2, color: colors.text, fontWeight: '600' }}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {getTitle(item)}
-                    </Text>
-                    <View style={{ flexDirection: 'column', gap: 2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="star" size={12} color={colors.accent} />
-                        <Text style={{ fontSize: 12, color: colors.subText, marginLeft: 4 }}>
-                          Your Rating: {displayRating(item)}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="people" size={12} color="#4CAF50" />
-                        <Text style={{ fontSize: 12, color: '#4CAF50', marginLeft: 4 }}>
-                          TMDb: {item.vote_average ? item.vote_average.toFixed(1) : 'N/A'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
+              <MovieCard
+                item={item}
+                handleMovieSelect={(movie) => handleMovieSelect(movie, 'toppicks-grid')}
+                handleNotInterested={handleNotInterested}
+                mediaType={mediaType}
+                isDarkMode={isDarkMode}
+                rankingNumber={index + 1}
+              />
             )}
           />
         </View>
@@ -1818,70 +1775,14 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
             contentContainerStyle={{ paddingHorizontal: 16 }}
             keyExtractor={item => item.id.toString()}
             removeClippedSubviews={false}
-            renderItem={({ item, index }) => (
-              <TouchableOpacity
-                style={{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }}
-                activeOpacity={0.7}
-                onPress={() => handleMovieSelect(item, 'watchlist-grid')}
-              >
-                <View style={{ width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.card }}>
-                  <View style={{
-                    position: 'absolute',
-                    top: 8,
-                    left: 8,
-                    backgroundColor: '#4CAF50',
-                    borderRadius: 12,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    zIndex: 10
-                  }}>
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
-                      WL
-                    </Text>
-                  </View>
-                  
-                  <LinearGradient
-                    colors={colors.primaryGradient}
-                    style={{
-                      padding: 1,
-                      borderRadius: 8,
-                      width: MOVIE_CARD_WIDTH - 4,
-                      height: MOVIE_CARD_WIDTH * 1.5 - 4,
-                      marginTop: 2,
-                      marginLeft: 2
-                    }}
-                  >
-                    <Image
-                      source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
-                      style={{ width: '100%', height: '100%', borderRadius: 7 }}
-                      resizeMode="cover"
-                    />
-                  </LinearGradient>
-                  <View style={{ width: MOVIE_CARD_WIDTH - 6, minHeight: 80, padding: 8, backgroundColor: colors.card }}>
-                    <Text
-                      style={{ fontSize: 16, lineHeight: 18, marginBottom: 2, color: colors.text, fontWeight: '600' }}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {getTitle(item)}
-                    </Text>
-                    <View style={{ flexDirection: 'column', gap: 2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="bookmark" size={12} color="#4CAF50" />
-                        <Text style={{ fontSize: 12, color: colors.subText, marginLeft: 4 }}>
-                          On Watchlist
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="star" size={12} color={colors.accent} />
-                        <Text style={{ fontSize: 12, color: colors.subText, marginLeft: 4 }}>
-                          TMDb: {item.vote_average ? item.vote_average.toFixed(1) : 'N/A'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
+            renderItem={({ item }) => (
+              <MovieCard
+                item={item}
+                handleMovieSelect={(movie) => handleMovieSelect(movie, 'watchlist-grid')}
+                handleNotInterested={handleNotInterested}
+                mediaType={mediaType}
+                isDarkMode={isDarkMode}
+              />
             )}
           />
         </View>
@@ -1922,163 +1823,29 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         </TouchableOpacity>
       </Modal>
 
-      {/* Enhanced Movie Detail Modal - Now used for ALL movie interactions */}
-      <Modal
+      {/* Movie Detail Modal - Now uses standardized component */}
+      <MovieDetailModal
         visible={movieDetailModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeDetailModal}
-      >
-        <View style={modalStyles.detailModalOverlay}>
-          <LinearGradient
-            colors={theme[mediaType][isDarkMode ? 'dark' : 'light'].primaryGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={modalStyles.detailModalContent}
-          >
-            <Image 
-              source={{ uri: getSecureImageUrl(selectedMovie?.poster_path || selectedMovie?.poster, 'w500') || 'https://via.placeholder.com/500x750/333/fff?text=No+Poster' }} 
-              style={modalStyles.detailPoster}
-              resizeMode="cover" 
-            />
-            
-            <Text style={modalStyles.detailTitle}>
-              {selectedMovie?.title || selectedMovie?.name}
-            </Text>
-            
-            <Text style={modalStyles.detailYear}>
-              ({selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 
-                selectedMovie?.first_air_date ? new Date(selectedMovie.first_air_date).getFullYear() : 'Unknown'})
-            </Text>
-            
-            <Text style={modalStyles.detailScore}>
-              {selectedMovie?.userRating ? `Your Rating: ${selectedMovie.userRating.toFixed(1)}` : 
-               selectedMovie?.vote_average ? `TMDb: ${selectedMovie.vote_average.toFixed(1)}` : 'N/A'}
-            </Text>
-            
-            {/* Cast Information */}
-            {movieCredits && movieCredits.length > 0 && (
-              <Text style={modalStyles.detailActors}>
-                Actors: {movieCredits.map(actor => actor.name).join(', ')}
-              </Text>
-            )}
-            
-            <Text 
-              style={modalStyles.detailPlot}
-              numberOfLines={4}
-              ellipsizeMode="tail"
-            >
-              {selectedMovie?.overview || 'No description available.'}
-            </Text>
-            
-            <StreamingProviders
-              movie={selectedMovie}
-              visible={movieDetailModalVisible}
-              style={{ marginVertical: 12 }}
-            />
-            
-            <View style={modalStyles.buttonRow}>
-              {/* Dynamic buttons based on context */}
-              {movieContext === 'toprated' || movieContext === 'toppicks-grid' || movieContext === 'fulllist' ? (
-                // For movies already rated - show Edit Rating button
-                <TouchableOpacity 
-                  style={[
-                    standardButtonStyles.baseButton,
-                    standardButtonStyles.primaryButton
-                  ]}
-                  onPress={() => {
-                    closeDetailModal();
-                    openEditModal(selectedMovie);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text 
-                    style={[
-                      standardButtonStyles.baseText,
-                      standardButtonStyles.primaryText
-                    ]}
-                  >
-                    Edit Rating
-                  </Text>
-                </TouchableOpacity>
-              ) : movieContext === 'watchlist' || movieContext === 'watchlist-grid' ? (
-                // For watchlist movies - show Rate and Remove buttons
-                <>
-                  <TouchableOpacity 
-                    style={[
-                      standardButtonStyles.baseButton,
-                      standardButtonStyles.primaryButton
-                    ]}
-                    onPress={() => {
-                      console.log('🎬 Rate button clicked from enhanced modal');
-                      closeDetailModal(true);
-                      setEmotionModalVisible(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text 
-                      style={[
-                        standardButtonStyles.baseText,
-                        standardButtonStyles.primaryText
-                      ]}
-                    >
-                      Rate
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[
-                      standardButtonStyles.baseButton,
-                      standardButtonStyles.tertiaryButton
-                    ]}
-                    onPress={handleWatchlistToggle}
-                    activeOpacity={0.7}
-                  >
-                    <Text 
-                      style={[
-                        standardButtonStyles.baseText,
-                        standardButtonStyles.tertiaryText
-                      ]}
-                    >
-                      Remove
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                // Default case - show View Details button
-                <TouchableOpacity 
-                  style={[
-                    standardButtonStyles.baseButton,
-                    standardButtonStyles.primaryButton
-                  ]}
-                  onPress={() => {
-                    closeDetailModal();
-                    navigation.navigate('MovieDetail', {
-                      movieId: selectedMovie.id,
-                      movieTitle: selectedMovie.title || selectedMovie.name,
-                      mediaType: mediaType
-                    });
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text 
-                    style={[
-                      standardButtonStyles.baseText,
-                      standardButtonStyles.primaryText
-                    ]}
-                  >
-                    View Details
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            <TouchableOpacity onPress={closeDetailModal} style={modalStyles.cancelButtonContainer}>
-              <Text style={modalStyles.cancelText}>cancel</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </Modal>
+        selectedMovie={selectedMovie}
+        movieCredits={movieCredits}
+        isLoadingMovieDetails={isLoadingMovieDetails}
+        mediaType={mediaType}
+        isDarkMode={isDarkMode}
+        showSentimentButtons={false}
+        closeDetailModal={closeDetailModal}
+        handleNotInterested={handleNotInterested}
+        handleRateButton={() => {
+          console.log('🎬 Rate button clicked from Profile modal');
+          closeDetailModal(true);
+          setEmotionModalVisible(true);
+        }}
+        handleWatchlistToggle={handleWatchlistToggle}
+        colors={theme[mediaType][isDarkMode ? 'dark' : 'light']}
+        standardButtonStyles={getStandardizedButtonStyles(theme[mediaType][isDarkMode ? 'dark' : 'light'])}
+        memoizedRatingCategories={null}
+        handleEmotionSelected={null}
+        cancelSentimentSelection={null}
+      />
 
       {/* User Search Modal */}
       <UserSearchModal
@@ -2661,12 +2428,12 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         userMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
       />
       
-      {/* Comparison Modal */}
-      <Modal visible={comparisonModalVisible} transparent animationType="slide">
+      {/* Comparison Modal - Using Home screen implementation */}
+      <Modal visible={comparisonModalVisible} transparent animationType="none">
         <View style={styles.modalOverlay}>
           <LinearGradient
             colors={colors.primaryGradient || ['#667eea', '#764ba2']}
-            style={[styles.comparisonModalContent]}
+            style={styles.comparisonModalContent}
           >
             {!isComparisonComplete ? (
               <>
@@ -2675,11 +2442,11 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                     🎬 Comparison {currentComparison + 1}/3
                   </Text>
                   <Text style={[styles.comparisonSubtitle, { color: colors.subText }]}>
-                    Which do you prefer?
+                    Which one do you prefer?
                   </Text>
                 </View>
-
-                <View style={styles.movieComparisonContainer}>
+                
+                <View style={styles.moviesComparison}>
                   {/* New Movie */}
                   <TouchableOpacity 
                     style={styles.movieComparisonCard}
@@ -2687,91 +2454,116 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                     activeOpacity={0.8}
                   >
                     <Image
-                      source={{ uri: getSecureImageUrl(selectedMovie?.poster_path || selectedMovie?.poster, 'w500') || 'https://via.placeholder.com/500x750/333/fff?text=No+Poster' }}
+                      source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
                       style={styles.comparisonPoster}
                       resizeMode="cover"
                     />
-                    <Text style={[styles.comparisonTitle, { color: colors.text }]} numberOfLines={2}>
+                    <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
                       {selectedMovie?.title || selectedMovie?.name}
                     </Text>
-                    <Text style={[styles.comparisonSubtext, { color: colors.subText }]}>
-                      New Movie
+                    <Text style={[styles.movieCardYear, { color: colors.subText }]}>
+                      {selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 'N/A'}
                     </Text>
                   </TouchableOpacity>
-
-                  <View style={styles.vsContainer}>
+                  
+                  {/* VS Indicator */}
+                  <View style={styles.vsIndicator}>
                     <Text style={[styles.vsText, { color: colors.accent }]}>VS</Text>
                   </View>
-
+                  
                   {/* Comparison Movie */}
-                  <TouchableOpacity 
-                    style={styles.movieComparisonCard}
-                    onPress={() => handleComparison('comparison')}
-                    activeOpacity={0.8}
-                  >
-                    <Image
-                      source={{ uri: getSecureImageUrl(comparisonMovies[currentComparison]?.poster_path, 'w500') || 'https://via.placeholder.com/500x750/333/fff?text=No+Poster' }}
-                      style={styles.comparisonPoster}
-                      resizeMode="cover"
-                    />
-                    <Text style={[styles.comparisonTitle, { color: colors.text }]} numberOfLines={2}>
-                      {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
-                    </Text>
-                    <Text style={[styles.comparisonSubtext, { color: colors.subText }]}>
-                      Your Rating: {comparisonMovies[currentComparison]?.userRating?.toFixed(1) || 'N/A'}
-                    </Text>
-                  </TouchableOpacity>
+                  {comparisonMovies[currentComparison] && (
+                    <TouchableOpacity 
+                      style={styles.movieComparisonCard}
+                      onPress={() => handleComparison('comparison')}
+                      activeOpacity={0.8}
+                    >
+                      <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w500${comparisonMovies[currentComparison]?.poster_path}` }}
+                        style={styles.comparisonPoster}
+                        resizeMode="cover"
+                      />
+                      <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                        {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
+                      </Text>
+                      <Text style={[styles.movieCardYear, { color: colors.subText }]}>
+                        {comparisonMovies[currentComparison]?.release_date ? new Date(comparisonMovies[currentComparison].release_date).getFullYear() : 'N/A'}
+                      </Text>
+                      <View style={[styles.ratingBadge, { backgroundColor: colors.accent }]}>
+                        <Text style={styles.ratingText}>
+                          {comparisonMovies[currentComparison]?.userRating?.toFixed(1)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
-                <TouchableOpacity 
-                  style={[styles.tieButton, { backgroundColor: colors.card }]}
-                  onPress={() => handleComparison('tie')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.tieButtonText, { color: colors.text }]}>
-                    Too Close to Call
-                  </Text>
-                </TouchableOpacity>
+                {/* Progress Indicator */}
+                <View style={styles.progressIndicator}>
+                  {[0, 1, 2].map(index => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.progressDot,
+                        { 
+                          backgroundColor: index <= currentComparison ? colors.accent : colors.border?.color || '#ccc'
+                        }
+                      ]}
+                    />
+                  ))}
+                </View>
 
+                {/* Too Tough to Decide Button */}
                 <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={() => setComparisonModalVisible(false)}
+                  style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+                  onPress={() => {
+                    console.log('User selected: Too tough to decide');
+                    // Use unified pairwise calculation for TIE result
+                    handleComparison('tie');
+                  }}
                 >
-                  <Text style={[styles.cancelButtonText, { color: colors.subText }]}>Cancel</Text>
+                  <Text style={[styles.cancelButtonText, { color: colors.subText }]}>Too Tough to Decide</Text>
                 </TouchableOpacity>
               </>
             ) : (
-              <>
-                <View style={styles.comparisonHeader}>
-                  <Text style={[styles.modalTitle, { color: colors.text }]}>
-                    🎉 Rating Complete!
-                  </Text>
-                  <Text style={[styles.comparisonSubtitle, { color: colors.subText }]}>
-                    Final Rating: {currentMovieRating?.toFixed(1)}/10
-                  </Text>
-                </View>
-
-                <View style={styles.resultsContainer}>
-                  <Text style={[styles.resultsTitle, { color: colors.text }]}>
-                    {selectedMovie?.title || selectedMovie?.name}
-                  </Text>
-                  <Text style={[styles.finalRatingText, { color: colors.accent }]}>
-                    {currentMovieRating?.toFixed(1)}/10
-                  </Text>
-                </View>
-
-                <View style={styles.comparisonButtonRow}>
-                  <TouchableOpacity 
-                    style={[styles.confirmButton, { backgroundColor: colors.primary }]}
-                    onPress={() => handleConfirmRating(currentMovieRating)}
-                  >
-                    <Text style={[styles.confirmButtonText, { color: colors.accent }]}>
-                      Confirm Rating
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </>
+              // Completion Screen
+              <View style={styles.finalRatingModal}>
+                {console.log('🎬 COMPLETION SCREEN RENDERING - finalCalculatedRating:', finalCalculatedRating)}
+                {/* Movie Poster */}
+                <Image
+                  source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
+                  style={styles.finalRatingPoster}
+                  resizeMode="cover"
+                />
+                
+                {/* Movie Title */}
+                <Text style={styles.finalRatingTitle} numberOfLines={1} ellipsizeMode="tail">
+                  {selectedMovie?.title || selectedMovie?.name}
+                </Text>
+                
+                {/* Movie Year */}
+                <Text style={styles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
+                  ({selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : selectedMovie?.first_air_date ? new Date(selectedMovie.first_air_date).getFullYear() : 'N/A'})
+                </Text>
+                
+                {/* Final Score */}
+                <Text style={[styles.finalRatingScore, { color: colors.secondary }]}>
+                  {(() => {
+                    console.log('🔍 Rendering final score, finalCalculatedRating is:', finalCalculatedRating);
+                    return finalCalculatedRating?.toFixed(1) || 'test';
+                  })()}
+                </Text>
+              </View>
             )}
+            
+            <TouchableOpacity 
+              style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+              onPress={handleCloseEnhancedModals}
+            >
+              <Text style={[styles.cancelButtonText, { color: colors.subText }]}>
+                {isComparisonComplete ? 'Close' : 'Cancel'}
+              </Text>
+            </TouchableOpacity>
           </LinearGradient>
         </View>
       </Modal>
@@ -3835,6 +3627,79 @@ const profileStyles = StyleSheet.create({
   advancedFiltersText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  // **Comparison Modal Styles from Home screen**
+  moviesComparison: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  movieCardName: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  movieCardYear: {
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  ratingBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  ratingText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  vsIndicator: {
+    marginHorizontal: 16,
+    paddingVertical: 8,
+  },
+  progressIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  progressDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginHorizontal: 4,
+  },
+  // **Final Rating Modal Styles**
+  finalRatingModal: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  finalRatingPoster: {
+    width: 120,
+    height: 180,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  finalRatingTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  finalRatingYear: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  finalRatingScore: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
 

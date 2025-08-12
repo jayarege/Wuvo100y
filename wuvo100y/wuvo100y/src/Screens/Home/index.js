@@ -2886,16 +2886,17 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
                 showsVerticalScrollIndicator={false}
               >
                 <SocialRecommendationsSection
-                  socialRecommendations={socialRecommendations}
-                  isLoading={isLoadingSocialRecs}
-                  onMoviePress={handleMovieSelect}
-                  onNotInterested={handleNotInterested}
-                  isDarkMode={isDarkMode}
-                  homeStyles={homeStyles}
-                  mediaType={mediaType}
-                  theme={theme}
-                  colors={colors}
-                />
+  socialRecommendations={socialRecommendations}
+  isLoading={isLoadingSocialRecs}
+  onMoviePress={handleMovieSelect}
+  onNotInterested={handleNotInterested}
+  isDarkMode={isDarkMode}
+  homeStyles={homeStyles}
+  mediaType={mediaType}
+  theme={theme}
+  colors={colors}
+  getRatingBorderColor={getRatingBorderColor}
+/>
                 {renderAIRecommendationsSection()}
                 {renderPopularMoviesSection()}
                 {renderWhatsOutNowSection()}
@@ -2980,17 +2981,18 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
                 contentContainerStyle={{ paddingBottom: 100 }}
                 showsVerticalScrollIndicator={false}
               >
-                <SocialRecommendationsSection
-                  socialRecommendations={socialRecommendations}
-                  isLoading={isLoadingSocialRecs}
-                  onMoviePress={handleMovieSelect}
-                  onNotInterested={handleNotInterested}
-                  isDarkMode={isDarkMode}
-                  homeStyles={homeStyles}
-                  mediaType={mediaType}
-                  theme={theme}
-                  colors={colors}
-                />
+              <SocialRecommendationsSection
+  socialRecommendations={socialRecommendations}
+  isLoading={isLoadingSocialRecs}
+  onMoviePress={handleMovieSelect}
+  onNotInterested={handleNotInterested}
+  isDarkMode={isDarkMode}
+  homeStyles={homeStyles}
+  mediaType={mediaType}
+  theme={theme}
+  colors={colors}
+  getRatingBorderColor={getRatingBorderColor}
+/>
                 {renderAIRecommendationsSection()}
                 {renderPopularMoviesSection()}
               </ScrollView>

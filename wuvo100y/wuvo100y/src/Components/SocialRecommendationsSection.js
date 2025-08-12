@@ -2,125 +2,114 @@ import React from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  StyleSheet,
+  FlatList,
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import SocialRecommendationCard from './SocialRecommendationCard';
+import MovieCard from './MovieCard';
 
 /**
  * SocialRecommendationsSection - Friend-based movie recommendations
  * 
- * CODE_BIBLE Commandment #3: Clear visual separation from AI recommendations
- * - Distinct icon and title for social vs AI recommendations
- * - Horizontal scrolling for easy browsing
- * - Loading state with clear messaging
+ * CODE_BIBLE Commandment #3: Use existing MovieCard component for consistency
  */
 function SocialRecommendationsSection({
   socialRecommendations = [],
   isLoading = false,
   onMoviePress,
+  onNotInterested,
   isDarkMode,
   homeStyles,
   mediaType,
-  theme
+  theme,
+  colors,
+  getRatingBorderColor = () => 'transparent'
 }) {
-  if (isLoading || socialRecommendations.length === 0) {
-    return null; // Don't show section if no social data
-  }
+  // Filter out any invalid recommendations
+  const validRecommendations = socialRecommendations.filter(item => 
+    item && item.id && (item.poster_path || item.poster)
+  );
 
-  const colors = {
-    accent: isDarkMode ? '#FFD700' : '#4B0082',
-    text: isDarkMode ? '#F5F5F5' : '#333',
-    subtext: isDarkMode ? '#D3D3D3' : '#666'
-  };
+  if (!validRecommendations || validRecommendations.length === 0) {
+    return null; // Don't render section if no recommendations
+  }
 
   return (
     <View style={homeStyles.section}>
-      <View style={styles.header}>
-        <View style={styles.titleContainer}>
-          <Ionicons 
-            name="people" 
-            size={16} 
-            color={colors.accent} 
-            style={styles.icon}
-          />
-          <Text style={[homeStyles.sectionTitle, styles.title]}>
-            Friends Recommend
-          </Text>
-        </View>
-        <Text style={[homeStyles.genreScore, styles.count]}>
-          {socialRecommendations.length} suggestions
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 1, marginTop: -5 }}>
+        <Ionicons 
+          name="people" 
+          size={16} 
+          color={colors.success || '#4CAF50'} 
+          style={{ marginRight: 8, marginBottom: 2 }}
+        />
+        <Text style={homeStyles.sectionTitle}>
+          Friends Recommend
+        </Text>
+        <Text style={{
+          fontSize: 12,
+          color: colors.accent,
+          marginLeft: 'auto',
+          fontWeight: '600'
+        }}>
+          {validRecommendations.length} suggestion{validRecommendations.length !== 1 ? 's' : ''}
         </Text>
       </View>
       
+      <Text style={homeStyles.swipeInstructions}>
+        Based on what your friends are watching
+      </Text>
+      
       {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={[styles.loadingText, { color: colors.subtext }]}>
-            Finding friend recommendations...
+        <View style={{ height: 200, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="small" color={colors.accent} />
+          <Text style={[homeStyles.swipeInstructions, { marginTop: 8 }]}>
+            Loading friend recommendations...
           </Text>
         </View>
       ) : (
-        <ScrollView 
-          horizontal 
+        <FlatList
+          data={validRecommendations}
+          horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {socialRecommendations.map((movie, index) => (
-            <SocialRecommendationCard
-              key={`social-${movie.id}-${index}`}
-              movie={movie}
-              onPress={onMoviePress}
-              isDarkMode={isDarkMode}
-              showSocialContext={true}
-              mediaType={mediaType}
-              theme={theme}
-              homeStyles={homeStyles}
-            />
-          ))}
-        </ScrollView>
+          contentContainerStyle={homeStyles.carouselContent}
+          keyExtractor={(item) => `social-${item.id}`}
+          removeClippedSubviews={false}
+          windowSize={10}
+          initialNumToRender={5}
+          maxToRenderPerBatch={3}
+          renderItem={({ item }) => {
+            // Normalize the item data to match MovieCard expectations
+            const normalizedItem = {
+              ...item,
+              poster_path: item.poster_path || item.poster,
+              title: item.title || item.name,
+              vote_average: item.vote_average || item.score,
+              // Add friend-specific data
+              friendsRating: item.friendsRating || item.averageFriendRating || 
+                             (item.socialContext ? item.socialContext.averageFriendRating : null),
+              recommendedBy: item.recommendedBy || [],
+              // Add a visual indicator that this is a friend recommendation
+              isFriendRecommendation: true
+            };
+            
+            return (
+              <MovieCard
+                item={normalizedItem}
+                handleMovieSelect={onMoviePress}
+                handleNotInterested={onNotInterested}
+                mediaType={mediaType}
+                isDarkMode={isDarkMode}
+                currentSession={null}
+                getRatingBorderColor={getRatingBorderColor}
+                isFriendRecommendation={true}
+              />
+            );
+          }}
+        />
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    marginTop: -5,
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  icon: {
-    marginRight: 8,
-    marginBottom: 2,
-  },
-  title: {
-    // Inherits from homeStyles.sectionTitle
-  },
-  count: {
-    fontSize: 12,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  loadingText: {
-    marginTop: 8,
-    fontSize: 14,
-  },
-  scrollContent: {
-    paddingHorizontal: 8,
-    paddingBottom: 16,
-    gap: 8,
-  },
-});
 
 export default SocialRecommendationsSection;

@@ -8,8 +8,8 @@ const { width } = Dimensions.get('window');
 const MOVIE_CARD_WIDTH = (width - 48) / 2.2;
 
 /**
- * MovieCard - EXACT copy of AI recommendations from Home screen (lines 2756-2840)
- * CODE_BIBLE Commandment #3: Write obvious code - this is a direct extraction
+ * MovieCard - Enhanced to support friend recommendations
+ * CODE_BIBLE Commandment #3: Write obvious code - standardized card component
  */
 const MovieCard = ({ 
   item, 
@@ -17,11 +17,13 @@ const MovieCard = ({
   handleNotInterested,
   mediaType = 'movie',
   isDarkMode = false,
-  currentSession = null,
-  getRatingBorderColor = () => 'transparent'
+  getRatingBorderColor = () => 'transparent',
+  rankingNumber = null // Prop for showing ranking numbers (1-10) in Profile screen
 }) => {
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
+
+  // No longer needed since badges are removed for Home screen
 
   // FORCE THE WIDTH - NO MATTER WHAT
   return (
@@ -47,21 +49,21 @@ const MovieCard = ({
           height: '100%',
           overflow: 'hidden'
         }]}>
-          <View style={[
-            styles.aiRecommendationBadge, 
-            { 
-              backgroundColor: (item.discoverySession || currentSession) ? '#FF6B6B' : '#4CAF50', 
-              top: 12 
-            }
-          ]}>
-            <Text style={[styles.rankingNumber, { color: '#000' }]}>
-              {(() => {
-                if (item.discoveryScore) return Math.round(item.discoveryScore);
-                if (item.discoverySession || currentSession) return 'DS';
-                return 'AI';
-              })()}
+          {/* Ranking number - Only shown for Profile screen with rankingNumber prop */}
+          {rankingNumber && (
+            <Text style={[
+              styles.rankingNumberLarge,
+              { 
+                color: colors.primary,
+                top: 8,
+                left: 8,
+                position: 'absolute',
+                zIndex: 1
+              }
+            ]}>
+              {rankingNumber}
             </Text>
-          </View>
+          )}
           
           {/* NOT INTERESTED X BUTTON - TOP RIGHT */}
           <TouchableOpacity
@@ -86,7 +88,7 @@ const MovieCard = ({
           
           <Image
             source={{
-              uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
+              uri: `https://image.tmdb.org/t/p/w500${item.poster_path || item.poster}`
             }}
             style={styles.moviePoster}
             resizeMode="cover"
@@ -126,7 +128,11 @@ const MovieCard = ({
               <View style={[homeStyles.ratingLine, { flex: 1 }]}>
                 <Ionicons name="people" size={12} color={colors.success || '#4CAF50'} />
                 <Text style={[homeStyles.friendsText, { fontSize: 11 }]} numberOfLines={1}>
-                  Friends {item.friendsRating ? item.friendsRating.toFixed(1) : 'N/A'}
+                  {item.averageFriendRating ? 
+                    `${item.averageFriendRating.toFixed(1)}` :
+                    item.friendsRating ? `${item.friendsRating.toFixed(1)}` : 
+                    'N/A'
+                  }
                 </Text>
               </View>
             </View>
@@ -144,20 +150,12 @@ const styles = {
     height: MOVIE_CARD_WIDTH * 1.5,
     borderRadius: 8,
   },
-  aiRecommendationBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    zIndex: 1,
-    minWidth: 24,
-    alignItems: 'center',
-  },
-  rankingNumber: {
-    fontSize: 12,
-    fontWeight: 'bold',
+  rankingNumberLarge: {
+    fontSize: 40,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 };
 
