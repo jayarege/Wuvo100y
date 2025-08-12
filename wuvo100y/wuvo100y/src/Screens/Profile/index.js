@@ -97,7 +97,12 @@ import UserSearchModal from '../../Components/UserSearchModal';
 import { useAuth } from '../../hooks/useAuth';
 import FirebaseAuthTest from '../../Components/FirebaseAuthTest';
 // RatingModal replaced with EnhancedRatingSystem components
-import { SentimentRatingModal, calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
+import { 
+  SentimentRatingModal, 
+  calculateDynamicRatingCategories,
+  selectMovieFromPercentileUnified,
+  calculateAverageRating
+} from '../../Components/EnhancedRatingSystem';
 import MovieCard, { MOVIE_CARD_WIDTH } from '../../Components/MovieCard/MovieCard';
 import MovieDetailModal from '../../Components/MovieDetailModal/MovieDetailModal';
 import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion } from '../../Components/EnhancedRatingSystem';
@@ -792,35 +797,10 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   
   // Select movie from percentile based on emotion (from Home screen logic)
   const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
-    const percentileRanges = {
-      LOVED: [0.0, 0.25],      // Top 25%
-      LIKED: [0.25, 0.50],     // Upper-middle 25-50% 
-      AVERAGE: [0.50, 0.75],   // Lower-middle 50-75%
-      DISLIKED: [0.75, 1.0]    // Bottom 25%
-    };
-
-    if (!seenMovies || seenMovies.length === 0) {
-      console.log('🚨 No seen movies available');
-      return null;
-    }
-
-    // Sort movies by rating to establish percentile ranges
-    const sortedMovies = [...seenMovies].sort((a, b) => (a.userRating || 0) - (b.userRating || 0));
-    const [minPercent, maxPercent] = percentileRanges[emotion] || [0.5, 0.75];
-    
-    const startIndex = Math.floor(sortedMovies.length * minPercent);
-    const endIndex = Math.min(Math.floor(sortedMovies.length * maxPercent), sortedMovies.length - 1);
-    
-    console.log(`🎯 ${emotion} percentile [${minPercent}-${maxPercent}]: indices ${startIndex}-${endIndex}`);
-    
-    const percentileMovies = sortedMovies.slice(startIndex, endIndex + 1);
-    if (percentileMovies.length === 0) return sortedMovies[0]; // Fallback
-    
-    // Random selection from percentile
-    const selectedMovie = percentileMovies[Math.floor(Math.random() * percentileMovies.length)];
-    console.log(`🎬 Selected from ${emotion} percentile: ${selectedMovie.title} (Rating: ${selectedMovie.userRating})`);
-    
-    return selectedMovie;
+    // Use unified percentile selection function
+    return selectMovieFromPercentileUnified(seenMovies, emotion, {
+      enhancedLogging: true
+    });
   }, []);
 
   const handleEmotionSelected = useCallback((emotion) => {
