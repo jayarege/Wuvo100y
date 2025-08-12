@@ -19,8 +19,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { EnhancedRatingButton, SentimentRatingModal, calculateDynamicRatingCategories } from '../../Components/EnhancedRatingSystem';
-import { adjustRatingWildcard } from '../../Components/EnhancedRatingSystem';
+import { 
+  EnhancedRatingButton, 
+  SentimentRatingModal, 
+  calculateDynamicRatingCategories,
+  adjustRatingWildcard,
+  selectMovieFromPercentileUnified,
+  calculateAverageRating
+} from '../../Components/EnhancedRatingSystem';
 import { 
   isObfuscatedAdultContent, 
   hasSuspiciousAdultStructure, 
@@ -178,28 +184,10 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
       return null;
     }
     
-    const percentileRanges = {
-      LOVED: [0.0, 0.25],      // Top 25%
-      LIKED: [0.25, 0.50],     // Upper-middle 25-50% 
-      AVERAGE: [0.50, 0.75],   // Lower-middle 50-75%
-      DISLIKED: [0.75, 1.0]    // Bottom 25%
-    };
-    
-    const range = percentileRanges[emotion] || [0.25, 0.75];
-    
-    // Sort movies by rating descending
-    const sortedMovies = [...seenMovies]
-      .filter(movie => movie.userRating && !isNaN(movie.userRating))
-      .sort((a, b) => b.userRating - a.userRating);
-    
-    if (sortedMovies.length === 0) return null;
-    
-    const startIndex = Math.floor(range[0] * sortedMovies.length);
-    const endIndex = Math.floor(range[1] * sortedMovies.length);
-    const candidates = sortedMovies.slice(startIndex, Math.max(endIndex, startIndex + 1));
-    
-    // Return random movie from the percentile range
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    // Use unified percentile selection with enhanced debugging preserved
+    return selectMovieFromPercentileUnified(seenMovies, emotion, {
+      enhancedLogging: true
+    });
   }, []);
   
   // Handle emotion selection and start comparison process
@@ -799,7 +787,7 @@ ${user.overview || 'No bio available'}`,
                       const currentComparisonMovie = comparisonMovies[currentComparison];
                       const currentRating = currentMovieRating || 5.0;
                       const opponentRating = currentComparisonMovie?.userRating || 5.0;
-                      const averageRating = (currentRating + opponentRating) / 2;
+                      const averageRating = calculateAverageRating(currentRating, opponentRating);
                       
                       // Assign very close ratings (like Wildcard screen)
                       const neutralRating = Math.min(10, Math.max(1, averageRating + 0.05));
