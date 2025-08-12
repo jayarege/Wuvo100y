@@ -355,7 +355,7 @@ function HomeScreen({
       console.error('❌ Discovery session generation failed:', error);
       console.log('🔇 Discovery session error (popup disabled):', error.message);
     }
-  }, [generateSession, sessionType, seen]);
+  }, [generateSession, sessionType, seen, mediaType]);
   
   const handleDiscoverySessionClose = useCallback(() => {
     setShowDiscoverySession(false);
@@ -376,7 +376,7 @@ function HomeScreen({
       setLastGeneratedSession(currentSession);
       mediaType === 'movie' ? setAiMovieRecommendations(currentSession.movies || []) : setAiTvRecommendations(currentSession.movies || []);
     }
-  }, [currentSession, showDiscoverySession]);
+  }, [currentSession, showDiscoverySession, mediaType]);
 
   // **CRITICAL FIX: Force reset rating flag on component mount**
   useEffect(() => {
@@ -426,7 +426,7 @@ function HomeScreen({
     });
 
     return unsubscribe;
-  }, [navigation, lastDataFetch, recentReleases.length, popularMovies.length, fetchRecentReleases, fetchPopularMovies]);
+  }, [navigation, lastDataFetch, recentReleases.length, popularMovies.length, fetchRecentReleases, fetchPopularMovies, CACHE_DURATION]);
   
   // **ANIMATION SYSTEM - ENGINEER TEAM 4-6**
   // REMOVED: slideAnim - caused screen movement
@@ -564,7 +564,7 @@ function HomeScreen({
     } finally {
       setIsRefreshingAI(false);
     }
-  }, [checkRefreshEligibility, fetchAIRecommendations, mediaType, contentType, seen.length]);
+  }, [checkRefreshEligibility, fetchAIRecommendations, mediaType, contentType, seen.length, refreshTimestamps, seen]);
 
   // COMMANDMENT 8: Test initialization on component mount
   useEffect(() => {
@@ -755,7 +755,7 @@ function HomeScreen({
       console.error('Error handling enhanced not interested:', error);
       console.log('🔇 Not interested error (popup disabled):', error.message);
     }
-  }, [mediaType, recordNotInterested, addToSkippedMovies]);
+  }, [mediaType, addToSkippedMovies]);
 
   // ============================================================================
   // **SESSION DISMISSAL HANDLER - Temporary hiding without permanent disposition**
@@ -849,7 +849,7 @@ function HomeScreen({
       console.log(`🗑️ Removed from socialRecommendations: ${prev.length} -> ${filtered.length}`);
       return filtered;
     });
-  }, [mediaType, setPopularMovies, setRecentReleases, setAiMovieRecommendations, setAiTvRecommendations, setSocialRecommendations]);
+  }, [setPopularMovies, setRecentReleases, setAiMovieRecommendations, setAiTvRecommendations, setSocialRecommendations]);
 
   const formatDate = useCallback((date) => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -988,7 +988,7 @@ function HomeScreen({
     }
     
     return result;
-  }, [deduplicateProviders]);;
+  }, [deduplicateProviders]);
 
   const getProviderLogoUrl = useCallback((logoPath, providerId) => {
     if (!logoPath) return null;
@@ -1038,7 +1038,7 @@ function HomeScreen({
       console.error('Error fetching movie providers:', error);
       return [];
     }
-  }, []);;
+  }, []);
 
   const fetchAIRecommendations = useCallback(async (forceRefresh = false) => {
     try {
@@ -1203,7 +1203,7 @@ function HomeScreen({
     } finally {
       setIsLoadingSocialRecs(false);
     }
-  }, [currentUser?.id, contentType, seen, firebaseErrorCache]);
+  }, [currentUser?.id, contentType, seen, firebaseErrorCache, FIREBASE_ERROR_CACHE_DURATION, currentSeenContent]);
 
   const handleRefreshAI = useCallback(async () => {
     try {
@@ -1312,7 +1312,7 @@ function HomeScreen({
     } catch (err) {
       console.warn(`Failed fetching popular ${contentType}`, err);
     }
-  }, [currentSeenContent, currentUnseenContent, contentType, skippedMovies]); // Dependencies: currentSeenContent already includes seen/unseen changes
+  }, [currentSeenContent, currentUnseenContent, contentType, skippedMovies, mediaType]); // Dependencies: currentSeenContent already includes seen/unseen changes
   
   const fetchRecentReleases = useCallback(async () => {
     try {
@@ -1375,7 +1375,7 @@ function HomeScreen({
       console.error('Error fetching recent releases:', error);
       setIsLoadingRecent(false);
     }
-  }, [today, oneWeekAgo, seen, unseen, formatDateForAPI, contentType, skippedMovies]); // CODE_BIBLE Fix: Removed notInterestedMovies dependency
+  }, [today, oneWeekAgo, seen, unseen, formatDateForAPI, contentType, skippedMovies, mediaType]); // CODE_BIBLE Fix: Removed notInterestedMovies dependency
 
   // ============================================================================
   // **ANIMATION SYSTEM - ENGINEER TEAM 12**
@@ -1443,7 +1443,7 @@ function HomeScreen({
       })() :
       getDefaultRatingForCategory(categoryKey);
     handleConfirmRating(categoryAverage);
-  }, [currentSeenContent, selectedMovie, genres]);
+  }, [currentSeenContent, selectedMovie, genres, calculateComparisonScore, getMoviesInPercentileRange, handleConfirmRating, memoizedRatingCategories, seen]);
 
   const getMoviesInPercentileRange = useCallback((userMovies, targetPercentile, excludeMovieId) => {
     if (!userMovies || userMovies.length === 0) return [];
@@ -1652,7 +1652,7 @@ function HomeScreen({
         handleConfirmRating(finalRating);
       }, 1500);
     }
-  }, [currentComparison, comparisonMovies, selectedMovie, selectedEmotion, currentMovieRating]);
+  }, [currentComparison, comparisonMovies, selectedMovie, selectedEmotion, currentMovieRating, handleConfirmRating, mediaType]);
 
   // ELO-based rating calculation now uses centralized function from EnhancedRatingSystem
 
@@ -1823,7 +1823,7 @@ function HomeScreen({
       `You ${RATING_CATEGORIES[selectedCategory]?.label?.toLowerCase()} "${selectedMovie.title}" (${finalRating.toFixed(1)}/10)`,
       [{ text: "OK" }]
     );
-  }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, setFinalCalculatedRating, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, closeDetailModal]);
+  }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, setFinalCalculatedRating, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, closeDetailModal, mediaType, memoizedRatingCategories, removeMovieFromAllSections]);
 
   const handleCloseEnhancedModals = useCallback(() => {
     setComparisonModalVisible(false);
@@ -1959,7 +1959,7 @@ function HomeScreen({
       setIsProcessingMovieSelect(false);
       console.log('🔓 Processing flag reset to FALSE in finally block for:', movie?.title);
     }
-  }, [fetchMovieCredits, fetchMovieProviders, mediaType, isProcessingMovieSelect, isRatingInProgress]);
+  }, [fetchMovieCredits, fetchMovieProviders, mediaType, isProcessingMovieSelect, isRatingInProgress, selectedMovie]);
 
   // COMMANDMENT 4: Brutally honest - user clicked X, they don't want this movie
   const handleNotInterested = useCallback(async (movie, event) => {
@@ -2071,7 +2071,7 @@ function HomeScreen({
       console.error('❌ Error handling not interested:', error);
       console.log('🔇 Not interested error (popup disabled):', error.message);
     }
-  }, [contentType, mediaType, seen.length, recordNotInterested, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, setSocialRecommendations, setNotInterestedMovies, selectedMovie, closeDetailModal]);
+  }, [contentType, mediaType, seen, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, setSocialRecommendations, setNotInterestedMovies, selectedMovie, closeDetailModal]);
 
   // Removed openRatingModal and cancelSentimentSelection - handled by SentimentRatingModal
 
@@ -2444,7 +2444,7 @@ function HomeScreen({
         </View>
       </View>
     );
-  }, [calculateMatchPercentage, homeStyles, handleMovieSelect, colors, getRatingBorderColor]);
+  }, [calculateMatchPercentage, homeStyles, handleMovieSelect, colors, getRatingBorderColor, handleNotInterested]);
 
   // **PERFORMANCE OPTIMIZATION: Memoized movie card component**
   const MovieCard = React.memo(({ item }) => (
@@ -2816,7 +2816,7 @@ function HomeScreen({
         )}
       </View>
     );
-  }, [aiRecommendations, isLoadingRecommendations, homeStyles, contentType, handleMovieSelect, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, mediaType, getRatingBorderColor, currentSession, generateSession, handleRefreshRecommendations, dailyRefreshCount, isRefreshingAI]);
+  }, [aiRecommendations, isLoadingRecommendations, homeStyles, contentType, handleMovieSelect, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, mediaType, getRatingBorderColor, currentSession, generateSession, handleRefreshRecommendations, dailyRefreshCount, isRefreshingAI, currentSeenContent, dismissedInSession, formatTimeUntilReset, handleNotInterested, timeUntilReset]);
 
   // =============================================================================
   // DISCOVERY SESSION LOGIC NOW INTEGRATED INTO AI RECOMMENDATIONS
@@ -2949,7 +2949,7 @@ function HomeScreen({
         />
       </View>
     );
-  }, [homeStyles, popularMovies, handleMovieSelect, theme, mediaType, isDarkMode, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, getRatingBorderColor]);
+  }, [homeStyles, popularMovies, handleMovieSelect, mediaType, isDarkMode, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, getRatingBorderColor, contentType, handleNotInterested]);
 
   const renderWhatsOutNowSection = useCallback(() => {
     return (
@@ -3009,7 +3009,7 @@ function HomeScreen({
     fetchRecentReleases();
     fetchPopularMovies();
     // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static to prevent reloading
-  }, [currentSeenContent.length, fetchRecentReleases, fetchPopularMovies]);
+  }, [currentSeenContent.length, fetchRecentReleases, fetchPopularMovies, mediaType, seen]);
 
   // AUTO-SCROLL DISABLED: Prevented unwanted scrolling when movies are removed via X button
   // useEffect(() => {

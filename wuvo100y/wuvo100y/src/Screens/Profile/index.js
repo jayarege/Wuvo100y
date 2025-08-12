@@ -19,11 +19,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMediaType } from '../../Navigation/TabNavigator';
-import { ThemedHeader } from '../../Styles/headerStyles';
+import { ThemedHeader, getHeaderStyles } from '../../Styles/headerStyles';
 import { getModalStyles } from '../../Styles/modalStyles';
 import { getLayoutStyles } from '../../Styles/layoutStyles';
-import { getHeaderStyles } from '../../Styles/headerStyles';
 import { getListStyles } from '../../Styles/listStyles';
+import { getHomeStyles } from '../../Styles/homeStyles';
+import { getButtonStyles } from '../../Styles/buttonStyles';
+import { getRatingStyles } from '../../Styles/ratingStyles';
 
 const { width } = Dimensions.get('window');
 
@@ -90,7 +92,6 @@ const getStandardizedButtonStyles = (colors) => ({
   },
 });
 import { getMovieCardStyles } from '../../Styles/movieCardStyles';
-import { getHomeStyles } from '../../Styles/homeStyles';
 import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
 import UserSearchModal from '../../Components/UserSearchModal';
@@ -123,6 +124,8 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const headerStyles = getHeaderStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const listStyles = getListStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
+  const buttonStyles = getButtonStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
+  const ratingStyles = getRatingStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const movieCardStyles = getMovieCardStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
   const standardButtonStyles = getStandardizedButtonStyles(colors);
@@ -598,7 +601,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         logo_url: null
       })));
     }
-  }, [mediaType]);
+  }, [mediaType, getSecureImageUrl]);
 
   useEffect(() => {
     fetchStreamingProviders();
@@ -935,7 +938,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         setCurrentComparison(currentComparison + 1);
       }
     }
-  }, [comparisonMovies, currentComparison, currentMovieRating, selectedMovie, selectedEmotion]);
+  }, [comparisonMovies, currentComparison, currentMovieRating, selectedMovie]);
 
   // ✅ CONSOLIDATED: Removed custom ELO implementation - now uses centralized calculatePairwiseRating
 
@@ -1729,24 +1732,43 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={topPicksForGrid}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16 }}
-            keyExtractor={item => item.id.toString()}
-            removeClippedSubviews={false}
-            renderItem={({ item, index }) => (
-              <MovieCard
-                item={item}
-                handleMovieSelect={(movie) => handleMovieSelect(movie, 'toppicks-grid')}
-                handleNotInterested={handleNotInterested}
-                mediaType={mediaType}
-                isDarkMode={isDarkMode}
-                rankingNumber={index + 1}
-              />
-            )}
-          />
+          {/* 3x3 Grid Layout for Top 9 Movies */}
+          <View style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            paddingHorizontal: 16,
+            justifyContent: 'space-between'
+          }}>
+            {topPicksForGrid.slice(0, 9).map((item, index) => {
+              // Calculate card width for 3x3 grid with 2px spacing
+              const screenWidth = Dimensions.get('window').width;
+              const totalPadding = 32; // 16px on each side
+              const totalSpacing = 4; // 2px between each column (2 gaps)
+              const cardWidth = (screenWidth - totalPadding - totalSpacing) / 3;
+              
+              return (
+                <View 
+                  key={item.id.toString()}
+                  style={{
+                    width: cardWidth,
+                    marginBottom: index < 6 ? 2 : 0, // 2px spacing between rows
+                    marginRight: (index + 1) % 3 === 0 ? 0 : 2, // 2px spacing between columns
+                  }}
+                >
+                  <MovieCard
+                    item={item}
+                    handleMovieSelect={(movie) => handleMovieSelect(movie, 'toppicks-grid')}
+                    context="toppicks-grid"
+                    handleNotInterested={handleNotInterested}
+                    mediaType={mediaType}
+                    isDarkMode={isDarkMode}
+                    rankingNumber={index + 1}
+                    customWidth={cardWidth}
+                  />
+                </View>
+              );
+            })}
+          </View>
         </View>
 
         {/* Watchlist - Single Line with Home Screen Style */}
@@ -2422,67 +2444,67 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       
       {/* Comparison Modal - Using Home screen implementation with movie theme */}
       <Modal visible={comparisonModalVisible} transparent animationType="none">
-        <View style={styles.modalOverlay}>
+        <View style={modalStyles.modalOverlay}>
           <LinearGradient
             colors={getModalColors(true).primaryGradient || ['#667eea', '#764ba2']}
-            style={styles.comparisonModalContent}
+            style={modalStyles.comparisonModalContent}
           >
             {!isComparisonComplete ? (
               <>
-                <View style={styles.comparisonHeader}>
-                  <Text style={[styles.modalTitle, { color: getModalColors(true).text }]}>
+                <View style={modalStyles.comparisonHeader}>
+                  <Text style={[modalStyles.modalTitle, { color: getModalColors(true).text }]}>
                     🎬 Comparison {currentComparison + 1}/3
                   </Text>
-                  <Text style={[styles.comparisonSubtitle, { color: getModalColors(true).subText }]}>
+                  <Text style={[modalStyles.comparisonSubtitle, { color: getModalColors(true).subText }]}>
                     Which one do you prefer?
                   </Text>
                 </View>
                 
-                <View style={styles.moviesComparison}>
+                <View style={modalStyles.moviesComparison}>
                   {/* New Movie */}
                   <TouchableOpacity 
-                    style={styles.movieComparisonCard}
+                    style={modalStyles.movieComparisonCard}
                     onPress={() => handleComparison('new')}
                     activeOpacity={0.8}
                   >
                     <Image
                       source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
-                      style={styles.comparisonPoster}
+                      style={modalStyles.comparisonPoster}
                       resizeMode="cover"
                     />
-                    <Text style={[styles.movieCardName, { color: getModalColors(true).text }]} numberOfLines={2}>
+                    <Text style={[modalStyles.movieCardName, { color: getModalColors(true).text }]} numberOfLines={2}>
                       {selectedMovie?.title || selectedMovie?.name}
                     </Text>
-                    <Text style={[styles.movieCardYear, { color: getModalColors(true).subText }]}>
+                    <Text style={[modalStyles.movieCardYear, { color: getModalColors(true).subText }]}>
                       {selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 'N/A'}
                     </Text>
                   </TouchableOpacity>
                   
                   {/* VS Indicator */}
-                  <View style={styles.vsIndicator}>
-                    <Text style={[styles.vsText, { color: getModalColors(true).accent }]}>VS</Text>
+                  <View style={modalStyles.vsIndicator}>
+                    <Text style={[modalStyles.vsText, { color: getModalColors(true).accent }]}>VS</Text>
                   </View>
                   
                   {/* Comparison Movie */}
                   {comparisonMovies[currentComparison] && (
                     <TouchableOpacity 
-                      style={styles.movieComparisonCard}
+                      style={modalStyles.movieComparisonCard}
                       onPress={() => handleComparison('comparison')}
                       activeOpacity={0.8}
                     >
                       <Image
                         source={{ uri: `https://image.tmdb.org/t/p/w500${comparisonMovies[currentComparison]?.poster_path}` }}
-                        style={styles.comparisonPoster}
+                        style={modalStyles.comparisonPoster}
                         resizeMode="cover"
                       />
-                      <Text style={[styles.movieCardName, { color: getModalColors(true).text }]} numberOfLines={2}>
+                      <Text style={[modalStyles.movieCardName, { color: getModalColors(true).text }]} numberOfLines={2}>
                         {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
                       </Text>
-                      <Text style={[styles.movieCardYear, { color: getModalColors(true).subText }]}>
+                      <Text style={[modalStyles.movieCardYear, { color: getModalColors(true).subText }]}>
                         {comparisonMovies[currentComparison]?.release_date ? new Date(comparisonMovies[currentComparison].release_date).getFullYear() : 'N/A'}
                       </Text>
-                      <View style={[styles.ratingBadge, { backgroundColor: getModalColors(true).accent }]}>
-                        <Text style={styles.ratingText}>
+                      <View style={[modalStyles.ratingBadge, { backgroundColor: getModalColors(true).accent }]}>
+                        <Text style={modalStyles.ratingText}>
                           {comparisonMovies[currentComparison]?.userRating?.toFixed(1)}
                         </Text>
                       </View>
@@ -2491,12 +2513,12 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                 </View>
 
                 {/* Progress Indicator */}
-                <View style={styles.progressIndicator}>
+                <View style={modalStyles.progressIndicator}>
                   {[0, 1, 2].map(index => (
                     <View
                       key={index}
                       style={[
-                        styles.progressDot,
+                        modalStyles.progressDot,
                         { 
                           backgroundColor: index <= currentComparison ? getModalColors(true).accent : getModalColors(true).border?.color || '#ccc'
                         }
@@ -2507,39 +2529,39 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
 
                 {/* Too Tough to Decide Button */}
                 <TouchableOpacity 
-                  style={[styles.cancelButton, { borderColor: getModalColors(true).border?.color || '#ccc' }]}
+                  style={[modalStyles.cancelButton, { borderColor: getModalColors(true).border?.color || '#ccc' }]}
                   onPress={() => {
                     console.log('User selected: Too tough to decide');
                     // Use unified pairwise calculation for TIE result
                     handleComparison('tie');
                   }}
                 >
-                  <Text style={[styles.cancelButtonText, { color: getModalColors(true).subText }]}>Too Tough to Decide</Text>
+                  <Text style={[modalStyles.cancelButtonText, { color: getModalColors(true).subText }]}>Too Tough to Decide</Text>
                 </TouchableOpacity>
               </>
             ) : (
               // Completion Screen
-              <View style={styles.finalRatingModal}>
+              <View style={modalStyles.finalRatingModal}>
                 {console.log('🎬 COMPLETION SCREEN RENDERING - finalCalculatedRating:', finalCalculatedRating)}
                 {/* Movie Poster */}
                 <Image
                   source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
-                  style={styles.finalRatingPoster}
+                  style={modalStyles.finalRatingPoster}
                   resizeMode="cover"
                 />
                 
                 {/* Movie Title */}
-                <Text style={styles.finalRatingTitle} numberOfLines={1} ellipsizeMode="tail">
+                <Text style={modalStyles.finalRatingTitle} numberOfLines={1} ellipsizeMode="tail">
                   {selectedMovie?.title || selectedMovie?.name}
                 </Text>
                 
                 {/* Movie Year */}
-                <Text style={styles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
+                <Text style={modalStyles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
                   ({selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : selectedMovie?.first_air_date ? new Date(selectedMovie.first_air_date).getFullYear() : 'N/A'})
                 </Text>
                 
                 {/* Final Score */}
-                <Text style={[styles.finalRatingScore, { color: getModalColors(true).secondary }]}>
+                <Text style={[modalStyles.finalRatingScore, { color: getModalColors(true).secondary }]}>
                   {(() => {
                     console.log('🔍 Rendering final score, finalCalculatedRating is:', finalCalculatedRating);
                     return finalCalculatedRating?.toFixed(1) || 'test';
@@ -2549,10 +2571,10 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
             )}
             
             <TouchableOpacity 
-              style={[styles.cancelButton, { borderColor: getModalColors(true).border?.color || '#ccc' }]}
+              style={[modalStyles.cancelButton, { borderColor: getModalColors(true).border?.color || '#ccc' }]}
               onPress={handleCloseEnhancedModals}
             >
-              <Text style={[styles.cancelButtonText, { color: getModalColors(true).subText }]}>
+              <Text style={[modalStyles.cancelButtonText, { color: getModalColors(true).subText }]}>
                 {isComparisonComplete ? 'Close' : 'Cancel'}
               </Text>
             </TouchableOpacity>
@@ -3094,66 +3116,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  movieInfoContainer: {
-    flex: 1,
-    paddingHorizontal: 8,
-    justifyContent: 'center',
-  },
   // Grid styles removed - now using single-line FlatList matching Home screen
-  genreFilterContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  genreFilterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 15,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  genreFilterText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  genreButtonsList: {
-    paddingHorizontal: 0,
-  },
-  fullListContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  listPoster: {
-    width: 60,
-    height: 90,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  listMovieInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  listTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  listYear: {
-    color: '#ccc',
-    fontSize: 14,
-    marginBottom: 4,
-  },
   listGenres: {
     color: '#999',
     fontSize: 12,
@@ -3187,16 +3150,6 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    color: '#999',
-    fontSize: 16,
-    marginTop: 10,
-    textAlign: 'center',
   },
   dropdownOverlay: {
     flex: 1,
@@ -3232,114 +3185,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#555',
     marginHorizontal: 16,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  comparisonModalContent: {
-    width: '90%',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    maxHeight: '80%',
-  },
-  comparisonHeader: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 8,
-  },
-  comparisonSubtitle: {
-    fontSize: 16,
-    opacity: 0.8,
-  },
-  movieComparisonContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 20,
-  },
-  movieComparisonCard: {
-    alignItems: 'center',
-    flex: 1,
-    maxWidth: 120,
-  },
-  comparisonPoster: {
-    width: 100,
-    height: 150,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  comparisonTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  comparisonSubtext: {
-    fontSize: 12,
-    textAlign: 'center',
-    opacity: 0.7,
-  },
-  vsContainer: {
-    paddingHorizontal: 15,
-  },
-  vsText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  tieButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-  tieButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  cancelButton: {
-    paddingVertical: 8,
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  resultsContainer: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  resultsTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  finalRatingText: {
-    fontSize: 36,
-    fontWeight: 'bold',
-  },
-  comparisonButtonRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  confirmButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
   },
 });
 
@@ -3621,78 +3470,7 @@ const profileStyles = StyleSheet.create({
     fontWeight: '500',
   },
   // **Comparison Modal Styles from Home screen**
-  moviesComparison: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  movieCardName: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  movieCardYear: {
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  ratingBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  ratingText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  vsIndicator: {
-    marginHorizontal: 16,
-    paddingVertical: 8,
-  },
-  progressIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  progressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginHorizontal: 4,
-  },
   // **Final Rating Modal Styles**
-  finalRatingModal: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  finalRatingPoster: {
-    width: 120,
-    height: 180,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  finalRatingTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 20,
-  },
-  finalRatingYear: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  finalRatingScore: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
 });
 
 export default ProfileScreen;

@@ -69,7 +69,7 @@ import {
   calculateRatingFromELOComparisons,
   selectMovieFromPercentileUnified
 } from '../../Components/EnhancedRatingSystem';
-import InitialRatingFlow from '../InitialRatingFlow';
+
 
 // Helper functions for calculating range from percentile (moved from component)
 const getRatingRangeFromPercentile = (userMovies, percentile) => {
@@ -273,7 +273,6 @@ function HomeScreen({
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieDetailModalVisible, setMovieDetailModalVisible] = useState(false);
   // Removed ratingModalVisible - now uses SentimentRatingModal
-  const [initialRatingFlowVisible, setInitialRatingFlowVisible] = useState(false);
   const [ratingInput, setRatingInput] = useState('');
   const [recentReleases, setRecentReleases] = useState([]);
   const [popularMovies, setPopularMovies] = useState([]);
@@ -1198,8 +1197,17 @@ function HomeScreen({
         setFirebaseErrorCache(newCache);
       }
       
-      setSocialRecommendations(socialRecs);
-      console.log(`✅ Got ${socialRecs.length} social recommendations`);
+      // **DOUBLE SAFETY: Filter out any rated movies that slipped through**
+      const safeSocialRecs = socialRecs.filter(rec => {
+        const isRated = currentSeenContent.some(seen => seen.id === (rec.id || rec.movieId));
+        if (isRated) {
+          console.log(`🚫 SAFETY FILTER: Removing rated movie ${rec.title || rec.name} from social recommendations`);
+        }
+        return !isRated;
+      });
+      
+      setSocialRecommendations(safeSocialRecs);
+      console.log(`✅ Got ${safeSocialRecs.length} social recommendations (${socialRecs.length - safeSocialRecs.length} filtered out)`);
       
     } catch (error) {
       console.error('❌ Error fetching social recommendations:', error);
@@ -2105,43 +2113,9 @@ function HomeScreen({
     console.log('🔓 Processing flag reset to FALSE in closeDetailModal');
   }, []);
 
-  // **INITIAL RATING FLOW FUNCTIONS**
-  const openInitialRatingFlow = useCallback(() => {
-    setInitialRatingFlowVisible(true);
-  }, []);
 
-  const closeInitialRatingFlow = useCallback(() => {
-    setInitialRatingFlowVisible(false);
-    setSelectedMovie(null);
-  }, []);
 
-  const handleInitialRatingComplete = useCallback((ratedMovie) => {
-    console.log('🎬 Initial rating flow completed:', ratedMovie);
-    
-    // Add to seen list with the calibrated rating
-    onAddToSeen(ratedMovie);
-    
-    // **CRITICAL FIX: Update seenMoviesRef immediately to prevent AI re-recommendations**
-    seenMoviesRef.current = [...seenMoviesRef.current, ratedMovie];
-    
-    // **SIMPLE FIX: Remove from AI recommendations immediately after rating**
-    setAiMovieRecommendations(prev => prev.filter(movie => movie.id !== ratedMovie.id));
-    setAiTvRecommendations(prev => prev.filter(movie => movie.id !== ratedMovie.id));
-    
-    // **CODE_BIBLE Fix: Use unified removal utility to ensure ALL sections are cleaned**
-    removeMovieFromAllSections(ratedMovie.id);
-    
-    // Close the flow
-    setInitialRatingFlowVisible(false);
-    setSelectedMovie(null);
-    
-    // Show success feedback
-    Alert.alert(
-      "Rating Complete!",
-      `${ratedMovie.title} has been rated ${ratedMovie.userRating}/10 and added to your collection.`,
-      [{ text: "OK" }]
-    );
-  }, [onAddToSeen, removeMovieFromAllSections]);
+
   
   // Removed submitRating - now handled by SentimentRatingModal
 
@@ -3214,15 +3188,7 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
 
         {/* Legacy RatingModal removed - now uses SentimentRatingModal from EnhancedRatingSystem */}
 
-        {/* **INITIAL RATING FLOW MODAL** */}
-        <InitialRatingFlow
-          visible={initialRatingFlowVisible}
-          movie={selectedMovie}
-          seenMovies={currentSeenContent}
-          onClose={closeInitialRatingFlow}
-          onComplete={handleInitialRatingComplete}
-          isDarkMode={isDarkMode}
-        />
+
       </SafeAreaView>
     </View>
   );

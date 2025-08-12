@@ -319,7 +319,7 @@ class SocialRecommendationService {
    */
   filterSeenMovies(recommendations, userMovies) {
     const seenMovieIds = new Set(userMovies.map(movie => movie.id));
-    return recommendations.filter(rec => !seenMovieIds.has(rec.movieId));
+    return recommendations.filter(rec => !seenMovieIds.has(rec.movieId || rec.id));
   }
 
   /**

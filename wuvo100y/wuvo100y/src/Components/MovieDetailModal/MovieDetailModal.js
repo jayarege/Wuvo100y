@@ -36,9 +36,20 @@ const MovieDetailModal = ({
   standardButtonStyles,
   memoizedRatingCategories,
   handleEmotionSelected,
-  cancelSentimentSelection
+  cancelSentimentSelection,
+  context = 'general' // New prop to control button visibility
 }) => {
   const modalStyles = getModalStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
+
+  // Debug: Enhanced logging to understand X button behavior
+  console.log('🔍 MovieDetailModal context:', context, 'Type:', typeof context);
+  console.log('🔍 X button should be hidden:', (context === 'toprated' || context === 'toppicks-grid' || context === 'watchlist' || context === 'watchlist-grid'));
+  console.log('🔍 Context checks:', {
+    isToprated: context === 'toprated',
+    isToppicksGrid: context === 'toppicks-grid', 
+    isWatchlist: context === 'watchlist',
+    isWatchlistGrid: context === 'watchlist-grid'
+  });
 
   // EXACT copy from Home screen lines 3318-3561
   return (
@@ -55,26 +66,28 @@ const MovieDetailModal = ({
           end={{ x: 1, y: 1 }}
           style={modalStyles.detailModalContent}
         >
-          {/* X button at top-right - NOW WORKS AS NOT INTERESTED */}
-          <TouchableOpacity
-            style={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              borderRadius: 15,
-              width: 30,
-              height: 30,
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10
-            }}
-            onPress={(event) => handleNotInterested(selectedMovie, event)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="close" size={18} color="white" />
-          </TouchableOpacity>
+          {/* X button at top-right - Hidden for all Profile screen contexts */}
+          {!(context === 'toprated' || context === 'toppicks-grid' || context === 'watchlist' || context === 'watchlist-grid') && (
+            <TouchableOpacity
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                borderRadius: 15,
+                width: 30,
+                height: 30,
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10
+              }}
+              onPress={(event) => handleNotInterested(selectedMovie, event)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={18} color="white" />
+            </TouchableOpacity>
+          )}
           
           <Image 
             source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }} 
@@ -135,74 +148,147 @@ const MovieDetailModal = ({
               }}
               pointerEvents="auto"
             >
-              {/* Rate Button */}
-              <TouchableOpacity 
-                style={[
-                  standardButtonStyles.baseButton,
-                  standardButtonStyles.tertiaryButton
-                ]}
-                onPress={handleRateButton}
-                activeOpacity={0.7}
-              >
-                <Text 
+              {/* Conditional button rendering based on context */}
+              {(context === 'toprated' || context === 'toppicks-grid') ? (
+                // Top movies/shows: Only show Rerate button
+                <TouchableOpacity 
                   style={[
-                    standardButtonStyles.baseText,
-                    standardButtonStyles.tertiaryText,
-                    { fontSize: Math.min(16, width * 0.035) }
+                    standardButtonStyles.baseButton,
+                    standardButtonStyles.tertiaryButton
                   ]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  adjustsFontSizeToFit={true}
+                  onPress={handleRateButton}
+                  activeOpacity={0.7}
                 >
-                  Rate
-                </Text>
-              </TouchableOpacity>
+                  <Text 
+                    style={[
+                      standardButtonStyles.baseText,
+                      standardButtonStyles.tertiaryText,
+                      { fontSize: Math.min(16, width * 0.035) }
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    adjustsFontSizeToFit={true}
+                  >
+                    Rerate
+                  </Text>
+                </TouchableOpacity>
+              ) : (context === 'watchlist' || context === 'watchlist-grid') ? (
+                // Watchlist: Show Rate and Remove buttons
+                <>
+                  <TouchableOpacity 
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
+                    onPress={handleRateButton}
+                    activeOpacity={0.7}
+                  >
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText,
+                        { fontSize: Math.min(16, width * 0.035) }
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      adjustsFontSizeToFit={true}
+                    >
+                      Rate
+                    </Text>
+                  </TouchableOpacity>
 
-              {/* Watchlist Button */}
-              <TouchableOpacity 
-                style={[
-                  standardButtonStyles.baseButton,
-                  standardButtonStyles.tertiaryButton
-                ]}
-                onPress={handleWatchlistToggle}
-                activeOpacity={0.7}
-              >
-                <Text 
-                  style={[
-                    standardButtonStyles.baseText,
-                    standardButtonStyles.tertiaryText,
-                    { fontSize: Math.min(16, width * 0.035) }
-                  ]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  adjustsFontSizeToFit={true}
-                >
-                  Watchlist
-                </Text>
-              </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
+                    onPress={handleWatchlistToggle}
+                    activeOpacity={0.7}
+                  >
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText,
+                        { fontSize: Math.min(16, width * 0.035) }
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      adjustsFontSizeToFit={true}
+                    >
+                      Remove
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // Default: Show all original buttons
+                <>
+                  <TouchableOpacity 
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
+                    onPress={handleRateButton}
+                    activeOpacity={0.7}
+                  >
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText,
+                        { fontSize: Math.min(16, width * 0.035) }
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      adjustsFontSizeToFit={true}
+                    >
+                      Rate
+                    </Text>
+                  </TouchableOpacity>
 
-              {/* Not Interested Button */}
-              <TouchableOpacity 
-                style={[
-                  standardButtonStyles.baseButton,
-                  standardButtonStyles.tertiaryButton
-                ]}
-                onPress={(event) => handleNotInterested(selectedMovie, event)}
-                activeOpacity={0.7}
-              >
-                <Text 
-                  style={[
-                    standardButtonStyles.baseText,
-                    standardButtonStyles.tertiaryText,
-                    { fontSize: Math.min(14, width * 0.032) }
-                  ]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  adjustsFontSizeToFit={true}
-                >
-                  Not Interested
-                </Text>
-              </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
+                    onPress={handleWatchlistToggle}
+                    activeOpacity={0.7}
+                  >
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText,
+                        { fontSize: Math.min(16, width * 0.035) }
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      adjustsFontSizeToFit={true}
+                    >
+                      Watchlist
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[
+                      standardButtonStyles.baseButton,
+                      standardButtonStyles.tertiaryButton
+                    ]}
+                    onPress={(event) => handleNotInterested(selectedMovie, event)}
+                    activeOpacity={0.7}
+                  >
+                    <Text 
+                      style={[
+                        standardButtonStyles.baseText,
+                        standardButtonStyles.tertiaryText,
+                        { fontSize: Math.min(14, width * 0.032) }
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      adjustsFontSizeToFit={true}
+                    >
+                      Not Interested
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
 
             {/* **SENTIMENT SELECTION BUTTONS** */}

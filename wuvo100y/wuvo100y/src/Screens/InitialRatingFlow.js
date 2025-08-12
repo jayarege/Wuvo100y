@@ -26,7 +26,7 @@ import {
   adjustRatingWildcard,
   selectMovieFromPercentileUnified,
   calculateAverageRating
-} from '../../Components/EnhancedRatingSystem';
+} from '../Components/EnhancedRatingSystem';
 import { 
   isObfuscatedAdultContent, 
   hasSuspiciousAdultStructure, 
@@ -34,36 +34,36 @@ import {
   isTrustedContent, 
   filterSearchSuggestions, 
   filterFullSearchResults 
-} from '../../utils/ContentFiltering';
-import UnifiedSearchService from '../../services/UnifiedSearchService';
-import SearchBar from '../../Components/SearchBar';
-import MovieSearchResults from '../../Components/MovieSearchResults';
-import UserSearchResult from '../../Components/UserSearchResult';
+} from '../utils/ContentFiltering';
+import UnifiedSearchService from '../services/UnifiedSearchService';
+import SearchBar from '../Components/SearchBar';
+import MovieSearchResults from '../Components/MovieSearchResults';
+import UserSearchResult from '../Components/UserSearchResult';
 
 // Import theme system and styles
-import { useMediaType } from '../../Navigation/TabNavigator';
-import { getLayoutStyles } from '../../Styles/layoutStyles';
-import { getHeaderStyles, ThemedHeader } from '../../Styles/headerStyles';
-import { getSearchStyles } from '../../Styles/searchStyles';
-import { getMovieCardStyles } from '../../Styles/movieCardStyles';
-import { getButtonStyles, ThemedButton } from '../../Styles/buttonStyles';
-import { getModalStyles } from '../../Styles/modalStyles';
-import { movieUtils } from '../../utils/movieUtils';
-import { formatUtils } from '../../utils/formatUtils';
-import stateStyles from '../../Styles/StateStyles';
-import theme from '../../utils/Theme';
+import { useMediaType } from '../Navigation/TabNavigator';
+import { getLayoutStyles } from '../Styles/layoutStyles';
+import { getHeaderStyles, ThemedHeader } from '../Styles/headerStyles';
+import { getSearchStyles } from '../Styles/searchStyles';
+import { getMovieCardStyles } from '../Styles/movieCardStyles';
+import { getButtonStyles, ThemedButton } from '../Styles/buttonStyles';
+import { getModalStyles } from '../Styles/modalStyles';
+import { movieUtils } from '../utils/movieUtils';
+import { formatUtils } from '../utils/formatUtils';
+import stateStyles from '../Styles/StateStyles';
+import theme from '../utils/Theme';
 
-import { TMDB_API_KEY as API_KEY } from '../../Constants';
+import { TMDB_API_KEY as API_KEY } from '../Constants';
 
-function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen, onAddToUnseen, onRemoveFromWatchlist, onUpdateRating, genres, isDarkMode }) {
+function InitialRatingFlow({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen, onAddToUnseen, onRemoveFromWatchlist, onUpdateRating, genres, isDarkMode }) {
   // Use media type context
   const { mediaType } = useMediaType();
   
   // CRITICAL FIX: Ensure all props are valid arrays to prevent crashes
-  const safeSeen = Array.isArray(seen) ? seen : [];
-  const safeUnseen = Array.isArray(unseen) ? unseen : [];
-  const safeSeenTVShows = Array.isArray(seenTVShows) ? seenTVShows : [];
-  const safeUnseenTVShows = Array.isArray(unseenTVShows) ? unseenTVShows : [];
+  const safeSeen = useMemo(() => Array.isArray(seen) ? seen : [], [seen]);
+  const safeUnseen = useMemo(() => Array.isArray(unseen) ? unseen : [], [unseen]);
+  const safeSeenTVShows = useMemo(() => Array.isArray(seenTVShows) ? seenTVShows : [], [seenTVShows]);
+  const safeUnseenTVShows = useMemo(() => Array.isArray(unseenTVShows) ? unseenTVShows : [], [unseenTVShows]);
   
   // CRITICAL DEBUG: Check what props are being received
   console.log('🔍 ADD MOVIE SCREEN PROPS DEBUG:', {
@@ -87,7 +87,7 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
   
   // CRITICAL FIX: Helper functions to get appropriate arrays based on media type
   // This matches the pattern used in Home screen and other components
-  const getCurrentSeen = () => {
+  const getCurrentSeen = useCallback(() => {
     console.log(`🎭 getCurrentSeen() called with mediaType: ${mediaType}`);
     
     // CRITICAL FIX: Use the safety-checked arrays
@@ -102,13 +102,13 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     
     console.log(`🎭 getCurrentSeen() returning array with ${result.length} items:`, result.map(m => m.title || m.name));
     return result;
-  };
+  }, [mediaType, safeSeen, safeSeenTVShows]);
 
-  const getCurrentUnseen = () => {
+  const getCurrentUnseen = useCallback(() => {
     const result = mediaType === 'movie' ? safeUnseen : safeUnseenTVShows;
     console.log(`🎭 getCurrentUnseen() - mediaType: ${mediaType}, array length: ${result.length}`);
     return result;
-  };
+  }, [mediaType, safeUnseen, safeUnseenTVShows]);
   
   // Get all themed styles
   const headerStyles = getHeaderStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
@@ -188,7 +188,7 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     return selectMovieFromPercentileUnified(seenMovies, emotion, {
       enhancedLogging: true
     });
-  }, []);
+  }, [mediaType, safeSeen.length, safeSeenTVShows.length, seen?.length, seenTVShows?.length]);
   
   // Handle emotion selection and start comparison process
   const handleEmotionSelected = useCallback((emotion) => {
@@ -244,7 +244,7 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
     console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
     console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
-  }, [selectedMovieForRating, getCurrentSeen, selectMovieFromPercentile, safeSeen, safeSeenTVShows, mediaType]);
+  }, [selectedMovieForRating, getCurrentSeen, selectMovieFromPercentile, safeSeen.length, safeSeenTVShows.length, seen?.length, seenTVShows?.length, mediaType]);
 
 
   const handleComparison = useCallback((winner) => {
@@ -340,7 +340,7 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
         handleConfirmRating(finalRating);
       }, 1500);
     }
-  }, [currentComparison, comparisonMovies, selectedMovieForRating, selectedEmotion, currentMovieRating]);
+  }, [currentComparison, comparisonMovies, currentMovieRating, handleConfirmRating]);
 
   const handleConfirmRating = useCallback((finalRating) => {
     console.log('✅ Confirming rating:', finalRating, 'for:', selectedMovieForRating?.title);
@@ -522,7 +522,7 @@ ${user.overview || 'No bio available'}`,
           : m
       )
     );
-  }, [onAddToUnseen, onRemoveFromWatchlist, getCurrentSeen, getCurrentUnseen, mediaType]);
+  }, [onAddToUnseen, onRemoveFromWatchlist, getCurrentSeen, mediaType]);
 
 
 
@@ -560,11 +560,11 @@ ${user.overview || 'No bio available'}`,
             {searchResults.length > 0 && (
               <>
                 <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-                  <Text style={[{ 
+                  <Text style={{ 
                     fontSize: 18, 
                     fontWeight: 'bold', 
                     color: colors.text 
-                  }]}>
+                  }}>
                     {mediaType === 'movie' ? 'Movies' : 'TV Shows'} ({searchResults.length})
                   </Text>
                 </View>
@@ -600,11 +600,11 @@ ${user.overview || 'No bio available'}`,
             {userResults.length > 0 && (
               <>
                 <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
-                  <Text style={[{ 
+                  <Text style={{ 
                     fontSize: 18, 
                     fontWeight: 'bold', 
                     color: colors.text 
-                  }]}>
+                  }}>
                     Users ({userResults.length})
                   </Text>
                 </View>
@@ -694,7 +694,7 @@ ${user.overview || 'No bio available'}`,
         <View style={styles.modalOverlay}>
           <LinearGradient
             colors={colors.primaryGradient || ['#667eea', '#764ba2']}
-            style={[styles.comparisonModalContent]}
+            style={styles.comparisonModalContent}
           >
             {!isComparisonComplete ? (
               <>
@@ -1023,4 +1023,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AddMovieScreen;
+export default InitialRatingFlow;
