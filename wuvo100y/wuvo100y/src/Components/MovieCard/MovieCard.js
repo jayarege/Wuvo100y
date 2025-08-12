@@ -23,29 +23,43 @@ const MovieCard = ({
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
 
-  // EXACT copy from Home screen lines 2757-2840
+  // FORCE THE WIDTH - NO MATTER WHAT
   return (
-    <View style={[
-      homeStyles.movieCardBorder,
-      { 
-        borderColor: getRatingBorderColor(item),
-        borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0
-      }
-    ]}>
+    <View style={{
+      width: MOVIE_CARD_WIDTH,
+      maxWidth: MOVIE_CARD_WIDTH,
+      minWidth: MOVIE_CARD_WIDTH,
+      height: MOVIE_CARD_WIDTH * 1.9,
+      marginRight: 12,
+      overflow: 'hidden',
+      flex: 0,
+      flexShrink: 0,
+      flexGrow: 0,
+      flexBasis: MOVIE_CARD_WIDTH,
+      borderColor: getRatingBorderColor(item),
+      borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0
+    }}>
       <TouchableOpacity
-        style={{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }}
+        style={{ width: '100%', height: '100%' }}
         activeOpacity={0.7}
         onPress={() => handleMovieSelect(item)}
       >
-        <View style={[homeStyles.enhancedCard, { width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }]}>
+        <View style={[homeStyles.enhancedCard, { 
+          width: MOVIE_CARD_WIDTH, 
+          maxWidth: MOVIE_CARD_WIDTH,
+          minWidth: MOVIE_CARD_WIDTH,
+          height: MOVIE_CARD_WIDTH * 1.9,
+          overflow: 'hidden',
+          flex: 0
+        }]}>
           <View style={[
             styles.aiRecommendationBadge, 
             { 
-              backgroundColor: (item.discoverySession || currentSession) ? colors.secondary : colors.success, 
+              backgroundColor: (item.discoverySession || currentSession) ? '#FF6B6B' : '#4CAF50', 
               top: 12 
             }
           ]}>
-            <Text style={[styles.rankingNumber, { color: colors.textOnPrimary }]}>
+            <Text style={[styles.rankingNumber, { color: '#000' }]}>
               {(() => {
                 if (item.discoveryScore) return Math.round(item.discoveryScore);
                 if (item.discoverySession || currentSession) return 'DS';
@@ -60,7 +74,7 @@ const MovieCard = ({
               position: 'absolute',
               top: 8,
               right: 8,
-              backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.6)',
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
               borderRadius: 15,
               width: 30,
               height: 30,
@@ -83,11 +97,19 @@ const MovieCard = ({
             resizeMode="cover"
           />
           
-          <View style={[homeStyles.movieInfoBox, { width: MOVIE_CARD_WIDTH - 3, minHeight: 80 }]}>
+          <View style={[homeStyles.movieInfoBox, { 
+            width: MOVIE_CARD_WIDTH - 3, 
+            maxWidth: MOVIE_CARD_WIDTH - 3,
+            minWidth: MOVIE_CARD_WIDTH - 3,
+            minHeight: 80,
+            overflow: 'hidden',
+            flex: 0
+          }]}>
             <Text
               style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18, marginBottom: 2 }]}
               numberOfLines={1}
               ellipsizeMode="tail"
+              allowFontScaling={false}
             >
               {item.title}
             </Text>
@@ -100,7 +122,7 @@ const MovieCard = ({
               </View>
               <View style={homeStyles.ratingLine}>
                 <Ionicons name="people" size={12} color={colors.success} />
-                <Text style={[homeStyles.friendsText, { color: colors.success }]}>
+                <Text style={homeStyles.friendsText}>
                   Friends {item.friendsRating ? item.friendsRating.toFixed(1) : 'N/A'}
                 </Text>
               </View>

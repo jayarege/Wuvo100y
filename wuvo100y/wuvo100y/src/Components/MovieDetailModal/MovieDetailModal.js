@@ -61,7 +61,7 @@ const MovieDetailModal = ({
               position: 'absolute',
               top: 8,
               right: 8,
-              backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.6)',
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
               borderRadius: 15,
               width: 30,
               height: 30,
@@ -239,7 +239,7 @@ const MovieDetailModal = ({
                         fontSize: Math.min(14, width * 0.032),
                         textAlign: 'center',
                         fontWeight: '600',
-                        color: colors.text
+                        color: category.color
                       }}
                       numberOfLines={1}
                       ellipsizeMode="tail"

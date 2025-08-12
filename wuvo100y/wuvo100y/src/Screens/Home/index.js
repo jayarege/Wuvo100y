@@ -29,6 +29,8 @@ import { getRatingStyles } from '../../Styles/ratingStyles';
 import { getLayoutStyles } from '../../Styles/layoutStyles';
 import theme from '../../utils/Theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import MovieCard from '../../Components/MovieCard';
+import MovieDetailModal from '../../Components/MovieDetailModal';
 // OLD: Complex AI system with poor results
 // import { getAIRecommendations, getEnhancedRecommendations, recordNotInterested, recordUserRating, canRefreshAIRecommendations, refreshAIRecommendations } from '../../utils/AIRecommendations';
 
@@ -2443,11 +2445,10 @@ function HomeScreen({
             
             <View style={homeStyles.movieInfoBox}>
               <Text
-                style={homeStyles.genreName}
+                style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18 }]}
                 numberOfLines={1}
-                adjustsFontSizeToFit={true}
-                minimumFontScale={0.7}
                 ellipsizeMode="tail"
+                allowFontScaling={false}
               >
                 {item.title}
               </Text>
@@ -2517,11 +2518,10 @@ function HomeScreen({
         
         <View style={homeStyles.movieInfoBox}>
           <Text
-            style={homeStyles.genreName}
+            style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18 }]}
             numberOfLines={1}
-            adjustsFontSizeToFit={true}
-            minimumFontScale={0.7}
             ellipsizeMode="tail"
+            allowFontScaling={false}
           >
             {item.title}
           </Text>
@@ -2553,81 +2553,41 @@ function HomeScreen({
 
   // **🎯 CRITICAL ENHANCED RATING BUTTON INTEGRATION**
   // **PERFORMANCE OPTIMIZATION: Memoized recent release card component**
-  const RecentReleaseCard = React.memo(({ item }) => {
-    console.log('🎬 Rendering recent release card for:', item?.title, 'Already seen:', item?.alreadySeen);
+  // RecentReleaseCard removed - now using MovieCard component for unified styling
+
+  const renderRecentReleaseCard = useCallback(({ item }) => {
+    // Force fixed width and prevent any text scaling
+    const fixedItem = {
+      ...item,
+      // Ensure title doesn't cause width changes
+      title: item.title || ''
+    };
     
     return (
-      <View style={[
-        homeStyles.movieCardBorder, 
-        { 
-          width: 320, 
-          alignSelf: 'center', 
-          height: 150,
-          borderColor: getRatingBorderColor(item),
-          borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0
-        }
-      ]}>
-        <TouchableOpacity 
-          style={[homeStyles.enhancedCard, styles.recentCard, { alignItems: 'center', height: 150 }]}
-          activeOpacity={0.7}
-          onPress={() => handleMovieSelect(item)}
-        >
-          {/* NOT INTERESTED X BUTTON - TOP RIGHT */}
-          <TouchableOpacity
-            style={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              borderRadius: 15,
-              width: 30,
-              height: 30,
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10
-            }}
-            onPress={(event) => handleNotInterested(item, event)}
-            activeOpacity={0.8}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="close" size={18} color="white" />
-          </TouchableOpacity>
-          
-          <Image 
-            source={{ uri: `https://image.tmdb.org/t/p/w500${item.poster}` }} 
-            style={styles.recentPoster}
-            resizeMode="cover"
-          />
-          <View style={[homeStyles.movieInfoBox, { flex: 1, padding: 12, minWidth: 200, alignItems: 'center', justifyContent: 'center', height: 150 }]}>
-            <Text
-              style={[homeStyles.genreName, { fontSize: 20, lineHeight: 25, textAlign: 'center' }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {item.title}
-            </Text>
-            <Text style={[homeStyles.movieYear, { fontSize: 11, marginTop: 2, marginBottom: 4, textAlign: 'center' }]}>
-              Released: {formatReleaseDate(item.release_date)}
-            </Text>
-            <View style={[styles.ratingContainer, { marginVertical: 2, justifyContent: 'center' }]}>
-              <Ionicons name="star" size={12} color={homeStyles.genreScore.color} />
-              <Text style={[homeStyles.genreScore, { marginLeft: 4, fontSize: 11 }]}>
-                TMDb: {item.score.toFixed(1)}
-              </Text>
-            </View>
-            
-          </View>
-        </TouchableOpacity>
+      <View style={{ 
+        width: MOVIE_CARD_WIDTH, 
+        height: MOVIE_CARD_WIDTH * 1.9,
+        marginRight: 12,
+        overflow: 'hidden',
+        flex: 0,
+        flexShrink: 0,
+        flexGrow: 0,
+        flexBasis: MOVIE_CARD_WIDTH,
+        maxWidth: MOVIE_CARD_WIDTH,
+        minWidth: MOVIE_CARD_WIDTH
+      }}>
+        <MovieCard 
+          item={fixedItem}
+          handleMovieSelect={handleMovieSelect}
+          handleNotInterested={handleNotInterested}
+          mediaType={mediaType}
+          isDarkMode={isDarkMode}
+          currentSession={currentSession}
+          getRatingBorderColor={getRatingBorderColor}
+        />
       </View>
     );
-  }, (prevProps, nextProps) => {
-    // **PERFORMANCE: Custom comparison for memo optimization**
-    return prevProps.item.id === nextProps.item.id && 
-           prevProps.item.alreadySeen === nextProps.item.alreadySeen &&
-           prevProps.item.userRating === nextProps.item.userRating;
-  });
-
-  const renderRecentReleaseCard = useCallback(({ item }) => <RecentReleaseCard item={item} />, []);
+  }, [handleMovieSelect, handleNotInterested, mediaType, isDarkMode, currentSession, getRatingBorderColor]);
 
   const renderAIRecommendationsSection = useCallback(() => {
     return (
@@ -2754,89 +2714,15 @@ function HomeScreen({
             initialNumToRender={5}
             maxToRenderPerBatch={3}
             renderItem={({ item, index }) => (
-              <View style={[
-                homeStyles.movieCardBorder,
-                { 
-                  borderColor: getRatingBorderColor(item),
-                  borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0
-                }
-              ]}>
-                <TouchableOpacity
-                  style={{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }}
-                  activeOpacity={0.7}
-                  onPress={() => handleMovieSelect(item)}
-                >
-                  <View
-                    style={[homeStyles.enhancedCard, { width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }]}
-                  >
-                    <View style={[styles.aiRecommendationBadge, { 
-                      backgroundColor: (item.discoverySession || currentSession) ? '#FF6B6B' : '#4CAF50', 
-                      top: 12 
-                    }]}>
-                      <Text style={styles.rankingNumber}>
-                        {(() => {
-                          if (item.discoveryScore) return Math.round(item.discoveryScore);
-                          if (item.discoverySession || currentSession) return 'DS';
-                          return 'AI';
-                        })()}
-                      </Text>
-                    </View>
-                    
-                    {/* NOT INTERESTED X BUTTON - TOP RIGHT */}
-                    <TouchableOpacity
-                      style={{
-                        position: 'absolute',
-                        top: 8,
-                        right: 8,
-                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                        borderRadius: 15,
-                        width: 30,
-                        height: 30,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 10
-                      }}
-                      onPress={(event) => handleNotInterested(item, event)}
-                      activeOpacity={0.8}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <Ionicons name="close" size={18} color="white" />
-                    </TouchableOpacity>
-                    
-                    <Image
-                      source={{
-                        uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
-                      }}
-                      style={[styles.moviePoster, { width: MOVIE_CARD_WIDTH - 3, height: MOVIE_CARD_WIDTH * 1.5 - 3 }]}
-                      resizeMode="cover"
-                    />
-                    <View style={[homeStyles.movieInfoBox, { width: MOVIE_CARD_WIDTH - 3, minHeight: 80 }]}>
-                      <Text
-                        style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18, marginBottom: 2 }]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
-                        {item.title}
-                      </Text>
-                      <View style={homeStyles.ratingRow}>
-                        <View style={homeStyles.ratingLine}>
-                          <Ionicons name="star" size={12} color={colors.accent} />
-                          <Text style={homeStyles.tmdbText}>
-                            TMDb {item.vote_average ? item.vote_average.toFixed(1) : '?'}
-                          </Text>
-                        </View>
-                        <View style={homeStyles.ratingLine}>
-                          <Ionicons name="people" size={12} color="#4CAF50" />
-                          <Text style={homeStyles.friendsText}>
-                            Friends {item.friendsRating ? item.friendsRating.toFixed(1) : 'N/A'}
-                          </Text>
-                        </View>
-                      </View>
-
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              </View>
+              <MovieCard
+                item={item}
+                handleMovieSelect={handleMovieSelect}
+                handleNotInterested={handleNotInterested}
+                mediaType={mediaType}
+                isDarkMode={isDarkMode}
+                currentSession={currentSession}
+                getRatingBorderColor={getRatingBorderColor}
+              />
             )}
           />
         )}
@@ -2861,113 +2747,27 @@ function HomeScreen({
           contentContainerStyle={homeStyles.carouselContent}
           keyExtractor={item => item.id.toString()}
           removeClippedSubviews={false}
-          renderItem={({ item, index }) => (
-            <View style={[
-              homeStyles.movieCardBorder, 
-              { 
-                padding: 0,
-                borderColor: getRatingBorderColor(item),
-                borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0
-              }
-            ]}>
-              <TouchableOpacity
-                style={{ marginRight: 12, width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }}
-                activeOpacity={0.7}
-                onPress={() => handleMovieSelect(item)}
-              >
-                <View
-                  style={[homeStyles.enhancedCard, { width: MOVIE_CARD_WIDTH, height: MOVIE_CARD_WIDTH * 1.9 }]}
-                >
-                  <View style={[styles.rankingBadge, { backgroundColor: theme[mediaType][isDarkMode ? 'dark' : 'light'].accent }]}>
-                    <Text style={styles.rankingNumber}>{index + 1}</Text>
-                  </View>
-                  
-                  {/* NOT INTERESTED X BUTTON - TOP RIGHT */}
-                  <TouchableOpacity
-                    style={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                      borderRadius: 15,
-                      width: 30,
-                      height: 30,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      zIndex: 10
-                    }}
-                    onPress={(event) => handleNotInterested(item, event)}
-                    activeOpacity={0.8}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="close" size={18} color="white" />
-                  </TouchableOpacity>
-                  
-                  <Image
-                    source={{
-                      uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
-                    }}
-                    style={[styles.moviePoster, { width: MOVIE_CARD_WIDTH - 6, height: MOVIE_CARD_WIDTH * 1.5 - 6 }]}
-                    resizeMode="cover"
-                  />
-                  <View style={[homeStyles.movieInfoBox, { width: MOVIE_CARD_WIDTH - 3, minHeight: 80 }]}>
-                    <Text
-                      style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18, marginBottom: 2 }]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {item.title}
-                    </Text>
-                    <View style={homeStyles.ratingRow}>
-                      <View style={homeStyles.ratingLine}>
-                        <Ionicons name="star" size={12} color={colors.accent} />
-                        <Text style={homeStyles.tmdbText}>
-                          TMDb {item.vote_average ? item.vote_average.toFixed(1) : '?'}
-                        </Text>
-                      </View>
-                      <View style={homeStyles.ratingLine}>
-                        <Ionicons name="people" size={12} color="#4CAF50" />
-                        <Text style={homeStyles.friendsText}>
-                          Friends {item.friendsRating ? item.friendsRating.toFixed(1) : 'N/A'}
-                        </Text>
-                      </View>
-                    </View>
-                    {item.streamingProviders && item.streamingProviders.length > 0 && (
-                      <View style={{ flexDirection: 'row', marginTop: 4, flexWrap: 'wrap' }}>
-                        {item.streamingProviders.slice(0, 3).map((provider) => {
-                          const paymentType = getProviderPaymentType(provider.provider_id);
-                          return (
-                            <View key={provider.provider_id} style={{ alignItems: 'center', marginRight: 4 }}>
-                              <Image
-                                source={{ uri: `https://image.tmdb.org/t/p/w92${provider.logo_path}` }}
-                                style={{
-                                  width: 16,
-                                  height: 16,
-                                  borderRadius: 2,
-                                  borderColor: paymentType === 'paid' ? '#FF4444' : '#22C55E',
-                                  borderWidth: 0.5,
-                                }}
-                                resizeMode="contain"
-                              />
-                              <Text style={{
-                                fontSize: 6,
-                                color: paymentType === 'paid' ? '#FF4444' : '#22C55E',
-                                fontWeight: 'bold',
-                                marginTop: 1
-                              }}>
-                                {paymentType === 'paid' ? '$' : 'FREE'}
-                              </Text>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    )}
-
-                  </View>
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
+          renderItem={({ item, index }) => {
+            // Convert popular movie to format expected by MovieCard
+            const movieCardItem = {
+              ...item,
+              discoveryScore: index + 1, // Show ranking number instead of AI/DS badge
+              discoverySession: false,
+              friendsRating: item.friendsRating || null
+            };
+            
+            return (
+              <MovieCard
+                item={movieCardItem}
+                handleMovieSelect={handleMovieSelect}
+                handleNotInterested={handleNotInterested}
+                mediaType={mediaType}
+                isDarkMode={isDarkMode}
+                currentSession={null}
+                getRatingBorderColor={getRatingBorderColor}
+              />
+            );
+          }}
           // REMOVED: onScroll animation causing unwanted movement
           // AUTO-SCROLL DISABLED: No touch-based scrolling
           // onTouchStart={() => clearInterval(autoScrollPopular.current)}
@@ -3008,10 +2808,14 @@ function HomeScreen({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={homeStyles.carouselContent}
             removeClippedSubviews={false}
-
             windowSize={10}
             initialNumToRender={5}
             maxToRenderPerBatch={3}
+            getItemLayout={(data, index) => ({
+              length: MOVIE_CARD_WIDTH + 12,
+              offset: (MOVIE_CARD_WIDTH + 12) * index,
+              index
+            })}
           />
         )}
       </View>
@@ -3314,251 +3118,40 @@ function HomeScreen({
         )}
         
         {/* **MOVIE DETAIL MODAL WITH ENHANCED RATING INTEGRATION** */}
-        <Modal
+        <MovieDetailModal
           visible={movieDetailModalVisible}
-          transparent
-          animationType="none"
-          onRequestClose={closeDetailModal}
-        >
-          <View style={modalStyles.detailModalOverlay}>
-            <LinearGradient
-              colors={theme[mediaType][isDarkMode ? 'dark' : 'light'].primaryGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={modalStyles.detailModalContent}
-            >
-              {/* X button at top-right - NOW WORKS AS NOT INTERESTED */}
-              <TouchableOpacity
-                style={{
-                  position: 'absolute',
-                  top: 8,
-                  right: 8,
-                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                  borderRadius: 15,
-                  width: 30,
-                  height: 30,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 10
-                }}
-                onPress={(event) => handleNotInterested(selectedMovie, event)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="close" size={18} color="white" />
-              </TouchableOpacity>
-              
-              <Image 
-                source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }} 
-                style={modalStyles.detailPoster}
-                resizeMode="cover" 
-              />
-              
-              <Text style={modalStyles.detailTitle}>
-                {selectedMovie?.title}
-              </Text>
-              
-              <Text style={modalStyles.detailYear}>
-                ({selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 'Unknown'})
-              </Text>
-              
-              <Text style={modalStyles.detailScore}>
-                TMDb: {selectedMovie?.vote_average?.toFixed(1) || 'N/A'}
-              </Text>
-              
-              {/* **LOADING INDICATOR FOR MOVIE DETAILS** */}
-              {isLoadingMovieDetails ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8 }}>
-                  <ActivityIndicator size="small" color={colors.accent} />
-                  <Text style={[modalStyles.detailActors, { marginLeft: 8 }]}>
-                    Loading movie details...
-                  </Text>
-                </View>
-              ) : (
-                movieCredits && movieCredits.length > 0 && (
-                  <Text style={modalStyles.detailActors}>
-                    Actors: {movieCredits.map(actor => actor.name).join(', ')}
-                  </Text>
-                )
-              )}
-              
-              <Text 
-                style={modalStyles.detailPlot}
-                numberOfLines={4}
-                ellipsizeMode="tail"
-              >
-                {selectedMovie?.overview || 'No description available.'}
-              </Text>
-              
-              <StreamingProviders
-                movie={selectedMovie}
-                visible={movieDetailModalVisible}
-                style={{ marginVertical: 12 }}
-              />
-              
-              <View style={modalStyles.buttonRow}>
-                {/* **ACTION BUTTONS** */}
-                <View 
-                  style={{ 
-                    opacity: showSentimentButtons ? 0 : 1,
-                    position: showSentimentButtons ? 'absolute' : 'relative',
-                    width: '100%',
-                    flexDirection: 'row'
-                  }}
-                  pointerEvents="auto"
-                >
-                  {/* Rate Button */}
-                  <TouchableOpacity 
-                    style={[
-                      standardButtonStyles.baseButton,
-                      standardButtonStyles.tertiaryButton
-                    ]}
-                    onPress={() => {
-                      console.log('🚨🚨🚨 RATE BUTTON CLICKED! 🚨🚨🚨');
-                      console.log('selectedMovie:', selectedMovie);
-                      console.log('emotionModalVisible current state:', emotionModalVisible);
-                      
-                      // CLOSE the movie detail modal first to prevent stacking (preserve movie for rating)
-                      console.log('Closing movieDetailModalVisible...');
-                      closeDetailModal(true);
-                      
-                      // Then open emotion modal
-                      console.log('Setting emotionModalVisible to true...');
-                      setEmotionModalVisible(true);
-                      console.log('✅ setEmotionModalVisible(true) called');
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text 
-                      style={[
-                        standardButtonStyles.baseText,
-                        standardButtonStyles.tertiaryText
-                      ]}
-                    >
-                      {seen.some(movie => movie.id === selectedMovie?.id) ? 'Re-rate' : 'Rate'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {/* Watchlist Button */}
-                  <TouchableOpacity 
-                    style={[
-                      standardButtonStyles.baseButton,
-                      standardButtonStyles.tertiaryButton
-                    ]}
-                    onPress={handleWatchlistToggle}
-                    activeOpacity={0.7}
-                  >
-                    <Text 
-                      style={[
-                        standardButtonStyles.baseText,
-                        standardButtonStyles.tertiaryText
-                      ]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                      adjustsFontSizeToFit={true}
-                    >
-                      Watchlist
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {/* Not Interested Button - Tertiary Action */}
-                  <TouchableOpacity 
-                    style={[
-                      standardButtonStyles.baseButton,
-                      standardButtonStyles.tertiaryButton
-                    ]}
-                    onPress={(event) => handleNotInterested(selectedMovie, event)}
-                    activeOpacity={0.7}
-                  >
-                    <Text 
-                      style={[
-                        standardButtonStyles.baseText,
-                        standardButtonStyles.tertiaryText
-                      ]}
-                    >
-                      Not Interested
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                
-                {/* **SENTIMENT BUTTONS** */}
-                {showSentimentButtons && (
-                  <View 
-                    style={{ 
-                      opacity: 1,
-                      position: 'absolute',
-                      width: '100%',
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    {Object.entries(memoizedRatingCategories).map(([categoryKey, category]) => (
-                      <TouchableOpacity
-                        key={categoryKey}
-                        style={[
-                          styles.sentimentButton,
-                          { 
-                            backgroundColor: 'transparent',
-                            borderColor: category.borderColor || category.color,
-                            borderWidth: 2,
-                            flex: 1,
-                            marginHorizontal: 2,
-                            minHeight: 60
-                          }
-                        ]}
-                        onPress={() => handleSentimentSelect(categoryKey)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={{ fontSize: 20, marginBottom: 4 }}>{category.emoji}</Text>
-                        <Text 
-                          style={[
-                            styles.sentimentLabel,
-                            { 
-                              color: category.color, 
-                              fontSize: Math.min(14, width * 0.032), 
-                              textAlign: 'center',
-                              fontWeight: '600'
-                            }
-                          ]}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                          adjustsFontSizeToFit={true}
-                        >
-                          {category.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                    
-                    {/* Back button for sentiment selection */}
-                    <TouchableOpacity
-                      style={[
-                        styles.sentimentBackButton,
-                        { 
-                          borderColor: colors.border?.color || '#ccc',
-                          borderWidth: 1,
-                          width: '100%',
-                          marginTop: 8,
-                          paddingVertical: 8,
-                          alignItems: 'center',
-                          borderRadius: 8
-                        }
-                      ]}
-                      onPress={cancelSentimentSelection}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={{ color: colors.subText, fontSize: 14 }}>← Back to Options</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-              
-              <TouchableOpacity onPress={closeDetailModal} style={modalStyles.cancelButtonContainer}>
-                <Text style={modalStyles.cancelText}>cancel</Text>
-              </TouchableOpacity>
-            </LinearGradient>
-          </View>
-        </Modal>
+          selectedMovie={selectedMovie}
+          movieCredits={movieCredits}
+          isLoadingMovieDetails={isLoadingMovieDetails}
+          mediaType={mediaType}
+          isDarkMode={isDarkMode}
+          showSentimentButtons={showSentimentButtons}
+          closeDetailModal={closeDetailModal}
+          handleNotInterested={handleNotInterested}
+          handleRateButton={() => {
+            console.log('🚨🚨🚨 RATE BUTTON CLICKED! 🚨🚨🚨');
+            console.log('selectedMovie:', selectedMovie);
+            console.log('emotionModalVisible current state:', emotionModalVisible);
+            
+            // CLOSE the movie detail modal first to prevent stacking (preserve movie for rating)
+            console.log('Closing movieDetailModalVisible...');
+            closeDetailModal(true);
+            
+            // Then open emotion modal
+            console.log('Setting emotionModalVisible to true...');
+            setEmotionModalVisible(true);
+            console.log('✅ setEmotionModalVisible(true) called');
+          }}
+          handleWatchlistToggle={handleWatchlistToggle}
+          colors={colors}
+          standardButtonStyles={standardButtonStyles}
+          memoizedRatingCategories={memoizedRatingCategories}
+          handleEmotionSelected={handleSentimentSelect}
+          cancelSentimentSelection={() => {
+            console.log('🔙 Back to options pressed');
+            setShowSentimentButtons(false);
+          }}
+        />
 
         {/* **EMOTION SELECTION MODAL - Using Reusable Component** */}
         <SentimentRatingModal
@@ -3566,14 +3159,27 @@ function HomeScreen({
           movie={selectedMovie}
           onClose={() => {
             setEmotionModalVisible(false);
-            // **FIX: Reset rating flag if user cancels emotion selection**
             setIsRatingInProgress(false);
             console.log('🔓 Emotion modal closed - reset rating flag');
           }}
           onRatingSelect={(movieWithRating, categoryKey, rating) => {
             console.log('🎭 Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
             setSelectedCategory(categoryKey);
-            // Wire to existing handleEmotionSelected logic
+            handleEmotionSelected(categoryKey);
+          }}
+          colors={colors}
+          userMovies={currentSeenContent}
+          mediaType={mediaType}
+        />
+
+        {/* **EMOTION SELECTION MODAL - Using Reusable Component** */}
+        <SentimentRatingModal
+          visible={emotionModalVisible}
+          movie={selectedMovie}
+          onClose={() => setEmotionModalVisible(false)}
+          onRatingSelect={(movieWithRating, categoryKey, rating) => {
+            console.log('🎭 Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
+            setSelectedCategory(categoryKey);
             handleEmotionSelected(categoryKey);
           }}
           colors={colors}
