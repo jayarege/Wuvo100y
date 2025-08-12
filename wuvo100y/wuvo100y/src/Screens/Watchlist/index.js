@@ -793,11 +793,6 @@ const styles = StyleSheet.create({
    marginRight: 8,
    borderRadius: 12,
  },
- 
- // Rating Modal Styles
-   fontSize: 13,
-   fontWeight: '600',
- },
  scoreContainer: {
    marginTop: 8,
    flexGrow: 1,
