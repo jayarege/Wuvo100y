@@ -105,8 +105,8 @@ const MovieCard = ({
             }}
             style={[styles.moviePoster, {
               borderRadius: 12, // Round all corners to match MovieCard
-              borderBottomWidth: 0.5, // Add border at bottom of poster
-              borderBottomColor: colors.primaryGradient[1], // Match MovieCard border color
+              borderBottomWidth: 1, // Match MovieCard border thickness
+              borderBottomColor: getRatingBorderColor(item) !== 'transparent' ? getRatingBorderColor(item) : colors.primaryGradient[1], // Match exact MovieCard border color
               height: '70%' // Make poster shorter so text doesn't overlap
             }]}
             resizeMode="cover"
@@ -114,13 +114,13 @@ const MovieCard = ({
           
           <View style={[homeStyles.movieInfoBox, { 
             position: 'absolute',
-            bottom: -5, // Move text up closer to the poster
+            bottom: -20, // Move text down a little bit more to stop cutting off poster
             left: 0,
             right: 0,
             width: '100%',
             minHeight: 80,
             paddingHorizontal: 8,
-            paddingVertical: 8,
+            paddingVertical: 1, // Even tighter padding for minimal spacing
             backgroundColor: homeStyles.movieInfoBox?.backgroundColor || 'rgba(0,0,0,0.8)',
             borderBottomLeftRadius: 12, // Match MovieCard corner radius
             borderBottomRightRadius: 12 // Match MovieCard corner radius

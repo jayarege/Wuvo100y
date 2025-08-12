@@ -1734,40 +1734,110 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
           </View>
           {/* 3x3 Grid Layout for Top 9 Movies */}
           <View style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            paddingHorizontal: 16,
-            justifyContent: 'space-between'
+            paddingLeft: 2, // Just 2px from left edge
+            paddingRight: 2, // Just 2px from right edge  
           }}>
-            {topPicksForGrid.slice(0, 9).map((item, index) => {
-              // Calculate card width for 3x3 grid with 2px spacing
-              const screenWidth = Dimensions.get('window').width;
-              const totalPadding = 32; // 16px on each side
-              const totalSpacing = 4; // 2px between each column (2 gaps)
-              const cardWidth = (screenWidth - totalPadding - totalSpacing) / 3;
-              
-              return (
-                <View 
-                  key={item.id.toString()}
-                  style={{
-                    width: cardWidth,
-                    marginBottom: index < 6 ? 2 : 0, // 2px spacing between rows
-                    marginRight: (index + 1) % 3 === 0 ? 0 : 2, // 2px spacing between columns
-                  }}
-                >
-                  <MovieCard
-                    item={item}
-                    handleMovieSelect={(movie) => handleMovieSelect(movie, 'toppicks-grid')}
-                    context="toppicks-grid"
-                    handleNotInterested={handleNotInterested}
-                    mediaType={mediaType}
-                    isDarkMode={isDarkMode}
-                    rankingNumber={index + 1}
-                    customWidth={cardWidth}
-                  />
-                </View>
-              );
-            })}
+            {/* Row 1 */}
+            <View style={{
+              flexDirection: 'row',
+              marginBottom: 2, // 2px between rows
+            }}>
+              {topPicksForGrid.slice(0, 3).map((item, index) => {
+                // Calculate card width for uniform 2px spacing
+                const screenWidth = Dimensions.get('window').width;
+                const totalPadding = 4; // 2px on each side
+                const totalSpacing = 4; // 2px between 3 columns (2 gaps)
+                const cardWidth = (screenWidth - totalPadding - totalSpacing) / 3;
+                
+                return (
+                  <View
+                    key={item.id.toString()}
+                    style={{
+                      width: cardWidth,
+                      marginRight: index < 2 ? 2 : 0, // 2px between columns, none after last
+                    }}
+                  >
+                    <MovieCard
+                      item={item}
+                      handleMovieSelect={(movie) => handleMovieSelect(movie, 'toppicks-grid')}
+                      context="toppicks-grid"
+                      handleNotInterested={handleNotInterested}
+                      mediaType={mediaType}
+                      isDarkMode={isDarkMode}
+                      rankingNumber={index + 1}
+                      customWidth={cardWidth}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+            
+            {/* Row 2 */}
+            <View style={{
+              flexDirection: 'row',
+              marginBottom: 2, // 2px between rows
+            }}>
+              {topPicksForGrid.slice(3, 6).map((item, index) => {
+                const screenWidth = Dimensions.get('window').width;
+                const totalPadding = 4; // 2px on each side
+                const totalSpacing = 4; // 2px between 3 columns (2 gaps)
+                const cardWidth = (screenWidth - totalPadding - totalSpacing) / 3;
+                
+                return (
+                  <View
+                    key={item.id.toString()}
+                    style={{
+                      width: cardWidth,
+                      marginRight: index < 2 ? 2 : 0, // 2px between columns, none after last
+                    }}
+                  >
+                    <MovieCard
+                      item={item}
+                      handleMovieSelect={(movie) => handleMovieSelect(movie, 'toppicks-grid')}
+                      context="toppicks-grid"
+                      handleNotInterested={handleNotInterested}
+                      mediaType={mediaType}
+                      isDarkMode={isDarkMode}
+                      rankingNumber={index + 4}
+                      customWidth={cardWidth}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+            
+            {/* Row 3 */}
+            <View style={{
+              flexDirection: 'row',
+            }}>
+              {topPicksForGrid.slice(6, 9).map((item, index) => {
+                const screenWidth = Dimensions.get('window').width;
+                const totalPadding = 4; // 2px on each side  
+                const totalSpacing = 4; // 2px between 3 columns (2 gaps)
+                const cardWidth = (screenWidth - totalPadding - totalSpacing) / 3;
+                
+                return (
+                  <View
+                    key={item.id.toString()}
+                    style={{
+                      width: cardWidth,
+                      marginRight: index < 2 ? 2 : 0, // 2px between columns, none after last
+                    }}
+                  >
+                    <MovieCard
+                      item={item}
+                      handleMovieSelect={(movie) => handleMovieSelect(movie, 'toppicks-grid')}
+                      context="toppicks-grid"
+                      handleNotInterested={handleNotInterested}
+                      mediaType={mediaType}
+                      isDarkMode={isDarkMode}
+                      rankingNumber={index + 7}
+                      customWidth={cardWidth}
+                    />
+                  </View>
+                );
+              })}
+            </View>
           </View>
         </View>
 
