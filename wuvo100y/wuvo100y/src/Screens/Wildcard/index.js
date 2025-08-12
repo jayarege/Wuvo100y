@@ -56,7 +56,17 @@ import { STORAGE_KEYS } from '../../config/storageConfig';
 const getStorageKey = (mediaType) => mediaType === 'movie' ? STORAGE_KEYS.MOVIES.SEEN : STORAGE_KEYS.TV_SHOWS.SEEN;
 
 // **ENHANCED RATING SYSTEM IMPORT**
-import { calculateDynamicRatingCategories, SentimentRatingModal, calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion, selectRandomOpponent, handleTooToughToDecide } from '../../Components/EnhancedRatingSystem';
+import { 
+  calculateDynamicRatingCategories, 
+  SentimentRatingModal, 
+  calculatePairwiseRating, 
+  ComparisonResults, 
+  selectOpponentFromEmotion, 
+  selectRandomOpponent, 
+  handleTooToughToDecide,
+  calculateRatingFromELOComparisons,
+  selectMovieFromPercentileUnified
+} from '../../Components/EnhancedRatingSystem';
 import InitialRatingFlow from '../InitialRatingFlow';
 
 // Helper functions for calculating range from percentile (moved from component)
@@ -1644,54 +1654,18 @@ function HomeScreen({
     }
   }, [currentComparison, comparisonMovies, selectedMovie, selectedEmotion, currentMovieRating]);
 
-  // ELO-based rating calculation using Wildcard's superior system
-  const calculateRatingFromELOComparisons = useCallback((results) => {
-    // Use centralized ELO calculation system (following CODE_BIBLE single-source-of-truth)
-    let currentRating = null; // Start with no rating, just like the confidence-based system
-    
-    // Process each comparison using centralized ELO logic
-    results.forEach((result, index) => {
-      const opponent = result.winner === selectedMovie ? result.loser : result.winner;
-      const newMovieWon = result.userChoice === 'new';
-      const opponentRating = opponent.userRating || (opponent.eloRating / 100);
-      
-      if (currentRating === null) {
-        // First comparison: use direct opponent-based calculation
-        currentRating = opponentRating + (newMovieWon ? 0.5 : -0.5);
-        currentRating = Math.max(1, Math.min(10, currentRating));
-      } else {
-        // Subsequent comparisons: use proper ELO calculation
-        const comparisonResult = newMovieWon ? ComparisonResults.A_WINS : ComparisonResults.B_WINS;
-        const eloResult = calculatePairwiseRating({
-          aRating: currentRating,
-          bRating: opponentRating,
-          aGames: index,
-          bGames: opponent.gamesPlayed || 5,
-          result: comparisonResult
-        });
-        currentRating = eloResult.updatedARating;
-      }
-      
-      console.log(`📊 Comparison ${index + 1}: ${newMovieWon ? 'WIN' : 'LOSS'} vs ${opponent.title} (${opponentRating}) -> Rating: ${currentRating?.toFixed(2)}`);
-    });
-    
-    return currentRating;
-  }, [selectedMovie]);
+  // ELO-based rating calculation now uses centralized function from EnhancedRatingSystem
 
   // Note: Emotion baselines removed - using pure Unknown vs Known comparison
   
-  // ✅ CONSOLIDATED: Now using centralized opponent selection
+  // ✅ CONSOLIDATED: Now using unified opponent selection with media type filtering
   const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
-    // **MEDIA TYPE SEGREGATION: Only use content of the same media type for comparison**
-    const filteredMovies = seenMovies.filter(movie => 
-      movie.id !== selectedMovie?.id &&
-      (movie.mediaType || 'movie') === mediaType
-    );
-    
-    console.log(`🎯 Available opponents for ${mediaType}:`, filteredMovies.length);
-    console.log(`🎯 Media type filter: ${mediaType}, Sample opponents:`, filteredMovies.slice(0, 3).map(m => `${m.title} (${m.mediaType || 'movie'})`));
-    
-    return selectOpponentFromEmotion(emotion, filteredMovies, selectedMovie?.id);
+    return selectMovieFromPercentileUnified(seenMovies, emotion, {
+      mediaType,
+      excludeMovieId: selectedMovie?.id,
+      enableMediaTypeFilter: true,
+      enhancedLogging: true
+    });
   }, [mediaType, selectedMovie?.id]);
   
   // Handle emotion selection and start comparison process
