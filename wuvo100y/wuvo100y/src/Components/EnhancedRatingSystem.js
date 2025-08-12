@@ -2497,7 +2497,7 @@ const calculateRatingFromELOComparisons = (results, selectedMovie) => {
  * Unified opponent selection with media type filtering support
  * Consolidates all selectMovieFromPercentile implementations
  */
-export const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => {
+const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => {
   const { 
     mediaType = null, 
     excludeMovieId = null,
@@ -2558,7 +2558,7 @@ export const selectMovieFromPercentileUnified = (seenMovies, emotion, options = 
  * Unified comparison handling for all screens
  * Consolidates handleComparison logic with screen-specific behavior
  */
-export const handleComparisonUnified = async (screenConfig, comparisonParams) => {
+const handleComparisonUnified = async (screenConfig, comparisonParams) => {
   const {
     winner,
     currentComparison,
@@ -2620,7 +2620,7 @@ export const handleComparisonUnified = async (screenConfig, comparisonParams) =>
  * Simple utility for calculating average ratings
  * Used in "Too Tough to Decide" scenarios
  */
-export const calculateAverageRating = (rating1, rating2) => {
+const calculateAverageRating = (rating1, rating2) => {
   const avg = (rating1 + rating2) / 2;
   return Math.max(1, Math.min(10, avg));
 };
