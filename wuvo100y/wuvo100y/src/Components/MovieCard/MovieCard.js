@@ -42,7 +42,7 @@ const MovieCard = ({
       maxWidth: cardWidth,
       minWidth: cardWidth,
       height: cardWidth * 1.9,
-      marginRight: customWidth ? 0 : 12, // No margin for 3x3 grid
+      marginRight: customWidth ? 0 : 4, // Reduced margin for closer spacing like Profile screen
       borderColor: getRatingBorderColor(item),
       borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0,
       flex: 0,
@@ -104,10 +104,9 @@ const MovieCard = ({
               uri: `https://image.tmdb.org/t/p/w500${item.poster_path || item.poster}`
             }}
             style={[styles.moviePoster, {
+              height: '70%', // Make poster shorter so text doesn't overlap
               borderRadius: 12, // Round all corners to match MovieCard
-              borderBottomWidth: 1, // Match MovieCard border thickness
-              borderBottomColor: getRatingBorderColor(item) !== 'transparent' ? getRatingBorderColor(item) : colors.primaryGradient[1], // Match exact MovieCard border color
-              height: '70%' // Make poster shorter so text doesn't overlap
+              overflow: 'hidden' // Ensure rounded corners are clean
             }]}
             resizeMode="cover"
           />

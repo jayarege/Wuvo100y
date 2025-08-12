@@ -1734,8 +1734,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
           </View>
           {/* 3x3 Grid Layout for Top 9 Movies */}
           <View style={{
-            paddingLeft: 2, // Just 2px from left edge
-            paddingRight: 2, // Just 2px from right edge  
+            paddingRight: 4, // Account for right edge spacing
           }}>
             {/* Row 1 */}
             <View style={{
@@ -1743,11 +1742,11 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
               marginBottom: 2, // 2px between rows
             }}>
               {topPicksForGrid.slice(0, 3).map((item, index) => {
-                // Calculate card width for uniform 2px spacing
+                // Calculate card width with no left padding
                 const screenWidth = Dimensions.get('window').width;
-                const totalPadding = 4; // 2px on each side
+                const rightPadding = 4; // Only right padding
                 const totalSpacing = 4; // 2px between 3 columns (2 gaps)
-                const cardWidth = (screenWidth - totalPadding - totalSpacing) / 3;
+                const cardWidth = (screenWidth - rightPadding - totalSpacing) / 3;
                 
                 return (
                   <View
@@ -3097,7 +3096,7 @@ const styles = StyleSheet.create({
   profileInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 6, // Reduced from 20 to 6 (70% reduction)
     paddingVertical: 20,
   },
   avatarContainer: {
@@ -3147,7 +3146,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   sectionContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 6, // Reduced from 20 to 6 (70% reduction)
     marginBottom: 30,
   },
   sectionHeaderRow: {
