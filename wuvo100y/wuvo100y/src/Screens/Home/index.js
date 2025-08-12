@@ -247,6 +247,18 @@ function HomeScreen({
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
   
+  /**
+   * Helper function to get modal colors with optional theme override
+   * @param {boolean} forceMovieTheme - If true, always use movie theme colors for consistency
+   * @returns {object} Color theme object
+   */
+  const getModalColors = (forceMovieTheme = false) => {
+    if (forceMovieTheme) {
+      return theme.movie[isDarkMode ? 'dark' : 'light'];
+    }
+    return colors; // Exact same object reference to prevent unnecessary re-renders
+  };
+  
   // Initialize standardized button styles
   const standardButtonStyles = getStandardizedButtonStyles(colors);
   
