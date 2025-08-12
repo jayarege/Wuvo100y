@@ -2473,119 +2473,19 @@ function HomeScreen({
     );
   }, [calculateMatchPercentage, homeStyles, handleMovieSelect, colors, getRatingBorderColor]);
 
-  // **PERFORMANCE OPTIMIZATION: Memoized movie card component**
-  const MovieCard = React.memo(({ item }) => (
-    <View style={[
-      homeStyles.movieCardBorder,
-      { 
-        borderColor: getRatingBorderColor(item),
-        borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0
-      }
-    ]}>
-      <TouchableOpacity 
-        style={homeStyles.enhancedCard}
-        activeOpacity={0.7}
-        onPress={() => handleMovieSelect(item)}
-      >
-        <Image 
-          source={{ uri: `https://image.tmdb.org/t/p/w500${item.poster_path}` }} 
-          style={styles.moviePoster}
-          resizeMode="cover"
-        />
-        
-        {/* NOT INTERESTED X BUTTON */}
-        <TouchableOpacity
-          style={[
-            styles.notInterestedButton,
-            {
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              borderRadius: 15,
-              width: 30,
-              height: 30,
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10
-            }
-          ]}
-          onPress={(event) => handleNotInterested(item, event)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="close" size={18} color="white" />
-        </TouchableOpacity>
-        
-        <View style={homeStyles.movieInfoBox}>
-          <Text
-            style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18 }]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-            allowFontScaling={false}
-          >
-            {item.title}
-          </Text>
-          <View style={homeStyles.ratingRow}>
-            <View style={homeStyles.ratingLine}>
-              <Ionicons name="star" size={12} color={colors.accent} />
-              <Text style={homeStyles.tmdbText}>
-                TMDb {item.vote_average ? item.vote_average.toFixed(1) : '?'}
-              </Text>
-            </View>
-            <View style={homeStyles.ratingLine}>
-              <Ionicons name="people" size={12} color="#4CAF50" />
-              <Text style={homeStyles.friendsText}>
-                Friends {item.friendsRating ? item.friendsRating.toFixed(1) : 'N/A'}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </View>
-  ), (prevProps, nextProps) => {
-    // **PERFORMANCE: Custom comparison for memo optimization**
-    return prevProps.item.id === nextProps.item.id && 
-           prevProps.item.userRating === nextProps.item.userRating &&
-           prevProps.item.alreadySeen === nextProps.item.alreadySeen;
-  });
 
-  const renderMovieCard = useCallback(({ item }) => <MovieCard item={item} />, []);
 
-  // **🎯 CRITICAL ENHANCED RATING BUTTON INTEGRATION**
-  // **PERFORMANCE OPTIMIZATION: Memoized recent release card component**
-  // RecentReleaseCard removed - now using MovieCard component for unified styling
-
-  const renderRecentReleaseCard = useCallback(({ item }) => {
-    // Force fixed width and prevent any text scaling
-    const fixedItem = {
-      ...item,
-      // Ensure title doesn't cause width changes
-      title: item.title || ''
-    };
-    
+const renderRecentReleaseCard = useCallback(({ item }) => {
     return (
-      <View style={{ 
-        width: MOVIE_CARD_WIDTH, 
-        height: MOVIE_CARD_WIDTH * 1.9,
-        marginRight: 12,
-        overflow: 'hidden',
-        flex: 0,
-        flexShrink: 0,
-        flexGrow: 0,
-        flexBasis: MOVIE_CARD_WIDTH,
-        maxWidth: MOVIE_CARD_WIDTH,
-        minWidth: MOVIE_CARD_WIDTH
-      }}>
-        <MovieCard 
-          item={fixedItem}
-          handleMovieSelect={handleMovieSelect}
-          handleNotInterested={handleNotInterested}
-          mediaType={mediaType}
-          isDarkMode={isDarkMode}
-          currentSession={currentSession}
-          getRatingBorderColor={getRatingBorderColor}
-        />
-      </View>
+      <MovieCard 
+        item={item}
+        handleMovieSelect={handleMovieSelect}
+        handleNotInterested={handleNotInterested}
+        mediaType={mediaType}
+        isDarkMode={isDarkMode}
+        currentSession={currentSession}
+        getRatingBorderColor={getRatingBorderColor}
+      />
     );
   }, [handleMovieSelect, handleNotInterested, mediaType, isDarkMode, currentSession, getRatingBorderColor]);
 
@@ -2734,48 +2634,45 @@ function HomeScreen({
   // DISCOVERY SESSION LOGIC NOW INTEGRATED INTO AI RECOMMENDATIONS
   // =============================================================================
 
-  const renderPopularMoviesSection = useCallback(() => {
-    return (
-      <View style={homeStyles.section}>
-        <Text style={homeStyles.sectionTitle}>
-          Popular {contentType === 'movies' ? 'Movies' : 'TV Shows'}
-        </Text>
-        <FlatList
-          data={popularMovies}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={homeStyles.carouselContent}
-          keyExtractor={item => item.id.toString()}
-          removeClippedSubviews={false}
-          renderItem={({ item, index }) => {
-            // Convert popular movie to format expected by MovieCard
-            const movieCardItem = {
-              ...item,
-              discoveryScore: index + 1, // Show ranking number instead of AI/DS badge
-              discoverySession: false,
-              friendsRating: item.friendsRating || null
-            };
-            
-            return (
-              <MovieCard
-                item={movieCardItem}
-                handleMovieSelect={handleMovieSelect}
-                handleNotInterested={handleNotInterested}
-                mediaType={mediaType}
-                isDarkMode={isDarkMode}
-                currentSession={null}
-                getRatingBorderColor={getRatingBorderColor}
-              />
-            );
-          }}
-          // REMOVED: onScroll animation causing unwanted movement
-          // AUTO-SCROLL DISABLED: No touch-based scrolling
-          // onTouchStart={() => clearInterval(autoScrollPopular.current)}
-          // onTouchEnd={startPopularAutoScroll}
-        />
-      </View>
-    );
-  }, [homeStyles, popularMovies, handleMovieSelect, theme, mediaType, isDarkMode, colors, seen, onAddToSeen, onUpdateRating, buttonStyles, modalStyles, genres, getRatingBorderColor]);
+ const renderPopularMoviesSection = useCallback(() => {
+  return (
+    <View style={homeStyles.section}>
+      <Text style={homeStyles.sectionTitle}>
+        Popular {contentType === 'movies' ? 'Movies' : 'TV Shows'}
+      </Text>
+      <FlatList
+        data={popularMovies}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={homeStyles.carouselContent}
+        keyExtractor={item => item.id.toString()}
+        removeClippedSubviews={false}
+        snapToInterval={MOVIE_CARD_WIDTH + 12} // Add this for consistent spacing
+        decelerationRate="fast" // Add this for better snapping
+        renderItem={({ item, index }) => {
+          const movieCardItem = {
+            ...item,
+            discoveryScore: index + 1,
+            discoverySession: false,
+            friendsRating: item.friendsRating || null
+          };
+          
+          return (
+            <MovieCard
+              item={movieCardItem}
+              handleMovieSelect={handleMovieSelect}
+              handleNotInterested={handleNotInterested}
+              mediaType={mediaType}
+              isDarkMode={isDarkMode}
+              currentSession={null}
+              getRatingBorderColor={getRatingBorderColor}
+            />
+          );
+        }}
+      />
+    </View>
+  );
+}, [homeStyles, popularMovies, handleMovieSelect, mediaType, isDarkMode, getRatingBorderColor, handleNotInterested, contentType]);
 
   const renderWhatsOutNowSection = useCallback(() => {
     return (

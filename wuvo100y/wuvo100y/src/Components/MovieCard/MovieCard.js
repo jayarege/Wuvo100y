@@ -31,13 +31,11 @@ const MovieCard = ({
       minWidth: MOVIE_CARD_WIDTH,
       height: MOVIE_CARD_WIDTH * 1.9,
       marginRight: 12,
-      overflow: 'hidden',
+      borderColor: getRatingBorderColor(item),
+      borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0,
       flex: 0,
       flexShrink: 0,
       flexGrow: 0,
-      flexBasis: MOVIE_CARD_WIDTH,
-      borderColor: getRatingBorderColor(item),
-      borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0
     }}>
       <TouchableOpacity
         style={{ width: '100%', height: '100%' }}
@@ -45,12 +43,9 @@ const MovieCard = ({
         onPress={() => handleMovieSelect(item)}
       >
         <View style={[homeStyles.enhancedCard, { 
-          width: MOVIE_CARD_WIDTH, 
-          maxWidth: MOVIE_CARD_WIDTH,
-          minWidth: MOVIE_CARD_WIDTH,
-          height: MOVIE_CARD_WIDTH * 1.9,
-          overflow: 'hidden',
-          flex: 0
+          width: '100%', 
+          height: '100%',
+          overflow: 'hidden'
         }]}>
           <View style={[
             styles.aiRecommendationBadge, 
@@ -93,36 +88,44 @@ const MovieCard = ({
             source={{
               uri: `https://image.tmdb.org/t/p/w500${item.poster_path}`
             }}
-            style={[styles.moviePoster, { width: MOVIE_CARD_WIDTH - 3, height: MOVIE_CARD_WIDTH * 1.5 - 3 }]}
+            style={styles.moviePoster}
             resizeMode="cover"
           />
           
           <View style={[homeStyles.movieInfoBox, { 
-            width: MOVIE_CARD_WIDTH - 3, 
-            maxWidth: MOVIE_CARD_WIDTH - 3,
-            minWidth: MOVIE_CARD_WIDTH - 3,
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            width: '100%',
             minHeight: 80,
-            overflow: 'hidden',
-            flex: 0
+            paddingHorizontal: 8,
+            paddingVertical: 8,
+            backgroundColor: homeStyles.movieInfoBox?.backgroundColor || 'rgba(0,0,0,0.8)'
           }]}>
             <Text
-              style={[homeStyles.genreName, { fontSize: 16, lineHeight: 18, marginBottom: 2 }]}
+              style={[homeStyles.genreName, { 
+                fontSize: 14, 
+                lineHeight: 18, 
+                marginBottom: 2,
+                width: '100%'
+              }]}
               numberOfLines={1}
               ellipsizeMode="tail"
               allowFontScaling={false}
             >
-              {item.title}
+              {item.title || item.name || ''}
             </Text>
-            <View style={homeStyles.ratingRow}>
-              <View style={homeStyles.ratingLine}>
+            <View style={[homeStyles.ratingRow, { width: '100%' }]}>
+              <View style={[homeStyles.ratingLine, { flex: 1 }]}>
                 <Ionicons name="star" size={12} color={colors.accent} />
-                <Text style={homeStyles.tmdbText}>
+                <Text style={[homeStyles.tmdbText, { fontSize: 11 }]} numberOfLines={1}>
                   TMDb {item.vote_average ? item.vote_average.toFixed(1) : '?'}
                 </Text>
               </View>
-              <View style={homeStyles.ratingLine}>
-                <Ionicons name="people" size={12} color={colors.success} />
-                <Text style={homeStyles.friendsText}>
+              <View style={[homeStyles.ratingLine, { flex: 1 }]}>
+                <Ionicons name="people" size={12} color={colors.success || '#4CAF50'} />
+                <Text style={[homeStyles.friendsText, { fontSize: 11 }]} numberOfLines={1}>
                   Friends {item.friendsRating ? item.friendsRating.toFixed(1) : 'N/A'}
                 </Text>
               </View>
