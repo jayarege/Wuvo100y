@@ -2850,7 +2850,7 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
             {activeTab === 'new' && (
               <ScrollView 
                 style={homeStyles.homeContainer}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 20 }}
                 showsVerticalScrollIndicator={false}
               >
                 <SocialRecommendationsSection
@@ -2946,7 +2946,7 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
             {activeTab === 'new' && (
               <ScrollView 
                 style={homeStyles.homeContainer}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 20 }}
                 showsVerticalScrollIndicator={false}
               >
               <SocialRecommendationsSection
@@ -3218,10 +3218,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
+    marginVertical: 16,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   

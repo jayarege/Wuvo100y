@@ -996,7 +996,7 @@ const ConfidenceBasedComparison = ({
   const [currentComparison, setCurrentComparison] = useState(0);
   const [currentOpponent, setCurrentOpponent] = useState(null);
   const [movieStats, setMovieStats] = useState({
-    rating: null,
+    rating: Math.max(1, Math.min(10, newMovie?.suggestedRating ?? 7.0)),
     standardError: CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
     comparisons: 0,
     wins: 0,
@@ -1007,6 +1007,80 @@ const ConfidenceBasedComparison = ({
   const [comparisonHistory, setComparisonHistory] = useState([]);
   const [isComplete, setIsComplete] = useState(false);
   const [usedOpponentIds, setUsedOpponentIds] = useState([]);
+
+  // **DETERMINISTIC PLACEMENT STATE**
+  const [placementState, setPlacementState] = useState(() => {
+    const sortedRatings = availableMovies
+      .map(m => m.userRating)
+      .filter(r => r != null)
+      .sort((a, b) => a - b);
+    
+    const bands = [
+      [0.0, 0.25],   // LOVED: Top 25%
+      [0.25, 0.50],  // LIKED: Upper-middle 25%
+      [0.50, 0.75],  // AVERAGE: Lower-middle 25%
+      [0.75, 1.0]    // DISLIKED: Bottom 25%
+    ];
+    
+    // Start from sentiment band
+    const sentimentToBand = {
+      'LOVED': 0,
+      'LIKED': 1,
+      'AVERAGE': 2,
+      'DISLIKED': 3
+    };
+    
+    const currentBand = sentimentToBand[selectedSentiment] || 1; // Default to LIKED if unknown
+    
+    return {
+      sorted: sortedRatings,
+      bands: bands,
+      currentBand: currentBand,
+      lastOpponent: null
+    };
+  });
+
+  // **PLACEMENT HELPER FUNCTIONS**
+  const pickOpponentFromBand = useCallback((seen, bandIndex, excludeIds = []) => {
+    const [minPercentile, maxPercentile] = placementState.bands[bandIndex];
+    const sortedMovies = seen
+      .filter(m => m.userRating != null && !excludeIds.includes(m.id))
+      .sort((a, b) => a.userRating - b.userRating);
+    
+    if (sortedMovies.length === 0) return null;
+    
+    const minIndex = Math.floor(minPercentile * sortedMovies.length);
+    const maxIndex = Math.min(Math.ceil(maxPercentile * sortedMovies.length), sortedMovies.length - 1);
+    
+    const bandMovies = sortedMovies.slice(minIndex, maxIndex + 1);
+    if (bandMovies.length === 0) return null;
+    
+    // Sample one randomly from the band
+    const randomIndex = Math.floor(Math.random() * bandMovies.length);
+    return bandMovies[randomIndex];
+  }, [placementState.bands]);
+
+  const placeAfterResult = useCallback((currentRating, opponentRating, didWin) => {
+    if (didWin) {
+      // **EDGE CASE: If opponent = 10.0 and user picks new movie → set 10.0 (cap)**
+      if (opponentRating >= 10.0) {
+        return 10.0;
+      }
+      // One spot above opponent; minimal tick
+      const step = 0.1;
+      return Math.min(10, Math.max(opponentRating + step, currentRating));
+    } else {
+      // No immediate rating change; we'll probe lower band next
+      return currentRating; 
+    }
+  }, []);
+
+  const nextBandOnLoss = useCallback(() => {
+    setPlacementState(prev => ({
+      ...prev,
+      currentBand: Math.min(prev.bands.length - 1, prev.currentBand + 1)
+    }));
+  }, []);
 
   // Get confidence color based on interval width
   const getConfidenceColor = (intervalWidth) => {
@@ -1020,47 +1094,76 @@ const ConfidenceBasedComparison = ({
     }
   };
 
-  // Get next opponent based on current state
+  // Get next opponent from current placement band
   const getNextOpponent = useCallback(() => {
-    if (movieStats.rating === null) {
-      // First comparison: use sentiment-based selection
-      return selectInitialOpponent(selectedSentiment, availableMovies, [...usedOpponentIds, newMovie.id]);
-    } else {
-      // Subsequent comparisons: use information-gain-based selection
-      return selectOptimalOpponent(
-        movieStats.rating,
-        movieStats.standardError,
-        availableMovies,
-        [...usedOpponentIds, newMovie.id]
-      );
-    }
-  }, [movieStats, selectedSentiment, availableMovies, usedOpponentIds, newMovie.id]);
+    // Use deterministic band-based selection
+    return pickOpponentFromBand(availableMovies, placementState.currentBand, [...usedOpponentIds, newMovie.id]);
+  }, [pickOpponentFromBand, availableMovies, placementState.currentBand, usedOpponentIds, newMovie.id]);
 
   // Initialize comparison on modal open
   useEffect(() => {
-    if (visible && !currentOpponent && availableMovies.length > 0) {
+    if (visible && !currentOpponent) {
+      // **EDGE CASE: Handle tiny library**
+      if (availableMovies.length < 3) {
+        console.log('📚 Tiny library detected, using suggestedRating without comparisons');
+        setTimeout(() => {
+          onComparisonComplete({
+            finalRating: Math.max(1, Math.min(10, newMovie?.suggestedRating ?? 7.0)),
+            ratingStats: {
+              rating: Math.max(1, Math.min(10, newMovie?.suggestedRating ?? 7.0)),
+              standardError: 0.15,
+              comparisons: 0,
+              wins: 0,
+              losses: 0,
+              ties: 0,
+              confidenceInterval: { lower: 6, upper: 8, width: 2 }
+            },
+            comparisonHistory: [],
+            targetConfidenceReached: false
+          });
+        }, 1000);
+        return;
+      }
+      
       const opponent = getNextOpponent();
-      setCurrentOpponent(opponent);
-      setCurrentComparison(1);
+      if (opponent) {
+        setCurrentOpponent(opponent);
+        setCurrentComparison(1);
+      }
     }
-  }, [visible, availableMovies, getNextOpponent, currentOpponent]);
+  }, [visible, availableMovies, getNextOpponent, currentOpponent, newMovie, onComparisonComplete]);
 
   const handleComparison = useCallback(async (userChoice) => {
     if (!currentOpponent) return;
 
-    // Determine comparison result
-    let result;
-    if (userChoice === 'too_tough') {
-      result = ComparisonResults.TIE;
-    } else if (userChoice === 'new') {
-      result = ComparisonResults.A_WINS;
-    } else {
-      result = ComparisonResults.B_WINS;
-    }
+    // **DETERMINISTIC PLACEMENT LOGIC**
+    const didWin = (userChoice === 'new');
+    const didTie = (userChoice === 'too_tough');
+    
+    // Apply placement result rule
+    const newRating = placeAfterResult(movieStats.rating, currentOpponent.userRating, didWin);
+    
+    // Update movie statistics with deterministic placement
+    const newStats = {
+      ...movieStats,
+      rating: newRating,
+      comparisons: movieStats.comparisons + 1,
+      wins: movieStats.wins + (didWin ? 1 : 0),
+      losses: movieStats.losses + (!didWin && !didTie ? 1 : 0),
+      ties: movieStats.ties + (didTie ? 1 : 0)
+    };
 
-    // Update movie statistics
-    const previousStats = { ...movieStats };
-    const newStats = updateRatingWithConfidence(movieStats, currentOpponent.userRating, result, currentOpponent.ratingStats);
+    // Calculate confidence interval (fixed SE floor)
+    const n = Math.max(1, newStats.comparisons);
+    const winRate = Math.max(0.05, Math.min(0.95, newStats.wins / n)); // Clamp between 0.05-0.95
+    const se = Math.max(0.15, Math.sqrt((winRate * (1 - winRate)) / n) * 2.0); // Floor at 0.15
+    newStats.standardError = se;
+    newStats.confidenceInterval = {
+      lower: Math.max(1, newRating - 1.96 * se),
+      upper: Math.min(10, newRating + 1.96 * se),
+      width: 2 * 1.96 * se
+    };
+
     setMovieStats(newStats);
 
     // Record comparison in history
@@ -1068,44 +1171,65 @@ const ConfidenceBasedComparison = ({
       comparison: currentComparison,
       opponent: currentOpponent.title,
       result: userChoice,
-      ratingBefore: previousStats.rating,
-      ratingAfter: newStats.rating,
+      ratingBefore: movieStats.rating,
+      ratingAfter: newRating,
       confidenceInterval: newStats.confidenceInterval
     };
     setComparisonHistory(prev => [...prev, comparisonRecord]);
 
     // Update used opponents
     setUsedOpponentIds(prev => [...prev, currentOpponent.id]);
+    
+    // Update placement state
+    setPlacementState(prev => ({
+      ...prev,
+      lastOpponent: { id: currentOpponent.id, rating: currentOpponent.userRating }
+    }));
 
-    console.log(`📊 Comparison ${currentComparison}: Rating ${newStats.rating?.toFixed(2)} ± ${newStats.confidenceInterval?.width?.toFixed(2)}`);
+    console.log(`📊 Comparison ${currentComparison}: Rating ${newRating?.toFixed(2)} ± ${newStats.confidenceInterval?.width?.toFixed(2)}`);
 
-    // Check if we have sufficient confidence or reached max comparisons
-    if (hasTargetConfidence(newStats) || currentComparison >= CONFIDENCE_RATING_CONFIG.CONFIDENCE.MAX_COMPARISONS) {
+    // Move band on loss for next opponent selection
+    if (!didWin && !didTie) {
+      nextBandOnLoss();
+    }
+
+    // **IMPROVED STOPPING CRITERIA**
+    const shouldStop = 
+      // 3-6 comparisons completed and last two moves changed rating by < 0.2 total
+      (newStats.comparisons >= 3 && newStats.comparisons <= 6 && 
+       comparisonHistory.length >= 1 && 
+       Math.abs(newRating - comparisonHistory[comparisonHistory.length - 1]?.ratingAfter || newRating) < 0.2) ||
+      // Or maximum comparisons reached
+      newStats.comparisons >= CONFIDENCE_RATING_CONFIG.CONFIDENCE.MAX_COMPARISONS ||
+      // Or no more opponents in current band
+      availableMovies.length <= usedOpponentIds.length + 1;
+
+    if (shouldStop) {
       // Rating complete
       setIsComplete(true);
       setTimeout(() => {
         onComparisonComplete({
-          finalRating: newStats.rating,
+          finalRating: newRating,
           ratingStats: newStats,
           comparisonHistory: [...comparisonHistory, comparisonRecord],
-          targetConfidenceReached: hasTargetConfidence(newStats)
+          targetConfidenceReached: newStats.confidenceInterval?.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH
         });
       }, 2000);
     } else {
-      // Get next opponent
-      const nextOpponent = getNextOpponent();
+      // Get next opponent from current band
+      const nextOpponent = pickOpponentFromBand(availableMovies, placementState.currentBand, [...usedOpponentIds, newMovie.id]);
       if (nextOpponent) {
         setCurrentOpponent(nextOpponent);
         setCurrentComparison(prev => prev + 1);
       } else {
-        // No more opponents available
+        // No more opponents available in any band
         setIsComplete(true);
         setTimeout(() => {
           onComparisonComplete({
-            finalRating: newStats.rating,
+            finalRating: newRating,
             ratingStats: newStats,
             comparisonHistory: [...comparisonHistory, comparisonRecord],
-            targetConfidenceReached: hasTargetConfidence(newStats)
+            targetConfidenceReached: newStats.confidenceInterval?.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH
           });
         }, 2000);
       }
