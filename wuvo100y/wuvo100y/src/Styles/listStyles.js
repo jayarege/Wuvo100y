@@ -12,38 +12,37 @@ const getListStyles = (mediaType = 'movie', mode = 'light', theme) => {
     rankingItem: {
       flexDirection: 'row',
       marginHorizontal: 16,
-      marginVertical: 4,
+      marginVertical: 1,
       borderRadius: 8,
       backgroundColor: colors.card,
       overflow: 'hidden',
-      borderWidth: .5,
-      borderColor: colors.primaryGradient[1],
+      
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.1,
       shadowRadius: 2,
       elevation: 2,
-      // CODE_BIBLE #3: Clear 50% size reduction for mobile optimization
-      minHeight: 98,
+      // CODE_BIBLE #3: Ultra-compact height - 30% smaller list bars
+      minHeight: 46,
     },
     resultPoster: {
-      width: 50,
-      height: 98,
-      // CODE_BIBLE #3: 50% size reduction maintains 2:3 aspect ratio with 30% height increase
+      width: 31,
+      height: 46,
+      // CODE_BIBLE #3: Narrower poster to maintain 2:3 aspect ratio
     },
     movieDetails: {
       flex: 1,
       padding: 6,
-      height: 98,
+      height: 46,
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.card,
       overflow: 'hidden',
-      // CODE_BIBLE #3: Horizontal layout for content + action button
+      // CODE_BIBLE #3: Smaller height for compact list bars
       paddingRight: 4,
     },
     resultTitle: {
-      fontSize: 12,
+      fontSize: 14,
       fontWeight: 'bold',
       marginBottom: 2,
       color: colors.text,
@@ -79,7 +78,7 @@ const getListStyles = (mediaType = 'movie', mode = 'light', theme) => {
     // UPDATED: Right-side ranking container
     rankingContainer: {
       width: 30, // CODE_BIBLE #3: 50% width reduction for mobile
-      height: 98,
+      height: 46,
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: colors.primary,
@@ -102,10 +101,13 @@ const getListStyles = (mediaType = 'movie', mode = 'light', theme) => {
     // UPDATED: Much larger ranking number
     rankNumber: {
       fontWeight: 'bold',
-      fontSize: 12, // CODE_BIBLE #3: 50% size reduction, still readable
+      fontSize: 16, // Made bigger for better visibility
       color: colors.accent,
       fontFamily: colors.font.header,
       textAlign: 'center',
+      borderWidth: 0,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
     },
     
     // Additional optimized styles for content fitting
@@ -210,6 +212,11 @@ const listStyles = StyleSheet.create({
     fontSize: 24,
     color: '#FFFFFF',
     textAlign: 'center',
+    borderWidth: 0.5,
+    borderColor: '#FFA000', // Yellow from secondary theme color
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
   
   scoreContainer: {

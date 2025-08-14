@@ -48,7 +48,7 @@ const UsernameSelectionScreen = ({ navigation, route }) => {
         useNativeDriver: true,
       })
     ]).start();
-  }, []);
+  }, [fadeInAnimation, slideUpAnimation]);
 
   // =============================================================================
   // USERNAME VALIDATION

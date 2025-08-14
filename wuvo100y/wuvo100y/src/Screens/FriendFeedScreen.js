@@ -41,6 +41,29 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
     gradient: themeColors.primaryGradient.slice(0, 2)
   };
 
+  const loadLikeStatus = useCallback(async (activitiesToCheck) => {
+    if (!currentUser?.id) return;
+
+    try {
+      const likePromises = activitiesToCheck.map(activity =>
+        ActivityFeedService.hasUserLikedActivity(activity.id, currentUser.id)
+      );
+
+      const likeResults = await Promise.all(likePromises);
+      const newLikedActivities = new Set(likedActivities);
+
+      activitiesToCheck.forEach((activity, index) => {
+        if (likeResults[index]) {
+          newLikedActivities.add(activity.id);
+        }
+      });
+
+      setLikedActivities(newLikedActivities);
+    } catch (error) {
+      console.error('❌ Error loading like status:', error);
+    }
+  }, [currentUser?.id, likedActivities]);
+
   const loadFeed = useCallback(async (refresh = false) => {
     if (!currentUser?.id) return;
 
@@ -79,30 +102,7 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
       setIsRefreshing(false);
       setIsLoadingMore(false);
     }
-  }, [currentUser, lastDoc]);
-
-  const loadLikeStatus = async (activitiesToCheck) => {
-    if (!currentUser?.id) return;
-
-    try {
-      const likePromises = activitiesToCheck.map(activity =>
-        ActivityFeedService.hasUserLikedActivity(activity.id, currentUser.id)
-      );
-
-      const likeResults = await Promise.all(likePromises);
-      const newLikedActivities = new Set(likedActivities);
-
-      activitiesToCheck.forEach((activity, index) => {
-        if (likeResults[index]) {
-          newLikedActivities.add(activity.id);
-        }
-      });
-
-      setLikedActivities(newLikedActivities);
-    } catch (error) {
-      console.error('❌ Error loading like status:', error);
-    }
-  };
+  }, [currentUser?.id, lastDoc, loadLikeStatus]);
 
   const handleLikeActivity = async (activityId) => {
     if (!currentUser?.id) return;
@@ -158,7 +158,7 @@ function FriendFeedScreen({ navigation, isDarkMode, currentUser }) {
 
   useEffect(() => {
     loadFeed(true);
-  }, []);
+  }, [loadFeed]);
 
 
   const renderActivityIcon = (activityType) => {

@@ -464,9 +464,10 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     // Apply advanced filters (payment type & streaming services from new modal)
     if (selectedPaymentTypes.length > 0 || selectedStreamingProviders.length > 0) {
       filtered = filtered.filter(movie => {
-        // Note: In a real app, you would fetch streaming data for each movie
-        // For now, this is a placeholder that shows the filtering structure
-        if (!movie.streamingProviders) return true; // Show all if no provider data
+        // If movie has no streaming data, only include if no streaming filters are applied
+        if (!movie.streamingProviders) {
+          return selectedPaymentTypes.length === 0 && selectedStreamingProviders.length === 0;
+        }
         
         let passesPaymentFilter = selectedPaymentTypes.length === 0;
         let passesProviderFilter = selectedStreamingProviders.length === 0;
@@ -720,18 +721,22 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     setTempGenres([...selectedGenres]);
     setTempDecades([...selectedDecades]);
     setTempStreamingServices([...selectedStreamingServices]);
+    setTempPaymentTypes([...selectedPaymentTypes]);
+    setTempStreamingProviders([...selectedStreamingProviders]);
     setFilterModalVisible(true);
-  }, [selectedGenres, selectedDecades, selectedStreamingServices]);
+  }, [selectedGenres, selectedDecades, selectedStreamingServices, selectedPaymentTypes, selectedStreamingProviders]);
 
   const applyFilters = useCallback(() => {
     setFilterModalVisible(false);
     setSelectedGenres([...tempGenres]);
     setSelectedDecades([...tempDecades]);
     setSelectedStreamingServices([...tempStreamingServices]);
-    if (tempGenres.length > 0 || tempDecades.length > 0 || tempStreamingServices.length > 0) {
+    setSelectedPaymentTypes([...tempPaymentTypes]);
+    setSelectedStreamingProviders([...tempStreamingProviders]);
+    if (tempGenres.length > 0 || tempDecades.length > 0 || tempStreamingServices.length > 0 || tempPaymentTypes.length > 0 || tempStreamingProviders.length > 0) {
       setSelectedGenreId(null);
     }
-  }, [tempGenres, tempDecades, tempStreamingServices]);
+  }, [tempGenres, tempDecades, tempStreamingServices, tempPaymentTypes, tempStreamingProviders]);
 
   const cancelFilters = useCallback(() => {
     setFilterModalVisible(false);
@@ -1301,7 +1306,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       end={{ x: 1, y: 1 }}
                       style={listStyles.rankingContainer}
                     >
-                      <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 12 }]}>
+                      <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 16 }]}>
                         {index + 1}
                       </Text>
                     </LinearGradient>
@@ -1310,13 +1315,13 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       style={{
                         padding: 1,
                         borderRadius: 4,
-                        width: 50,
-                        height: 75
+                        width: 33,
+                        height: 48
                       }}
                     >
                       <Image
                         source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
-                        style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                        style={[listStyles.resultPoster, { width: 31, height: 46 }]}
                         resizeMode="cover"
                       />
                     </LinearGradient>
@@ -1523,7 +1528,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                     end={{ x: 1, y: 1 }}
                     style={listStyles.rankingContainer}
                   >
-                    <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 12 }]}>
+                    <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 16 }]}>
                       {index + 1}
                     </Text>
                   </LinearGradient>
@@ -1538,7 +1543,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                   >
                     <Image
                       source={{ uri: getPosterUrl(item.poster || item.poster_path) }}
-                      style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                      style={[listStyles.resultPoster, { width: 31, height: 46 }]}
                       resizeMode="cover"
                     />
                   </LinearGradient>
@@ -1659,7 +1664,12 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   }, [currentUnseen]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <LinearGradient
+      colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ flex: 1 }}
+    >
       {/* ThemedHeader with gradient and movie/TV toggle - identical to Home screen */}
       <ThemedHeader mediaType={mediaType} isDarkMode={isDarkMode} theme={theme}>
         <Text style={headerStyles.screenTitle}>Profile</Text>
@@ -1855,7 +1865,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
             data={watchlistForGrid}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16 }}
+            contentContainerStyle={{ paddingHorizontal: 0 }}
             keyExtractor={item => item.id.toString()}
             removeClippedSubviews={false}
             renderItem={({ item }) => (
@@ -1959,12 +1969,18 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       {/* Top Movies Modal */}
       <Modal visible={topMoviesModalVisible} transparent animationType="fade">
         <View style={modalStyles.modalOverlay}>
-          <View style={[modalStyles.modalContent, { 
-          backgroundColor: colors.background,
-          flex: 0,
-          height: '90%',
-          width: '90%'
-        }]}>
+          <LinearGradient
+            colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+            locations={[0, 0.1, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[modalStyles.modalContent, { 
+            flex: 0,
+            height: '90%',
+            width: '90%',
+            borderWidth: 0.5,
+            borderColor: colors.primaryGradient[1],
+          }]}>
             <View style={styles.modalHeader}>
               <TouchableOpacity
                 onPress={() => setTopMoviesModalVisible(false)}
@@ -2118,7 +2134,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       end={{ x: 1, y: 1 }}
                       style={listStyles.rankingContainer}
                     >
-                      <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 12 }]}>
+                      <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 16 }]}>
                         {index + 1}
                       </Text>
                     </LinearGradient>
@@ -2127,13 +2143,13 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       style={{
                         padding: 1,
                         borderRadius: 4,
-                        width: 50,
-                        height: 75
+                        width: 33,
+                        height: 48
                       }}
                     >
                       <Image
                         source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
-                        style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                        style={[listStyles.resultPoster, { width: 31, height: 46 }]}
                         resizeMode="cover"
                       />
                     </LinearGradient>
@@ -2176,19 +2192,25 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                 </Text>
               </View>
             )}
-          </View>
+          </LinearGradient>
         </View>
       </Modal>
       
       {/* Watchlist Modal */}
       <Modal visible={watchlistModalVisible} transparent animationType="fade">
         <View style={modalStyles.modalOverlay}>
-          <View style={[modalStyles.modalContent, { 
-          backgroundColor: colors.background,
-          flex: 0,
-          height: '90%',
-          width: '90%'
-        }]}>
+          <LinearGradient
+            colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+            locations={[0, 0.1, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[modalStyles.modalContent, { 
+            flex: 0,
+            height: '90%',
+            width: '90%',
+            borderWidth: 0.5,
+            borderColor: colors.primaryGradient[1],
+          }]}>
             <View style={styles.modalHeader}>
               <TouchableOpacity
                 onPress={() => setWatchlistModalVisible(false)}
@@ -2432,7 +2454,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       end={{ x: 1, y: 1 }}
                       style={listStyles.rankingContainer}
                     >
-                      <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 12 }]}>
+                      <Text style={[listStyles.rankNumber, { color: colors.accent, fontSize: 16 }]}>
                         {index + 1}
                       </Text>
                     </LinearGradient>
@@ -2441,13 +2463,13 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                       style={{
                         padding: 1,
                         borderRadius: 4,
-                        width: 50,
-                        height: 75
+                        width: 33,
+                        height: 48
                       }}
                     >
                       <Image
                         source={{ uri: getPosterUrl(movie.poster || movie.poster_path) }}
-                        style={[listStyles.resultPoster, { width: 48, height: 73 }]}
+                        style={[listStyles.resultPoster, { width: 31, height: 46 }]}
                         resizeMode="cover"
                       />
                     </LinearGradient>
@@ -2490,7 +2512,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                 </Text>
               </View>
             )}
-          </View>
+          </LinearGradient>
         </View>
       </Modal>
 
@@ -2515,8 +2537,14 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       <Modal visible={comparisonModalVisible} transparent animationType="none">
         <View style={modalStyles.modalOverlay}>
           <LinearGradient
-            colors={getModalColors(true).primaryGradient || ['#667eea', '#764ba2']}
-            style={modalStyles.comparisonModalContent}
+            colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+            locations={[0, 0.1, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[modalStyles.comparisonModalContent, {
+              borderWidth: 0.5,
+              borderColor: colors.primaryGradient[1],
+            }]}
           >
             {!isComparisonComplete ? (
               <>
@@ -2660,10 +2688,14 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       >
         <View style={filterStyles.modalOverlay}>
           <LinearGradient
-            colors={colors.primaryGradient}
+            colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+            locations={[0, 0.1, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={filterStyles.enhancedModalContent}
+            style={[filterStyles.enhancedModalContent, {
+              borderWidth: 0.5,
+              borderColor: colors.primaryGradient[1],
+            }]}
           >
             {/* Modal Header */}
             <View style={filterStyles.modalHeader}>
@@ -2858,28 +2890,31 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
        </View>
      </Modal>
 
-     {/* Advanced Filters Modal - Using absolute positioning instead of Modal */}
-     {advancedFiltersModalVisible && (
+     {/* Advanced Filters Modal - Now using React Native Modal component */}
+     <Modal
+       visible={advancedFiltersModalVisible}
+       transparent
+       animationType="fade"
+       onRequestClose={() => setAdvancedFiltersModalVisible(false)}
+     >
        <View style={{
-         position: 'absolute',
-         top: 0,
-         left: 0,
-         right: 0,
-         bottom: 0,
+         flex: 1,
          backgroundColor: 'rgba(0,0,0,0.8)',
          justifyContent: 'center',
          alignItems: 'center',
-         zIndex: 9999
        }}>
          <LinearGradient
-           colors={colors.primaryGradient}
+           colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+           locations={[0, 0.1, 1]}
            start={{ x: 0, y: 0 }}
            end={{ x: 1, y: 1 }}
            style={{
              width: '90%',
              maxHeight: '80%',
              borderRadius: 12,
-             padding: 20
+             padding: 20,
+             borderWidth: 0.5,
+             borderColor: colors.primaryGradient[1],
            }}
          >
            {/* Modal Header */}
@@ -3053,9 +3088,9 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
            </View>
          </LinearGradient>
        </View>
-     )}
+     </Modal>
       </SafeAreaView>
-    </View>
+    </LinearGradient>
   );
 };
 
@@ -3096,7 +3131,7 @@ const styles = StyleSheet.create({
   profileInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6, // Reduced from 20 to 6 (70% reduction)
+    paddingHorizontal: 0, // Removed all padding for edge-to-edge layout
     paddingVertical: 20,
   },
   avatarContainer: {
@@ -3146,7 +3181,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   sectionContainer: {
-    paddingHorizontal: 6, // Reduced from 20 to 6 (70% reduction)
+    paddingHorizontal: 0, // Removed all padding for edge-to-edge grid
     marginBottom: 30,
   },
   sectionHeaderRow: {
@@ -3254,11 +3289,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#555',
     marginHorizontal: 16,
   },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
+
 });
 
 const filterStyles = StyleSheet.create({
@@ -3267,6 +3298,7 @@ const filterStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 10000, // Higher than other modals (9999)
   },
   enhancedModalContent: {
     width: '90%',

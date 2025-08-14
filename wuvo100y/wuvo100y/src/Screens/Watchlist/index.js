@@ -85,6 +85,8 @@ function WatchlistScreen({ movies, genres, isDarkMode, onAddToSeen, onRemoveFrom
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [selectedDecades, setSelectedDecades] = useState([]);
   const [selectedStreamingServices, setSelectedStreamingServices] = useState([]);
+  const [selectedPaymentTypes, setSelectedPaymentTypes] = useState([]);
+  const [selectedStreamingProviders, setSelectedStreamingProviders] = useState([]);
   const [tempGenres, setTempGenres] = useState([]);
   const [tempDecades, setTempDecades] = useState([]);
   const [tempStreamingServices, setTempStreamingServices] = useState([]);
@@ -153,20 +155,37 @@ const moviesByMediaType = useMemo(() => {
   const sortedMovies = [...moviesByMediaType].sort((a, b) => b.score - a.score);
 
   const filteredMovies = useMemo(() => {
+    console.log('🔍 WATCHLIST FILTER DEBUG - Starting filter process');
+    console.log('📊 Initial data:', { 
+      totalMovies: sortedMovies.length,
+      selectedGenres: selectedGenres.length,
+      selectedDecades: selectedDecades.length,
+      selectedStreamingServices: selectedStreamingServices.length,
+      selectedPaymentTypes: selectedPaymentTypes.length,
+      selectedStreamingProviders: selectedStreamingProviders.length,
+      selectedGenreId
+    });
+
     // Apply content filtering for safety first
     const safeContent = filterAdultContent(sortedMovies, mediaType);
     let filtered = safeContent;
+    console.log('🔒 After adult content filter:', filtered.length);
 
     // Apply advanced filters
     if (selectedGenres.length > 0) {
+      console.log('🎭 Applying genre filter:', selectedGenres);
+      const beforeGenre = filtered.length;
       filtered = filtered.filter(movie => 
         movie.genre_ids && movie.genre_ids.some(genreId => 
           selectedGenres.includes(genreId.toString())
         )
       );
+      console.log(`🎭 Genre filter: ${beforeGenre} → ${filtered.length}`);
     }
 
     if (selectedDecades.length > 0) {
+      console.log('📅 Applying decade filter:', selectedDecades);
+      const beforeDecade = filtered.length;
       filtered = filtered.filter(movie => {
         const dateField = movie.release_date || movie.first_air_date;
         if (!dateField) return false;
@@ -176,15 +195,54 @@ const moviesByMediaType = useMemo(() => {
           return year >= decadeInfo.startYear && year <= decadeInfo.endYear;
         });
       });
+      console.log(`📅 Decade filter: ${beforeDecade} → ${filtered.length}`);
     }
 
     // Apply legacy genre filter if no advanced filters are active
     if (selectedGenres.length === 0 && selectedDecades.length === 0 && selectedStreamingServices.length === 0 && selectedGenreId) {
+      console.log('🏷️ Applying selectedGenreId filter:', selectedGenreId);
+      const beforeGenreId = filtered.length;
       filtered = filtered.filter(movie => movie.genre_ids?.includes(selectedGenreId));
+      console.log(`🏷️ GenreId filter: ${beforeGenreId} → ${filtered.length}`);
     }
 
+    // Apply advanced filters (payment type & streaming services from new modal)
+    if (selectedPaymentTypes.length > 0 || selectedStreamingProviders.length > 0) {
+      console.log('📺 Applying streaming filters');
+      const beforeStreaming = filtered.length;
+      filtered = filtered.filter(movie => {
+        // If movie has no streaming data, only include if no streaming filters are applied
+        if (!movie.streamingProviders) {
+          const result = selectedPaymentTypes.length === 0 && selectedStreamingProviders.length === 0;
+          console.log(`📺 Movie ${movie.title} has no streaming data, including: ${result}`);
+          return result;
+        }
+        
+        let passesPaymentFilter = selectedPaymentTypes.length === 0;
+        let passesProviderFilter = selectedStreamingProviders.length === 0;
+        
+        if (selectedPaymentTypes.length > 0) {
+          const hasFree = selectedPaymentTypes.includes('free') && 
+            movie.streamingProviders.some(p => p.type === 'flatrate');
+          const hasPaid = selectedPaymentTypes.includes('paid') && 
+            movie.streamingProviders.some(p => p.type === 'rent' || p.type === 'buy');
+          passesPaymentFilter = hasFree || hasPaid;
+        }
+        
+        if (selectedStreamingProviders.length > 0) {
+          passesProviderFilter = movie.streamingProviders.some(p => 
+            selectedStreamingProviders.includes(p.provider_id.toString())
+          );
+        }
+        
+        return passesPaymentFilter && passesProviderFilter;
+      });
+      console.log(`📺 Streaming filter: ${beforeStreaming} → ${filtered.length}`);
+    }
+
+    console.log('✅ WATCHLIST FILTER DEBUG - Final result:', filtered.length);
     return filtered;
-  }, [selectedGenres, selectedDecades, selectedStreamingServices, selectedGenreId, sortedMovies, mediaType]);
+  }, [selectedGenres, selectedDecades, selectedStreamingServices, selectedPaymentTypes, selectedStreamingProviders, selectedGenreId, sortedMovies, mediaType]);
 
   const uniqueGenreIds = useMemo(() => {
     return Array.from(new Set(moviesByMediaType.flatMap(m => m.genre_ids || [])));

@@ -19,7 +19,7 @@ class DiscoverySessionGenerator {
 
   async generateSessionTheme(userProfile, sessionTemplate, candidateMovies) {
     try {
-      if (!true) {
+      if (!process.env.GROQ_API_KEY) {
         console.log('⚠️ No Groq API key, using template theme');
         return this.createTemplateTheme(sessionTemplate, userProfile);
       }

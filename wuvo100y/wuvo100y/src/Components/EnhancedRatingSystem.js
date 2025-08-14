@@ -130,7 +130,7 @@ const calculateStandardError = (comparisons, wins, losses, ties = 0) => {
   const p = winRate;
   const variance = (p * (1 - p)) / n;
   
-  // Convert to rating scale standard error
+  // Convert to rating scale standard error (uses /4 for variance scaling, not probability)
   const ratingVariance = variance * Math.pow(CONFIDENCE_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR / 4, 2);
   return Math.sqrt(ratingVariance / 100); // Scale to 1-10 rating system
 };
@@ -722,7 +722,7 @@ const eloUpdate = (Ra, Rb, Sa, Ka, Kb) => {
     return [Ra || fallback, Rb || fallback]; // Safe fallback
   }
   
-  const Ea = 1 / (1 + Math.pow(ENHANCED_RATING_CONFIG.ELO_CONFIG.BASE, (Rb - Ra) / ENHANCED_RATING_CONFIG.ELO_CONFIG.DIVISOR));
+  const Ea = 1 / (1 + Math.pow(ENHANCED_RATING_CONFIG.ELO_CONFIG.BASE, (Rb - Ra) / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
   const Eb = 1 - Ea;
   
   const newRatingA = Ra + Ka * (Sa - Ea);
@@ -1752,7 +1752,7 @@ const EnhancedRatingButton = ({
 
       <ConfidenceBasedComparison
         visible={comparisonModalVisible}
-        newMovie={movie}
+        newMovie={{...movie, suggestedRating}}
         availableMovies={seen}
         selectedSentiment={selectedCategory}
         onClose={handleCloseModals}
@@ -2288,7 +2288,7 @@ const getRatingCategory = (rating, userMovies) => {
  */
 export const adjustRatingWildcard = (winnerRating, loserRating, winnerWon, winnerGamesPlayed = 0, loserGamesPlayed = 5) => {
   const ratingDifference = Math.abs(winnerRating - loserRating);
-  const expectedWinProbability = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 4));
+  const expectedWinProbability = 1 / (1 + Math.pow(ENHANCED_RATING_CONFIG.ELO_CONFIG.BASE, (loserRating - winnerRating) / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
   
   const winnerK = calculateDynamicKFactor(winnerGamesPlayed < 5 ? 2.0 : 1.0, winnerGamesPlayed);
   const loserK = calculateDynamicKFactor(loserGamesPlayed < 5 ? 2.0 : 1.0, loserGamesPlayed);
@@ -2439,7 +2439,7 @@ export const calculateKFactor = (gamesPlayed) => {
  * Legacy expected win probability calculation
  */
 export const calculateExpectedWinProbability = (ratingA, ratingB) => {
-  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 4));
+  return 1 / (1 + Math.pow(ENHANCED_RATING_CONFIG.ELO_CONFIG.BASE, (ratingB - ratingA) / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
 };
 
 /**

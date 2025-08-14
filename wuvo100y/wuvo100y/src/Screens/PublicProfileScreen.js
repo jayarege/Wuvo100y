@@ -86,7 +86,7 @@ function PublicProfileScreen({
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [userId, navigation]);
+  }, [userId, navigation, currentUser.id]);
 
   useEffect(() => {
     loadUserProfile();

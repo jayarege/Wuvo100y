@@ -1,17 +1,27 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getHomeStyles } from '../../Styles/homeStyles';
 import theme from '../../utils/Theme';
 
 const { width } = Dimensions.get('window');
-// Original horizontal scroll sizing
-const MOVIE_CARD_WIDTH_HORIZONTAL = (width - 48) / 2.2;
-// New 3x3 grid sizing for testing
-const MOVIE_CARD_WIDTH_3x3 = (width - 60) / 3;
-// Use 3x3 sizing for now to preview
-const MOVIE_CARD_WIDTH = MOVIE_CARD_WIDTH_3x3;
+
+// Responsive sizing that works from iPhone 8 (375px) to iPhone 15 Pro Max (430px)
+// Home screen horizontal scroll sizing - 35% smaller than before
+const MOVIE_CARD_WIDTH_HOME = Math.min(
+  (width - 48) / 2.8, // Made 35% smaller (was 1.8, now 2.8)
+  130 // Max width cap reduced 35% (was 200, now 130)
+);
+
+// Profile screen 3x3 grid sizing - 35% smaller
+const MOVIE_CARD_WIDTH_PROFILE = Math.max(
+  (width - 60) / 4.6, // Made 35% smaller (was 3, now 4.6)
+  60 // Minimum width reduced 35% (was 90, now 60)
+);
+
+// Constants for external use - CODE_BIBLE Commandment #3: Clear naming
+export const MOVIE_CARD_WIDTH = MOVIE_CARD_WIDTH_HOME;
 
 /**
  * MovieCard - Enhanced to support friend recommendations
@@ -25,16 +35,28 @@ const MovieCard = ({
   isDarkMode = false,
   getRatingBorderColor = () => 'transparent',
   rankingNumber = null, // Prop for showing ranking numbers (1-10) in Profile screen
-  context = 'general', // New prop to control X button visibility
+  context = 'general', // New prop to control X button visibility and sizing
   customWidth = null // Custom width override for Profile 3x3 grid
 }) => {
   const colors = theme[mediaType][isDarkMode ? 'dark' : 'light'];
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
 
-  // No longer needed since badges are removed for Home screen
-
-  // FORCE THE WIDTH - NO MATTER WHAT (or use custom width for Profile 3x3 grid)
-  const cardWidth = customWidth || MOVIE_CARD_WIDTH;
+  // CODE_BIBLE Commandment #3: Write obvious code - explicit card sizing
+  const cardWidth = (() => {
+    // Explicit override takes precedence
+    if (customWidth) return customWidth;
+    
+    // Context-based sizing for clear screen differentiation
+    switch (context) {
+      case 'home':
+      case 'general':
+        return MOVIE_CARD_WIDTH_HOME; // Larger cards for horizontal scrolling
+      case 'profile':
+      case 'grid':
+      default:
+        return MOVIE_CARD_WIDTH_PROFILE; // Compact cards for grid layout
+    }
+  })();
   
   return (
     <View style={{
@@ -44,7 +66,7 @@ const MovieCard = ({
       height: cardWidth * 1.9,
       marginRight: customWidth ? 0 : 4, // Reduced margin for closer spacing like Profile screen
       borderColor: getRatingBorderColor(item),
-      borderWidth: getRatingBorderColor(item) !== 'transparent' ? 1 : 0,
+      borderWidth: getRatingBorderColor(item) !== 'transparent' ? StyleSheet.hairlineWidth : 0,
       flex: 0,
       flexShrink: 0,
       flexGrow: 0,
@@ -60,20 +82,20 @@ const MovieCard = ({
           overflow: 'hidden'
         }]}>
           {/* Ranking number - Only shown for Profile screen with rankingNumber prop */}
-          {rankingNumber && (
+          {/* {rankingNumber && (
             <Text style={[
               styles.rankingNumberLarge,
               { 
                 color: colors.primary,
+                position: 'absolute',
                 top: 8,
                 left: 8,
-                position: 'absolute',
                 zIndex: 1
               }
             ]}>
               {rankingNumber}
             </Text>
-          )}
+          )} */}
           
           {/* NOT INTERESTED X BUTTON - TOP RIGHT - Hidden for Profile screen top movies/shows */}
           {!(context === 'toprated' || context === 'toppicks-grid') && (
@@ -124,37 +146,65 @@ const MovieCard = ({
             borderBottomLeftRadius: 12, // Match MovieCard corner radius
             borderBottomRightRadius: 12 // Match MovieCard corner radius
           }]}>
-            <Text
-              style={[homeStyles.genreName, { 
-                fontSize: 14, 
-                lineHeight: 18, 
-                marginBottom: 2,
-                width: '100%'
-              }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-              allowFontScaling={false}
-            >
-              {item.title || item.name || ''}
-            </Text>
-            <View style={[homeStyles.ratingRow, { width: '100%' }]}>
-              <View style={[homeStyles.ratingLine, { flex: 1 }]}>
-                <Ionicons name="star" size={12} color={colors.accent} />
-                <Text style={[homeStyles.tmdbText, { fontSize: 11 }]} numberOfLines={1}>
-                  TMDb {item.vote_average ? item.vote_average.toFixed(1) : '?'}
+            {/* Show title on Home screen OR scores on Profile screen */}
+            {context !== 'toprated' && context !== 'toppicks-grid' ? (
+              <Text
+                style={[homeStyles.genreName, { 
+                  fontSize: 14, 
+                  lineHeight: 18, 
+                  marginBottom: 2,
+                  width: '100%'
+                }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                allowFontScaling={false}
+              >
+                {item.title || item.name || ''}
+              </Text>
+            ) : (
+              // Profile screen: Show user score and friend score
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+                <Text style={{ 
+                  fontSize: 14, 
+                  fontWeight: 'bold',
+                  color: colors.secondary, // Yellow from theme (#FFA000)
+                }}>
+                  {item.userRating ? item.userRating.toFixed(1) : 'N/A'}
                 </Text>
-              </View>
-              <View style={[homeStyles.ratingLine, { flex: 1 }]}>
-                <Ionicons name="people" size={12} color={colors.success || '#4CAF50'} />
-                <Text style={[homeStyles.friendsText, { fontSize: 11 }]} numberOfLines={1}>
+                <Text style={{ 
+                  fontSize: 14, 
+                  fontWeight: 'bold',
+                  color: colors.success, // Green from theme (#4CAF50)
+                }}>
                   {item.averageFriendRating ? 
-                    `${item.averageFriendRating.toFixed(1)}` :
-                    item.friendsRating ? `${item.friendsRating.toFixed(1)}` : 
+                    item.averageFriendRating.toFixed(1) :
+                    item.friendsRating ? item.friendsRating.toFixed(1) : 
                     'N/A'
                   }
                 </Text>
               </View>
-            </View>
+            )}
+            {/* Only show ratings on Home screen, hide on Profile screen */}
+            {context !== 'toprated' && context !== 'toppicks-grid' && (
+              <View style={[homeStyles.ratingRow, { width: '100%' }]}>
+                <View style={[homeStyles.ratingLine, { flex: 1 }]}>
+                  <Ionicons name="star" size={12} color={colors.accent} />
+                  <Text style={[homeStyles.tmdbText, { fontSize: 11 }]} numberOfLines={1}>
+                    TMDb {item.vote_average ? item.vote_average.toFixed(1) : '?'}
+                  </Text>
+                </View>
+                <View style={[homeStyles.ratingLine, { flex: 1 }]}>
+                  <Ionicons name="people" size={12} color={colors.success || '#4CAF50'} />
+                  <Text style={[homeStyles.friendsText, { fontSize: 11 }]} numberOfLines={1}>
+                    {item.averageFriendRating ? 
+                      `${item.averageFriendRating.toFixed(1)}` :
+                      item.friendsRating ? `${item.friendsRating.toFixed(1)}` : 
+                      'N/A'
+                    }
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -172,11 +222,10 @@ const styles = {
   rankingNumberLarge: {
     fontSize: 40,
     fontWeight: '900',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowColor: 'rgba(255, 160, 0, 0.4)', // More transparent yellow shadow
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 3,
   },
 };
 
 export default MovieCard;
-export { MOVIE_CARD_WIDTH };

@@ -93,7 +93,7 @@ export const LavaLampBackground = ({ mediaType, isDarkMode, theme }) => {
       blob1Animation.stop();
       blob2Animation.stop();
     };
-  }, [mediaType, isDarkMode]);
+  }, [mediaType, isDarkMode, rotateValue, blob1X, blob1Y, blob2X, blob2Y]);
 
   const spin = rotateValue.interpolate({
     inputRange: [0, 1],
@@ -101,34 +101,19 @@ export const LavaLampBackground = ({ mediaType, isDarkMode, theme }) => {
   });
 
   return (
-    <View 
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        overflow: 'hidden',
-        zIndex: 0,
-      }}
-      pointerEvents="none"
-    >
-      {/* Rotating background gradient */}
-      <Animated.View style={{
-        position: 'absolute',
-        width: width * 1.5,
-        height: height * 1.5,
-        left: -width * 0.25,
-        top: -height * 0.25,
-        transform: [{ rotate: spin }],
-      }}>
-        <LinearGradient
-          colors={[...colors.primaryGradient, colors.primaryGradient[0]]}
-          style={{ flex: 1, opacity: 0.1 }}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-      </Animated.View>
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+      {/* Main gradient background */}
+      <LinearGradient
+        colors={colors.background}
+        locations={[0, 0.1, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ 
+          flex: 1,
+          transform: [{ rotate: spin }],
+          opacity: 0.3,
+        }}
+      />
 
       {/* Floating blob 1 */}
       <Animated.View style={{
@@ -142,7 +127,7 @@ export const LavaLampBackground = ({ mediaType, isDarkMode, theme }) => {
         ],
       }}>
         <LinearGradient
-          colors={[colors.primaryGradient[1], 'transparent']}
+          colors={[colors.background[1] || colors.background[0], 'transparent']}
           style={{ 
             flex: 1, 
             borderRadius: 150,
@@ -165,7 +150,7 @@ export const LavaLampBackground = ({ mediaType, isDarkMode, theme }) => {
         ],
       }}>
         <LinearGradient
-          colors={[colors.primaryGradient[2] || colors.primaryGradient[0], 'transparent']}
+          colors={[colors.background[2] || colors.background[0], 'transparent']}
           style={{ 
             flex: 1, 
             borderRadius: 125,
@@ -183,8 +168,8 @@ const theme = {
   movie: {
     light: {
       primary: '#6C2BD9',          // Deep Purple for header
-      primaryGradient: ['#612EF0','#6C2BD9', '#321680'], // Light purple to deep purple
-      background: '#F0F4F8',       // Changed from white to light blue-gray
+      primaryGradient: ['#612EF0','#6C2BD9', '#321680'], // HEADER GRADIENT: Light purple to deep purple
+      background: ['#000000', '#050108', '#0A0210'],  // BACKGROUND GRADIENT: Pure black to very dark purple
       card: '#E2E8F0',             // Changed to match new background theme
       text: '#333333',
       subText: '#666666',
@@ -218,8 +203,8 @@ const theme = {
     },
     dark: {
       primary: '#6C2BD9',         // BlueViolet
-      primaryGradient: ['#612EF0','#6C2BD9', '#321680'], // Lighter purple to blue violet
-      background: '#0F172A',      // Changed to deeper navy blue
+      primaryGradient: ['#612EF0','#6C2BD9', '#321680'], // HEADER GRADIENT: Lighter purple to blue violet
+      background: ['#000000', '#10031C', '#0A0210'],  // BACKGROUND GRADIENT: Pure black to very dark purple
       card: '#1E293B',            // Changed to slate shade
       text: '#F5F5F5',
       subText: '#D3D3D3',
@@ -256,8 +241,8 @@ const theme = {
   tv: {
     light: {
       primary: '#59ADE8',         // UCLA Blue
-      primaryGradient: ['#95C4EF', '#59ADE8'], // Light blue to UCLA blue
-      background: '#F0F4F8',      // Changed from white to light blue-gray
+      primaryGradient: ['#95C4EF', '#59ADE8'], // HEADER GRADIENT: Light blue to UCLA blue
+      background: ['#000000', '#07061A', '#000000'],  // BACKGROUND GRADIENT: Pure black to very dark blue
       card: '#E2E8F0',            // Changed to match new background theme
       text: '#333333',
       subText: '#666666',
@@ -291,8 +276,8 @@ const theme = {
     },
     dark: {
       primary: '#59ADE8',         // Sapphire Blue
-      primaryGradient: ['#95C4EF', '#59ADE8'], // Brighter blue to sapphire blue
-      background: '#0F172A',      // Changed to deeper navy blue
+      primaryGradient: ['#95C4EF', '#59ADE8'], // HEADER GRADIENT: Brighter blue to sapphire blue
+      background: ['#000000', '#07061A', '#000000'],  // BACKGROUND GRADIENT: Pure black to very dark blue
       card: '#1E293B',            // Changed to slate shade
       text: '#EEEEEE',
       subText: '#AAAAAA',

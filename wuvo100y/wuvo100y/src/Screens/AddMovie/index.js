@@ -340,7 +340,7 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
         handleConfirmRating(finalRating);
       }, 1500);
     }
-  }, [currentComparison, comparisonMovies, selectedMovieForRating, selectedEmotion, currentMovieRating]);
+  }, [currentComparison, comparisonMovies, selectedMovieForRating, selectedEmotion, currentMovieRating, handleConfirmRating]);
 
   const handleConfirmRating = useCallback((finalRating) => {
     console.log('✅ Confirming rating:', finalRating, 'for:', selectedMovieForRating?.title);
@@ -527,14 +527,23 @@ ${user.overview || 'No bio available'}`,
 
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <LinearGradient
+      colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ flex: 1 }}
+    >
       <ThemedHeader mediaType={mediaType} isDarkMode={isDarkMode} theme={theme}>
         <Text style={headerStyles.screenTitle}>
           Add {mediaType === 'movie' ? 'Movies' : 'TV Shows'}
         </Text>
       </ThemedHeader>
       
-      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 0 }}>
+      <SafeAreaView style={{ 
+        flex: 1, 
+        backgroundColor: 'transparent', 
+        paddingTop: 0,
+      }}>
         {/* Search bar */}
         <SearchBar
           mediaType={mediaType}
@@ -672,7 +681,7 @@ ${user.overview || 'No bio available'}`,
           </ScrollView>
         </TouchableWithoutFeedback>
         
-      </View>
+      </SafeAreaView>
 
       {/* **EMOTION SELECTION MODAL - Using Reusable Component** */}
       <SentimentRatingModal
@@ -693,8 +702,14 @@ ${user.overview || 'No bio available'}`,
       <Modal visible={comparisonModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <LinearGradient
-            colors={colors.primaryGradient || ['#667eea', '#764ba2']}
-            style={[styles.comparisonModalContent]}
+            colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+            locations={[0, 0.1, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.comparisonModalContent, {
+              borderWidth: 0.5,
+              borderColor: colors.primaryGradient[1],
+            }]}
           >
             {!isComparisonComplete ? (
               <>
@@ -881,7 +896,7 @@ ${user.overview || 'No bio available'}`,
         </View>
       </Modal>
 
-    </View>
+    </LinearGradient>
   );
 }
 

@@ -18,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 // Import constants and theme
 import { TMDB_API_KEY, ONBOARDING_COMPLETE_KEY, STREAMING_SERVICES } from '../Constants';
-import { useTheme } from '../hooks/useTheme';
+import theme from '../utils/Theme';
 
 // Constants
 const { width, height } = Dimensions.get('window');
@@ -58,9 +58,9 @@ const POPULAR_MOVIES = [
   { id: 284054, title: "Black Panther", poster_path: "/uxzzxijgPIY7slzFvMotPv8wjKA.jpg" }
 ];
 
-const OnboardingScreen = ({ onComplete }) => {
+const OnboardingScreen = ({ onComplete, isDarkMode = false }) => {
   // Theme integration
-  const { theme, isDark, getMediaTheme } = useTheme();
+  const themeColors = theme.movie[isDarkMode ? 'dark' : 'light'];
   
   // State management
   const [currentStep, setCurrentStep] = useState(1); // 1: movies, 2: streaming, 3: complete
@@ -103,7 +103,7 @@ const OnboardingScreen = ({ onComplete }) => {
       setCurrentStep(3);
       completeOnboarding();
     }
-  }, [currentStep, selectedMovies.length, selectedStreamingServices.length]);
+  }, [currentStep, selectedMovies.length, selectedStreamingServices.length, completeOnboarding]);
 
   const prevStep = useCallback(() => {
     if (currentStep > 1) {
@@ -377,13 +377,15 @@ const OnboardingScreen = ({ onComplete }) => {
   );
 
   // Create styles with current theme
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const styles = useMemo(() => createStyles(themeColors), [themeColors]);
 
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
-        colors={isDark ? ['#1C2526', '#4B0082'] : ['#F8F9FA', '#E9ECEF']}
+        colors={Array.isArray(themeColors.background) ? themeColors.background : [themeColors.background, themeColors.background]}
         style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
         {/* Progress indicator */}
         <View style={styles.progressContainer}>
@@ -408,10 +410,10 @@ const OnboardingScreen = ({ onComplete }) => {
 };
 
 // Create themed styles function
-const createStyles = (theme) => StyleSheet.create({
+const createStyles = (themeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.BACKGROUND.PRIMARY,
+    backgroundColor: Array.isArray(themeColors.background) ? themeColors.background[0] : themeColors.background,
   },
   gradient: {
     flex: 1,
@@ -433,7 +435,7 @@ const createStyles = (theme) => StyleSheet.create({
     borderRadius: 2,
   },
   progressText: {
-    color: theme.TEXT.PRIMARY,
+    color: themeColors.text,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -444,13 +446,13 @@ const createStyles = (theme) => StyleSheet.create({
   stepTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: theme.TEXT.PRIMARY,
+    color: themeColors.text,
     textAlign: 'center',
     marginBottom: 8,
   },
   stepSubtitle: {
     fontSize: 16,
-    color: theme.TEXT.SECONDARY,
+    color: themeColors.subText,
     textAlign: 'center',
     marginBottom: 30,
   },
@@ -489,7 +491,7 @@ const createStyles = (theme) => StyleSheet.create({
     padding: 2,
   },
   movieTitle: {
-    color: theme.TEXT.PRIMARY,
+    color: themeColors.text,
     fontSize: 12,
     textAlign: 'center',
     fontWeight: '500',
@@ -534,7 +536,7 @@ const createStyles = (theme) => StyleSheet.create({
     fontSize: 32,
   },
   streamingName: {
-    color: theme.TEXT.PRIMARY,
+    color: themeColors.text,
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
@@ -597,13 +599,13 @@ const createStyles = (theme) => StyleSheet.create({
   completionTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: theme.TEXT.PRIMARY,
+    color: themeColors.text,
     marginTop: 20,
     marginBottom: 10,
   },
   completionSubtitle: {
     fontSize: 16,
-    color: theme.TEXT.SECONDARY,
+    color: themeColors.subText,
     textAlign: 'center',
     marginBottom: 30,
   },

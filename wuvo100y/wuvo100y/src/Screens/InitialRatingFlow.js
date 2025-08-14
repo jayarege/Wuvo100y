@@ -244,7 +244,7 @@ function InitialRatingFlow({ seen, unseen, seenTVShows, unseenTVShows, onAddToSe
     console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
     console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
     console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
-  }, [selectedMovieForRating, getCurrentSeen, selectMovieFromPercentile, safeSeen.length, safeSeenTVShows.length, seen?.length, seenTVShows?.length, mediaType]);
+  }, [selectedMovieForRating, getCurrentSeen, selectMovieFromPercentile, safeSeen.length, safeSeenTVShows.length, mediaType]);
 
 
   const handleComparison = useCallback((winner) => {
