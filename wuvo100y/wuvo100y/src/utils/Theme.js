@@ -184,8 +184,8 @@ const theme = {
     light: {
       primary: '#6C2BD9',          // Deep Purple for header
       primaryGradient: ['#612EF0','#6C2BD9', '#321680'], // Light purple to deep purple
-      background: '#FFFFFF',
-      card: '#F5F5F5',
+      background: '#F0F4F8',       // Changed from white to light blue-gray
+      card: '#E2E8F0',             // Changed to match new background theme
       text: '#333333',
       subText: '#666666',
       accent: '#FFD700',          // Gold for highlights
@@ -219,8 +219,8 @@ const theme = {
     dark: {
       primary: '#6C2BD9',         // BlueViolet
       primaryGradient: ['#612EF0','#6C2BD9', '#321680'], // Lighter purple to blue violet
-      background: '#1C2526',
-      card: '#2A3132',
+      background: '#0F172A',      // Changed to deeper navy blue
+      card: '#1E293B',            // Changed to slate shade
       text: '#F5F5F5',
       subText: '#D3D3D3',
       accent: '#FFD700',
@@ -257,8 +257,8 @@ const theme = {
     light: {
       primary: '#59ADE8',         // UCLA Blue
       primaryGradient: ['#95C4EF', '#59ADE8'], // Light blue to UCLA blue
-      background: '#FFFFFF',
-      card: '#F5F5F5',
+      background: '#F0F4F8',      // Changed from white to light blue-gray
+      card: '#E2E8F0',            // Changed to match new background theme
       text: '#333333',
       subText: '#666666',
       accent: '#FFD700',
@@ -292,8 +292,8 @@ const theme = {
     dark: {
       primary: '#59ADE8',         // Sapphire Blue
       primaryGradient: ['#95C4EF', '#59ADE8'], // Brighter blue to sapphire blue
-      background: '#121212',
-      card: '#1C1C1C',
+      background: '#0F172A',      // Changed to deeper navy blue
+      card: '#1E293B',            // Changed to slate shade
       text: '#EEEEEE',
       subText: '#AAAAAA',
       accent: '#FFD700',

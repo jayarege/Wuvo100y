@@ -35,11 +35,11 @@ export const SEMANTIC_COLORS = {
 export const LIGHT_THEME = {
   // Background colors
   BACKGROUND: {
-    PRIMARY: '#FFFFFF',
-    SECONDARY: '#F8F9FA',
-    TERTIARY: '#E9ECEF',
+    PRIMARY: '#F0F4F8',     // Changed from white to light blue-gray
+    SECONDARY: '#E2E8F0',   // Changed to complementary shade
+    TERTIARY: '#CBD5E0',    // Changed to darker shade
     OVERLAY: 'rgba(0, 0, 0, 0.5)',
-    MODAL: '#FFFFFF'
+    MODAL: '#F0F4F8'        // Match primary background
   },
   
   // Text colors
@@ -80,11 +80,11 @@ export const LIGHT_THEME = {
 export const DARK_THEME = {
   // Background colors
   BACKGROUND: {
-    PRIMARY: '#1C2526',
-    SECONDARY: '#2D3748',
-    TERTIARY: '#4A5568',
+    PRIMARY: '#0F172A',     // Changed to deeper navy blue
+    SECONDARY: '#1E293B',   // Changed to slate shade
+    TERTIARY: '#334155',    // Changed to lighter slate
     OVERLAY: 'rgba(0, 0, 0, 0.7)',
-    MODAL: '#2D3748'
+    MODAL: '#1E293B'        // Match secondary background
   },
   
   // Text colors
