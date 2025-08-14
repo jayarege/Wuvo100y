@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, 
   Text, 
@@ -10,7 +10,9 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AuthService from '../services/AuthService';
+import theme from '../utils/Theme';
 
 // Import these when ready to implement real Google Sign-In
 // import * as WebBrowser from 'expo-web-browser';
@@ -29,6 +31,10 @@ function AuthScreen({ onAuthenticate, isDarkMode, navigation }) {
   const [displayName, setDisplayName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+
+  // Use theme system like other components
+  const themeColors = theme.movie[isDarkMode ? 'dark' : 'light'];
+  const styles = useMemo(() => createStyles(themeColors), [themeColors]);
 
   // ------------------------------------------------------------------------
   // REAL GOOGLE AUTHENTICATION CODE (Uncomment when ready to deploy)
@@ -195,13 +201,19 @@ function AuthScreen({ onAuthenticate, isDarkMode, navigation }) {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDarkMode ? '#1C2526' : '#FFFFFF' }]}>
-      <View style={[styles.container, { backgroundColor: isDarkMode ? '#1C2526' : '#FFFFFF' }]}>
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient
+        colors={Array.isArray(themeColors.background) ? themeColors.background : [themeColors.background, themeColors.background]}
+        style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.container}>
         <View style={styles.logoContainer}>
-          <Text style={[styles.appTitle, { color: isDarkMode ? '#F5F5F5' : '#333' }]}>
+          <Text style={styles.appTitle}>
             Wuvo
           </Text>
-          <Text style={[styles.appTagline, { color: isDarkMode ? '#D3D3D3' : '#666' }]}>
+          <Text style={styles.appTagline}>
             Movies you'll love, ranked your way
           </Text>
         </View>
@@ -209,16 +221,9 @@ function AuthScreen({ onAuthenticate, isDarkMode, navigation }) {
         <View style={styles.formContainer}>
           {isSignUp && (
             <TextInput
-              style={[
-                styles.input,
-                { 
-                  backgroundColor: isDarkMode ? '#4B0082' : '#F5F5F5',
-                  color: isDarkMode ? '#F5F5F5' : '#333',
-                  borderColor: isDarkMode ? '#8A2BE2' : '#E0E0E0' 
-                }
-              ]}
+              style={styles.input}
               placeholder="Display Name"
-              placeholderTextColor={isDarkMode ? '#A9A9A9' : '#999'}
+              placeholderTextColor={themeColors.subText}
               value={displayName}
               onChangeText={setDisplayName}
               autoCapitalize="words"
@@ -226,16 +231,9 @@ function AuthScreen({ onAuthenticate, isDarkMode, navigation }) {
           )}
           
           <TextInput
-            style={[
-              styles.input,
-              { 
-                backgroundColor: isDarkMode ? '#4B0082' : '#F5F5F5',
-                color: isDarkMode ? '#F5F5F5' : '#333',
-                borderColor: isDarkMode ? '#8A2BE2' : '#E0E0E0' 
-              }
-            ]}
+            style={styles.input}
             placeholder="Email"
-            placeholderTextColor={isDarkMode ? '#A9A9A9' : '#999'}
+            placeholderTextColor={themeColors.subText}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -243,36 +241,23 @@ function AuthScreen({ onAuthenticate, isDarkMode, navigation }) {
           />
           
           <TextInput
-            style={[
-              styles.input,
-              { 
-                backgroundColor: isDarkMode ? '#4B0082' : '#F5F5F5',
-                color: isDarkMode ? '#F5F5F5' : '#333',
-                borderColor: isDarkMode ? '#8A2BE2' : '#E0E0E0' 
-              }
-            ]}
+            style={styles.input}
             placeholder="Password"
-            placeholderTextColor={isDarkMode ? '#A9A9A9' : '#999'}
+            placeholderTextColor={themeColors.subText}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
           />
           
           <TouchableOpacity
-            style={[
-              styles.loginButton,
-              { backgroundColor: isDarkMode ? '#FFD700' : '#4B0082' }
-            ]}
+            style={styles.loginButton}
             onPress={isSignUp ? handleSignUp : handleLogin}
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator size="small" color={isDarkMode ? '#1C2526' : '#FFFFFF'} />
+              <ActivityIndicator size="small" color={themeColors.textOnPrimary} />
             ) : (
-              <Text style={[
-                styles.loginButtonText,
-                { color: isDarkMode ? '#1C2526' : '#FFFFFF' }
-              ]}>
+              <Text style={styles.loginButtonText}>
                 {isSignUp ? 'Create Account' : 'Sign In'}
               </Text>
             )}
@@ -288,48 +273,45 @@ function AuthScreen({ onAuthenticate, isDarkMode, navigation }) {
             }}
             disabled={isLoading}
           >
-            <Text style={[
-              styles.switchModeText,
-              { color: isDarkMode ? '#FFD700' : '#4B0082' }
-            ]}>
+            <Text style={styles.switchModeText}>
               {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
             </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[
-              styles.googleButton,
-              { borderColor: isDarkMode ? '#8A2BE2' : '#4B0082' }
-            ]}
+            style={styles.googleButton}
             onPress={handleGoogleSignIn}
             disabled={isLoading}
           >
-            <Ionicons name="logo-google" size={20} color={isDarkMode ? '#FFD700' : '#4B0082'} style={styles.googleIcon} />
-            <Text style={[
-              styles.googleButtonText,
-              { color: isDarkMode ? '#FFD700' : '#4B0082' }
-            ]}>
+            <Ionicons name="logo-google" size={20} color={themeColors.accent} style={styles.googleIcon} />
+            <Text style={styles.googleButtonText}>
               Continue with Google
             </Text>
           </TouchableOpacity>
         </View>
         
         <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: isDarkMode ? '#D3D3D3' : '#666' }]}>
+          <Text style={styles.footerText}>
             Rate movies and discover new favorites
           </Text>
           
-          <Text style={[styles.footerSubtext, { color: isDarkMode ? '#A9A9A9' : '#999' }]}>
+          <Text style={styles.footerSubtext}>
             Firebase authentication enabled
           </Text>
         </View>
-      </View>
+        </View>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+// Create themed styles function matching other components
+const createStyles = (themeColors) => StyleSheet.create({
   safeArea: {
+    flex: 1,
+    backgroundColor: Array.isArray(themeColors.background) ? themeColors.background[0] : themeColors.background,
+  },
+  gradient: {
     flex: 1,
   },
   container: {
@@ -345,39 +327,64 @@ const styles = StyleSheet.create({
     fontSize: 40,
     fontWeight: 'bold',
     marginBottom: 10,
+    color: themeColors.text,
   },
   appTagline: {
     fontSize: 16,
     textAlign: 'center',
+    color: themeColors.subText,
   },
   formContainer: {
     marginBottom: 30,
   },
   input: {
     height: 50,
-    borderWidth: 1,
-    borderRadius: 8,
+    borderWidth: themeColors.border.width,        // Use theme: 2px
+    borderRadius: themeColors.border.radius,      // Use theme: 12px 
+    borderColor: themeColors.border.color,        // Use theme colors
+    backgroundColor: themeColors.card,            // Use theme card color
+    color: themeColors.text,                      // Use theme text color
     marginBottom: 16,
     paddingHorizontal: 16,
     fontSize: 16,
+    // Add shadow from theme
+    ...themeColors.shadow && {
+      shadowColor: themeColors.shadow.color,
+      shadowOffset: themeColors.shadow.offset,
+      shadowOpacity: themeColors.shadow.opacity,
+      shadowRadius: themeColors.shadow.radius,
+      elevation: themeColors.shadow.elevation,
+    }
   },
   loginButton: {
     height: 50,
-    borderRadius: 8,
+    borderRadius: themeColors.border.radius,      // Use theme: 12px
+    backgroundColor: themeColors.accent,          // Use theme accent color
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    // Add shadow from theme
+    ...themeColors.shadow && {
+      shadowColor: themeColors.shadow.color,
+      shadowOffset: themeColors.shadow.offset,
+      shadowOpacity: themeColors.shadow.opacity,
+      shadowRadius: themeColors.shadow.radius,
+      elevation: themeColors.shadow.elevation,
+    }
   },
   loginButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: themeColors.textOnPrimary,             // Use theme text on primary
   },
   googleButton: {
     height: 50,
-    borderRadius: 8,
+    borderRadius: themeColors.border.radius,      // Use theme: 12px
+    borderWidth: themeColors.border.width,        // Use theme: 2px
+    borderColor: themeColors.border.color,        // Use theme border color
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
     flexDirection: 'row',
   },
   googleIcon: {
@@ -385,6 +392,7 @@ const styles = StyleSheet.create({
   },
   googleButtonText: {
     fontSize: 16,
+    color: themeColors.accent,                    // Use theme accent color
   },
   footer: {
     alignItems: 'center',
@@ -393,11 +401,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 8,
+    color: themeColors.subText,                   // Use theme subtext
   },
   footerSubtext: {
     fontSize: 12,
     textAlign: 'center',
     fontStyle: 'italic',
+    color: themeColors.subText,                   // Use theme subtext
+    opacity: 0.7,                                 // Slightly more muted
   },
   switchModeButton: {
     marginTop: 16,
@@ -407,6 +418,7 @@ const styles = StyleSheet.create({
   switchModeText: {
     fontSize: 14,
     textDecorationLine: 'underline',
+    color: themeColors.accent,                    // Use theme accent color
   },
 });
 
