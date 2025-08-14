@@ -347,7 +347,7 @@ const processConfidenceBasedRating = async (config) => {
 
     // Initialize movie statistics
     let movieStats = {
-      rating: null,
+      rating: Math.max(1, Math.min(10, newMovie?.suggestedRating ?? 7.0)),
       standardError: CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
       comparisons: 0,
       wins: 0,
@@ -1188,11 +1188,6 @@ const ConfidenceBasedComparison = ({
 
     console.log(`📊 Comparison ${currentComparison}: Rating ${newRating?.toFixed(2)} ± ${newStats.confidenceInterval?.width?.toFixed(2)}`);
 
-    // Move band on loss for next opponent selection
-    if (!didWin && !didTie) {
-      nextBandOnLoss();
-    }
-
     // **IMPROVED STOPPING CRITERIA**
     const shouldStop = 
       // 3-6 comparisons completed and last two moves changed rating by < 0.2 total
@@ -1216,8 +1211,18 @@ const ConfidenceBasedComparison = ({
         });
       }, 2000);
     } else {
-      // Get next opponent from current band
-      const nextOpponent = pickOpponentFromBand(availableMovies, placementState.currentBand, [...usedOpponentIds, newMovie.id]);
+      // **FIX STATE LAG: Compute next band index synchronously**
+      const nextBandIndex = (!didWin && !didTie)
+        ? Math.min(placementState.currentBand + 1, placementState.bands.length - 1)
+        : placementState.currentBand;
+
+      // Get next opponent from correct band (sync calculation)
+      const nextOpponent = pickOpponentFromBand(availableMovies, nextBandIndex, [...usedOpponentIds, newMovie.id]);
+      
+      // Update state to match what we just used
+      if (!didWin && !didTie) {
+        setPlacementState(prev => ({ ...prev, currentBand: nextBandIndex }));
+      }
       if (nextOpponent) {
         setCurrentOpponent(nextOpponent);
         setCurrentComparison(prev => prev + 1);
@@ -1241,7 +1246,7 @@ const ConfidenceBasedComparison = ({
     setCurrentComparison(0);
     setCurrentOpponent(null);
     setMovieStats({
-      rating: null,
+      rating: Math.max(1, Math.min(10, newMovie?.suggestedRating ?? 7.0)),
       standardError: CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
       comparisons: 0,
       wins: 0,
@@ -1260,7 +1265,7 @@ const ConfidenceBasedComparison = ({
     }
   }, [visible]);
 
-  if (!visible || !availableMovies || availableMovies.length < CONFIDENCE_RATING_CONFIG.CONFIDENCE.MIN_COMPARISONS) return null;
+  if (!visible || !availableMovies || availableMovies.length < ENHANCED_RATING_CONFIG.COMPARISON_CONFIG.MIN_MOVIES) return null;
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -1413,7 +1418,7 @@ const ConfidenceBasedComparison = ({
               </View>
             </>
           ) : (
-            // Completion Screen - Wildcard Style with calculated rating preview
+            // **FIXED COMPLETION SCREEN** - Uses actual tracked data (movieStats, comparisonHistory)
             <View style={styles.completionScreen}>
               <View style={[styles.completionHeader, { borderBottomColor: colors.border?.color || '#333' }]}>
                 <Text style={[styles.completionTitle, { color: colors.text }]}>
@@ -1421,40 +1426,41 @@ const ConfidenceBasedComparison = ({
                 </Text>
                 <View style={[styles.winsBadge, { backgroundColor: colors.accent }]}>
                   <Text style={styles.winsText}>
-                    {comparisonResults.filter(r => r.userChoice === 'new').length}/3 Wins
+                    {comparisonHistory.filter(r => r.result === 'new').length}/{movieStats.comparisons} Wins
                   </Text>
                 </View>
                 
-                {/* Show calculated rating preview */}
-                <View style={[styles.ratingPreview, { borderColor: categoryInfo?.color }]}>
-                  <Text style={[styles.ratingPreviewLabel, { color: colors.subText }]}>Calculated Rating:</Text>
+                {/* Show final rating with confidence interval */}
+                <View style={[styles.ratingPreview, { borderColor: colors.accent }]}>
+                  <Text style={[styles.ratingPreviewLabel, { color: colors.subText }]}>Final Rating:</Text>
                   <View style={styles.ratingPreviewValue}>
-                    <Ionicons name="star" size={16} color={categoryInfo?.color} />
-                    <Text style={[styles.ratingPreviewText, { color: categoryInfo?.color }]}>
-                      {calculateRatingFromComparisons(
-                        comparisonResults.filter(r => r.userChoice === 'new').length,
-                        comparisonResults,
-                        newMovie
-                      ).toFixed(1)}/10
+                    <Ionicons name="star" size={16} color={colors.accent} />
+                    <Text style={[styles.ratingPreviewText, { color: colors.accent }]}>
+                      {(movieStats.rating ?? newMovie?.suggestedRating ?? 7.0).toFixed(1)}/10
                     </Text>
+                    {movieStats.confidenceInterval && (
+                      <Text style={[styles.confidenceText, { color: colors.subText }]}>
+                        ±{movieStats.confidenceInterval.width.toFixed(2)}
+                      </Text>
+                    )}
                   </View>
                 </View>
               </View>
               
               <View style={styles.resultsContainer}>
-                <Text style={[styles.resultsHeader, { color: colors.text }]}>How it performed:</Text>
-                {comparisonResults.map((result, index) => (
-                  <View key={index} style={[styles.resultRowWildcard, { borderLeftColor: result.userChoice === 'new' ? '#4CAF50' : '#F44336' }]}>
+                <Text style={[styles.resultsHeader, { color: colors.text }]}>Comparison Results:</Text>
+                {comparisonHistory.map((record, index) => (
+                  <View key={index} style={[styles.resultRowWildcard, { borderLeftColor: record.result === 'new' ? '#4CAF50' : record.result === 'too_tough' ? '#FF9800' : '#F44336' }]}>
                     <View style={styles.resultContent}>
                       <Text style={[styles.resultNumber, { color: colors.accent }]}>
-                        #{result.comparison}
+                        #{record.comparison}
                       </Text>
                       <Text style={[styles.resultText, { color: colors.text }]}>
-                        vs {result.loser.title || result.loser.name}
+                        vs {record.opponent}
                       </Text>
-                      <View style={[styles.resultBadge, { backgroundColor: result.userChoice === 'new' ? '#4CAF50' : '#F44336' }]}>
+                      <View style={[styles.resultBadge, { backgroundColor: record.result === 'new' ? '#4CAF50' : record.result === 'too_tough' ? '#FF9800' : '#F44336' }]}>
                         <Text style={styles.resultBadgeText}>
-                          {result.userChoice === 'new' ? 'WON' : 'LOST'}
+                          {record.result === 'new' ? 'WON' : record.result === 'too_tough' ? 'TIE' : 'LOST'}
                         </Text>
                       </View>
                     </View>
@@ -1463,11 +1469,16 @@ const ConfidenceBasedComparison = ({
                 
                 <View style={[styles.performanceSummary, { backgroundColor: colors.card || 'rgba(255,255,255,0.05)' }]}>
                   <Text style={[styles.performanceSummaryText, { color: colors.subText }]}>
-                    Performance vs similar {categoryInfo?.label.toLowerCase()} movies: 
-                    <Text style={{ color: categoryInfo?.color, fontWeight: 'bold' }}>
-                      {comparisonResults.filter(r => r.userChoice === 'new').length > 1.5 ? 'Above Average' : 'Below Average'}
+                    Performance Summary: 
+                    <Text style={{ color: colors.accent, fontWeight: 'bold' }}>
+                      {movieStats.wins} wins, {movieStats.losses} losses, {movieStats.ties} ties
                     </Text>
                   </Text>
+                  {movieStats.confidenceInterval && (
+                    <Text style={[styles.performanceSummaryText, { color: colors.subText, fontSize: 12 }]}>
+                      Target confidence {movieStats.confidenceInterval.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH ? '✅ reached' : '⚠️ not reached'}
+                    </Text>
+                  )}
                 </View>
               </View>
             </View>
