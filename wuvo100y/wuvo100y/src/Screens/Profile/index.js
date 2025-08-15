@@ -1942,9 +1942,33 @@ Please rate a few more movies first!`,
         handleWatchlistToggle={handleWatchlistToggle}
         colors={theme[mediaType][isDarkMode ? 'dark' : 'light']}
         standardButtonStyles={getStandardizedButtonStyles(theme[mediaType][isDarkMode ? 'dark' : 'light'])}
-        memoizedRatingCategories={null}
-        handleEmotionSelected={null}
+        memoizedRatingCategories={memoizedRatingCategories}
+        handleEmotionSelected={handleEmotionSelected}
         cancelSentimentSelection={null}
+        // Profile-specific props for conditional button logic
+        isProfileScreen={true}
+        movieContext={movieContext}
+        isTopRatedMovie={movieContext === 'toprated' || (selectedMovie?.userRating && selectedMovie?.userRating >= 7)}
+        handleRemoveRating={() => {
+          // Handle removing rating for top-rated movies
+          if (selectedMovie) {
+            Alert.alert(
+              "Remove Rating",
+              `Remove your rating for "${selectedMovie.title || selectedMovie.name}"?`,
+              [
+                { text: "Cancel", style: "cancel" },
+                { 
+                  text: "Remove", 
+                  style: "destructive",
+                  onPress: () => {
+                    console.log('Removing rating for:', selectedMovie.title);
+                    closeDetailModal();
+                  }
+                }
+              ]
+            );
+          }
+        }}
       />
 
       {/* User Search Modal */}
