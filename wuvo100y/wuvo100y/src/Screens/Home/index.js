@@ -276,6 +276,9 @@ function HomeScreen({
   const [ratingInput, setRatingInput] = useState('');
   const [recentReleases, setRecentReleases] = useState([]);
   const [popularMovies, setPopularMovies] = useState([]);
+  const [actionMovies, setActionMovies] = useState([]);
+  const [thrillerMovies, setThrillerMovies] = useState([]);
+  const [comedyMovies, setComedyMovies] = useState([]);
   const [isLoadingRecent, setIsLoadingRecent] = useState(true);
   
   // **SESSION DISMISSAL STATE - For temporary hiding without permanent "not interested"**
@@ -432,6 +435,9 @@ function HomeScreen({
         // Only fetch if truly needed
         if (recentReleases.length === 0) fetchRecentReleases();
         if (popularMovies.length === 0) fetchPopularMovies();
+        if (actionMovies.length === 0) fetchActionMovies();
+        if (thrillerMovies.length === 0) fetchThrillerMovies();
+        if (comedyMovies.length === 0) fetchComedyMovies();
         setLastDataFetch(now);
       } else {
         console.log('✅ Using cached data - age:', Math.round((now - lastDataFetch) / 1000) + 's');
@@ -823,6 +829,108 @@ function HomeScreen({
     }
     setMediaType(type === 'movies' ? 'movie' : 'tv');
   }, [setMediaType, aiMovieRecommendations.length, aiTvRecommendations.length, popularMovies.length, recentReleases.length, seen]);
+  // **CROSS-ROW DEDUPLICATION SYSTEM - Prevents duplicate movies across all sections**
+  const deduplicateAllMovieSections = useCallback(() => {
+    console.log('🔄 Running cross-row deduplication across all movie sections');
+    
+    // Collect all movies with their section information
+    const allMovies = [
+      ...popularMovies.map(m => ({ ...m, section: 'popular' })),
+      ...recentReleases.map(m => ({ ...m, section: 'recent' })),
+      ...actionMovies.map(m => ({ ...m, section: 'action' })),
+      ...thrillerMovies.map(m => ({ ...m, section: 'thriller' })),
+      ...comedyMovies.map(m => ({ ...m, section: 'comedy' })),
+      ...aiRecommendations.map(m => ({ ...m, section: 'ai' })),
+      ...socialRecommendations.map(m => ({ ...m, section: 'social' }))
+    ];
+    
+    // Track movies we've already seen and their priority sections
+    const seenMovieIds = new Set();
+    const movieSectionPriority = {
+      'recent': 1,      // Highest priority - new releases
+      'popular': 2,     // Second priority - popular content
+      'ai': 3,          // Third priority - personalized recommendations
+      'social': 4,      // Fourth priority - friend recommendations
+      'action': 5,      // Genre-specific sections have lower priority
+      'thriller': 6,
+      'comedy': 7
+    };
+    
+    // Keep track of which movies to keep in each section
+    const keptMovies = {
+      popular: [],
+      recent: [],
+      action: [],
+      thriller: [],
+      comedy: [],
+      ai: [],
+      social: []
+    };
+    
+    // Sort movies by section priority to handle duplicates correctly
+    const sortedMovies = allMovies.sort((a, b) => {
+      return movieSectionPriority[a.section] - movieSectionPriority[b.section];
+    });
+    
+    // Process each movie and keep only the first occurrence (highest priority section)
+    sortedMovies.forEach(movie => {
+      if (!seenMovieIds.has(movie.id)) {
+        seenMovieIds.add(movie.id);
+        keptMovies[movie.section].push(movie);
+      } else {
+        console.log(`🗑️ DEDUPE: Removing duplicate "${movie.title || movie.name}" from ${movie.section} section`);
+      }
+    });
+    
+    // Update all state arrays with deduplicated movies
+    if (keptMovies.popular.length !== popularMovies.length) {
+      console.log(`📱 Updated popularMovies: ${popularMovies.length} -> ${keptMovies.popular.length}`);
+      setPopularMovies(keptMovies.popular);
+    }
+    
+    if (keptMovies.recent.length !== recentReleases.length) {
+      console.log(`📱 Updated recentReleases: ${recentReleases.length} -> ${keptMovies.recent.length}`);
+      setRecentReleases(keptMovies.recent);
+    }
+    
+    if (keptMovies.action.length !== actionMovies.length) {
+      console.log(`📱 Updated actionMovies: ${actionMovies.length} -> ${keptMovies.action.length}`);
+      setActionMovies(keptMovies.action);
+    }
+    
+    if (keptMovies.thriller.length !== thrillerMovies.length) {
+      console.log(`📱 Updated thrillerMovies: ${thrillerMovies.length} -> ${keptMovies.thriller.length}`);
+      setThrillerMovies(keptMovies.thriller);
+    }
+    
+    if (keptMovies.comedy.length !== comedyMovies.length) {
+      console.log(`📱 Updated comedyMovies: ${comedyMovies.length} -> ${keptMovies.comedy.length}`);
+      setComedyMovies(keptMovies.comedy);
+    }
+    
+    if (keptMovies.ai.length !== aiRecommendations.length) {
+      console.log(`📱 Updated aiRecommendations: ${aiRecommendations.length} -> ${keptMovies.ai.length}`);
+      if (mediaType === 'movie') {
+        setAiMovieRecommendations(keptMovies.ai);
+      } else {
+        setAiTvRecommendations(keptMovies.ai);
+      }
+    }
+    
+    if (keptMovies.social.length !== socialRecommendations.length) {
+      console.log(`📱 Updated socialRecommendations: ${socialRecommendations.length} -> ${keptMovies.social.length}`);
+      setSocialRecommendations(keptMovies.social);
+    }
+    
+    const totalOriginal = allMovies.length;
+    const totalKept = Object.values(keptMovies).reduce((sum, arr) => sum + arr.length, 0);
+    const duplicatesRemoved = totalOriginal - totalKept;
+    
+    if (duplicatesRemoved > 0) {
+      console.log(`✅ Deduplication complete: Removed ${duplicatesRemoved} duplicates from ${totalOriginal} total movies`);
+    }
+  }, [popularMovies, recentReleases, actionMovies, thrillerMovies, comedyMovies, aiRecommendations, socialRecommendations, mediaType]);
+
   // **UNIFIED MOVIE REMOVAL UTILITY - CODE_BIBLE Commandment #3: Write code that's clear and obvious**
   const removeMovieFromAllSections = useCallback((movieId) => {
     console.log(`🗑️ Removing movie ${movieId} from ALL home screen sections`);
@@ -862,7 +970,54 @@ function HomeScreen({
       console.log(`🗑️ Removed from socialRecommendations: ${prev.length} -> ${filtered.length}`);
       return filtered;
     });
-  }, [setPopularMovies, setRecentReleases, setAiMovieRecommendations, setAiTvRecommendations, setSocialRecommendations]);
+    
+    setActionMovies(prev => {
+      const filtered = prev.filter(movie => movie.id !== movieId);
+      if (filtered.length !== prev.length) {
+        console.log(`🗑️ Removed from actionMovies: ${prev.length} -> ${filtered.length}`);
+      }
+      return filtered;
+    });
+    
+    setThrillerMovies(prev => {
+      const filtered = prev.filter(movie => movie.id !== movieId);
+      if (filtered.length !== prev.length) {
+        console.log(`🗑️ Removed from thrillerMovies: ${prev.length} -> ${filtered.length}`);
+      }
+      return filtered;
+    });
+    
+    setComedyMovies(prev => {
+      const filtered = prev.filter(movie => movie.id !== movieId);
+      if (filtered.length !== prev.length) {
+        console.log(`🗑️ Removed from comedyMovies: ${prev.length} -> ${filtered.length}`);
+      }
+      return filtered;
+    });
+  }, [setPopularMovies, setRecentReleases, setAiMovieRecommendations, setAiTvRecommendations, setSocialRecommendations, setActionMovies, setThrillerMovies, setComedyMovies]);
+
+  // **CROSS-ROW DEDUPLICATION TRIGGER - Automatically run deduplication when any movie data changes**
+  useEffect(() => {
+    // Only run deduplication if we have movies in multiple sections
+    const hasMultipleSections = [
+      popularMovies.length,
+      recentReleases.length,
+      actionMovies.length,
+      thrillerMovies.length,
+      comedyMovies.length,
+      aiRecommendations.length,
+      socialRecommendations.length
+    ].filter(count => count > 0).length >= 2;
+
+    if (hasMultipleSections) {
+      // Small delay to allow all state updates to complete
+      const deduplicationTimer = setTimeout(() => {
+        deduplicateAllMovieSections();
+      }, 100);
+
+      return () => clearTimeout(deduplicationTimer);
+    }
+  }, [popularMovies.length, recentReleases.length, actionMovies.length, thrillerMovies.length, comedyMovies.length, aiRecommendations.length, socialRecommendations.length, deduplicateAllMovieSections]);
 
   const formatDate = useCallback((date) => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -1257,6 +1412,11 @@ function HomeScreen({
         .filter(m => !skippedMovies.includes(m.id))
         .filter(m => !notInterestedMoviesRef.current.includes(m.id))
         .filter(item => {
+          // **RATING FILTER: Only show movies/TV with TMDB rating >= 6.5**
+          if (item.vote_average && item.vote_average < 6.5) {
+            return false;
+          }
+          
           if (contentType === 'tv') {
             const excludedGenres = [10767, 10763, 10762, 10764];
             const topThreeGenres = item.genre_ids ? item.genre_ids.slice(0, 3) : [];
@@ -1277,10 +1437,6 @@ function HomeScreen({
             }
             
             if (item.name && item.name.toLowerCase().includes('good mythical morning')) {
-              return false;
-            }
-            
-            if (item.vote_average && item.vote_average < 6.5) {
               return false;
             }
           }
@@ -1335,6 +1491,216 @@ function HomeScreen({
       console.warn(`Failed fetching popular ${contentType}`, err);
     }
   }, [currentSeenContent, currentUnseenContent, contentType, skippedMovies, mediaType]); // Dependencies: currentSeenContent already includes seen/unseen changes
+
+  const fetchActionMovies = useCallback(async () => {
+    try {
+      let allResults = [];
+      
+      // Fetch 3 pages of action movies (genre ID: 28)
+      for (let page = 1; page <= 3; page++) {
+        const endpoint = contentType === 'movies'
+          ? `https://api.themoviedb.org/3/discover/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&with_genres=28&sort_by=popularity.desc&include_adult=false&vote_count.gte=10&vote_average.gte=6.5&page=${page}`
+          : `https://api.themoviedb.org/3/discover/tv?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&with_genres=10759&sort_by=popularity.desc&include_adult=false&vote_count.gte=10&vote_average.gte=6.5&page=${page}`;
+          
+        const res = await fetch(endpoint);
+        const { results } = await res.json();
+        allResults = [...allResults, ...results];
+      }
+      
+      // Apply same filtering as existing sections
+      const filtered = filterAdultContent(allResults, contentType === 'movies' ? 'movie' : 'tv')
+        .filter(m => !currentSeenContent.some(s => s.id === m.id))
+        .filter(m => !currentUnseenContent.some(u => u.id === m.id))
+        .filter(m => !skippedMovies.includes(m.id))
+        .filter(m => !notInterestedMoviesRef.current.includes(m.id))
+        .slice(0, 15);
+
+      // Enrich with streaming providers and create weighted score
+      const enrichedResults = await Promise.all(
+        filtered.map(async (item) => {
+          let streamingProviders = [];
+          try {
+            const mediaTypeForAPI = contentType === 'movies' ? 'movie' : 'tv';
+            const providerResponse = await fetch(
+              `https://api.themoviedb.org/3/${mediaTypeForAPI}/${item.id}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
+            );
+            const providerData = await providerResponse.json();
+            const usProviders = providerData.results?.US || {};
+            streamingProviders = [
+              ...(usProviders.flatrate || []).map(p => ({ ...p, providerType: 'flatrate' })),
+              ...(usProviders.rent || []).map(p => ({ ...p, providerType: 'rent' })),
+              ...(usProviders.buy || []).map(p => ({ ...p, providerType: 'buy' }))
+            ];
+          } catch (error) {
+            console.error('Error fetching streaming providers for action movie:', error);
+          }
+          
+          return {
+            ...item,
+            title: contentType === 'movies' ? item.title : item.name,
+            release_date: contentType === 'movies' ? item.release_date : item.first_air_date,
+            poster_path: item.poster_path,
+            vote_average: item.vote_average,
+            genre_ids: item.genre_ids,
+            overview: item.overview,
+            adult: item.adult || false,
+            mediaType: contentType === 'movies' ? 'movie' : 'tv',
+            streamingProviders: streamingProviders,
+            weightedScore: (item.popularity * 0.7) + (item.vote_average * 0.3)
+          };
+        })
+      );
+      
+      const sortedFiltered = enrichedResults
+        .sort((a, b) => b.weightedScore - a.weightedScore)
+        .slice(0, 10);
+      
+      console.log(`🎬 Action ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items`);
+      setActionMovies(sortedFiltered);
+    } catch (err) {
+      console.warn(`Failed fetching action ${contentType}`, err);
+    }
+  }, [currentSeenContent, currentUnseenContent, contentType, skippedMovies, mediaType]);
+
+  const fetchThrillerMovies = useCallback(async () => {
+    try {
+      let allResults = [];
+      
+      // Fetch 3 pages of thriller movies (genre ID: 53)
+      for (let page = 1; page <= 3; page++) {
+        const endpoint = contentType === 'movies'
+          ? `https://api.themoviedb.org/3/discover/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&with_genres=53&sort_by=popularity.desc&include_adult=false&vote_count.gte=10&vote_average.gte=6.5&page=${page}`
+          : `https://api.themoviedb.org/3/discover/tv?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&with_genres=9648&sort_by=popularity.desc&include_adult=false&vote_count.gte=10&vote_average.gte=6.5&page=${page}`;
+          
+        const res = await fetch(endpoint);
+        const { results } = await res.json();
+        allResults = [...allResults, ...results];
+      }
+      
+      // Apply same filtering as existing sections
+      const filtered = filterAdultContent(allResults, contentType === 'movies' ? 'movie' : 'tv')
+        .filter(m => !currentSeenContent.some(s => s.id === m.id))
+        .filter(m => !currentUnseenContent.some(u => u.id === m.id))
+        .filter(m => !skippedMovies.includes(m.id))
+        .filter(m => !notInterestedMoviesRef.current.includes(m.id))
+        .slice(0, 15);
+
+      // Enrich with streaming providers and create weighted score
+      const enrichedResults = await Promise.all(
+        filtered.map(async (item) => {
+          let streamingProviders = [];
+          try {
+            const mediaTypeForAPI = contentType === 'movies' ? 'movie' : 'tv';
+            const providerResponse = await fetch(
+              `https://api.themoviedb.org/3/${mediaTypeForAPI}/${item.id}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
+            );
+            const providerData = await providerResponse.json();
+            const usProviders = providerData.results?.US || {};
+            streamingProviders = [
+              ...(usProviders.flatrate || []).map(p => ({ ...p, providerType: 'flatrate' })),
+              ...(usProviders.rent || []).map(p => ({ ...p, providerType: 'rent' })),
+              ...(usProviders.buy || []).map(p => ({ ...p, providerType: 'buy' }))
+            ];
+          } catch (error) {
+            console.error('Error fetching streaming providers for thriller movie:', error);
+          }
+          
+          return {
+            ...item,
+            title: contentType === 'movies' ? item.title : item.name,
+            release_date: contentType === 'movies' ? item.release_date : item.first_air_date,
+            poster_path: item.poster_path,
+            vote_average: item.vote_average,
+            genre_ids: item.genre_ids,
+            overview: item.overview,
+            adult: item.adult || false,
+            mediaType: contentType === 'movies' ? 'movie' : 'tv',
+            streamingProviders: streamingProviders,
+            weightedScore: (item.popularity * 0.7) + (item.vote_average * 0.3)
+          };
+        })
+      );
+      
+      const sortedFiltered = enrichedResults
+        .sort((a, b) => b.weightedScore - a.weightedScore)
+        .slice(0, 10);
+      
+      console.log(`🎬 Thriller ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items`);
+      setThrillerMovies(sortedFiltered);
+    } catch (err) {
+      console.warn(`Failed fetching thriller ${contentType}`, err);
+    }
+  }, [currentSeenContent, currentUnseenContent, contentType, skippedMovies, mediaType]);
+
+  const fetchComedyMovies = useCallback(async () => {
+    try {
+      let allResults = [];
+      
+      // Fetch 3 pages of comedy movies (genre ID: 35)
+      for (let page = 1; page <= 3; page++) {
+        const endpoint = contentType === 'movies'
+          ? `https://api.themoviedb.org/3/discover/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&with_genres=35&sort_by=popularity.desc&include_adult=false&vote_count.gte=10&vote_average.gte=6.5&page=${page}`
+          : `https://api.themoviedb.org/3/discover/tv?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&with_genres=35&sort_by=popularity.desc&include_adult=false&vote_count.gte=10&vote_average.gte=6.5&page=${page}`;
+          
+        const res = await fetch(endpoint);
+        const { results } = await res.json();
+        allResults = [...allResults, ...results];
+      }
+      
+      // Apply same filtering as existing sections
+      const filtered = filterAdultContent(allResults, contentType === 'movies' ? 'movie' : 'tv')
+        .filter(m => !currentSeenContent.some(s => s.id === m.id))
+        .filter(m => !currentUnseenContent.some(u => u.id === m.id))
+        .filter(m => !skippedMovies.includes(m.id))
+        .filter(m => !notInterestedMoviesRef.current.includes(m.id))
+        .slice(0, 15);
+
+      // Enrich with streaming providers and create weighted score
+      const enrichedResults = await Promise.all(
+        filtered.map(async (item) => {
+          let streamingProviders = [];
+          try {
+            const mediaTypeForAPI = contentType === 'movies' ? 'movie' : 'tv';
+            const providerResponse = await fetch(
+              `https://api.themoviedb.org/3/${mediaTypeForAPI}/${item.id}/watch/providers?api_key=b401be0ea16515055d8d0bde16f80069`
+            );
+            const providerData = await providerResponse.json();
+            const usProviders = providerData.results?.US || {};
+            streamingProviders = [
+              ...(usProviders.flatrate || []).map(p => ({ ...p, providerType: 'flatrate' })),
+              ...(usProviders.rent || []).map(p => ({ ...p, providerType: 'rent' })),
+              ...(usProviders.buy || []).map(p => ({ ...p, providerType: 'buy' }))
+            ];
+          } catch (error) {
+            console.error('Error fetching streaming providers for comedy movie:', error);
+          }
+          
+          return {
+            ...item,
+            title: contentType === 'movies' ? item.title : item.name,
+            release_date: contentType === 'movies' ? item.release_date : item.first_air_date,
+            poster_path: item.poster_path,
+            vote_average: item.vote_average,
+            genre_ids: item.genre_ids,
+            overview: item.overview,
+            adult: item.adult || false,
+            mediaType: contentType === 'movies' ? 'movie' : 'tv',
+            streamingProviders: streamingProviders,
+            weightedScore: (item.popularity * 0.7) + (item.vote_average * 0.3)
+          };
+        })
+      );
+      
+      const sortedFiltered = enrichedResults
+        .sort((a, b) => b.weightedScore - a.weightedScore)
+        .slice(0, 10);
+      
+      console.log(`🎬 Comedy ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items`);
+      setComedyMovies(sortedFiltered);
+    } catch (err) {
+      console.warn(`Failed fetching comedy ${contentType}`, err);
+    }
+  }, [currentSeenContent, currentUnseenContent, contentType, skippedMovies, mediaType]);
   
   const fetchRecentReleases = useCallback(async () => {
     try {
@@ -1344,8 +1710,8 @@ function HomeScreen({
       const oneWeekAgoFormatted = formatDateForAPI(oneWeekAgo);
       
       const endpoint = contentType === 'movies' 
-        ? `https://api.themoviedb.org/3/discover/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&sort_by=primary_release_date.desc&include_adult=false&include_video=false&page=1&primary_release_date.gte=${oneWeekAgoFormatted}&primary_release_date.lte=${todayFormatted}&vote_count.gte=5`
-        : `https://api.themoviedb.org/3/discover/tv?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&sort_by=first_air_date.desc&include_adult=false&page=1&first_air_date.gte=${oneWeekAgoFormatted}&first_air_date.lte=${todayFormatted}&vote_count.gte=5`;
+        ? `https://api.themoviedb.org/3/discover/movie?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&sort_by=primary_release_date.desc&include_adult=false&include_video=false&page=1&primary_release_date.gte=${oneWeekAgoFormatted}&primary_release_date.lte=${todayFormatted}&vote_count.gte=5&vote_average.gte=6.5`
+        : `https://api.themoviedb.org/3/discover/tv?api_key=b401be0ea16515055d8d0bde16f80069&language=en-US&sort_by=first_air_date.desc&include_adult=false&page=1&first_air_date.gte=${oneWeekAgoFormatted}&first_air_date.lte=${todayFormatted}&vote_count.gte=5&vote_average.gte=6.5`;
       
       const response = await fetch(endpoint);
       
@@ -1810,13 +2176,8 @@ function HomeScreen({
       console.error('Failed to record rating for preference learning:', error);
     });
     
-    // **SIMPLE FIX: Remove from AI recommendations immediately after rating**
-    setAiMovieRecommendations(prev => prev.filter(movie => movie.id !== ratedMovie.id));
-    setAiTvRecommendations(prev => prev.filter(movie => movie.id !== ratedMovie.id));
-    
     // **CODE_BIBLE Fix: Use unified removal utility to ensure ALL sections are cleaned**
     removeMovieFromAllSections(ratedMovie.id);
-    setSocialRecommendations(prev => prev.filter(movie => movie.id !== ratedMovie.id));
     
     // Close the detail modal
     closeDetailModal();
@@ -2007,57 +2368,9 @@ function HomeScreen({
       // Record not interested for GROQ AI learning
       await recordNotInterested(movie, userProfile, contentType === 'movies' ? 'movie' : 'tv');
       
-      // Remove from current recommendations - ONLY update the specific list that contains the item
-      // This prevents multiple FlatList re-renders that cause screen "spazzing"
+      // **CODE_BIBLE Fix: Use unified removal utility to ensure ALL sections are cleaned including action, thriller, comedy**
       const movieId = movie.id;
-      
-      // Check which list contains the movie and only update that one
-      if (mediaType === 'movie') {
-        setAiMovieRecommendations(prev => {
-          const hasMovie = prev.some(item => item.id === movieId);
-          if (hasMovie) {
-            console.log(`🎯 Removing ${movie.title} from AI recommendations`);
-            return prev.filter(item => item.id !== movieId);
-          }
-          return prev; // No change if movie not in this list
-        });
-      } else {
-        setAiTvRecommendations(prev => {
-          const hasMovie = prev.some(item => item.id === movieId);
-          if (hasMovie) {
-            console.log(`🎯 Removing ${movie.title} from AI recommendations`);
-            return prev.filter(item => item.id !== movieId);
-          }
-          return prev; // No change if movie not in this list
-        });
-      }
-      
-      setPopularMovies(prev => {
-        const hasMovie = prev.some(item => item.id === movieId);
-        if (hasMovie) {
-          console.log(`🎯 Removing ${movie.title} from popular movies`);
-          return prev.filter(item => item.id !== movieId);
-        }
-        return prev; // No change if movie not in this list
-      });
-      
-      setRecentReleases(prev => {
-        const hasMovie = prev.some(item => item.id === movieId);
-        if (hasMovie) {
-          console.log(`🎯 Removing ${movie.title} from recent releases`);
-          return prev.filter(item => item.id !== movieId);
-        }
-        return prev; // No change if movie not in this list
-      });
-      
-      setSocialRecommendations(prev => {
-        const hasMovie = prev.some(item => item.id === movieId);
-        if (hasMovie) {
-          console.log(`🎯 Removing ${movie.title} from social recommendations`);
-          return prev.filter(item => item.id !== movieId);
-        }
-        return prev; // No change if movie not in this list
-      });
+      removeMovieFromAllSections(movieId);
       
       // Persist to AsyncStorage FIRST, then update state to trigger fetchPopularMovies with correct data
       const storePermanentNotInterested = async () => {
@@ -2095,7 +2408,7 @@ function HomeScreen({
       console.error('❌ Error handling not interested:', error);
       console.log('🔇 Not interested error (popup disabled):', error.message);
     }
-  }, [contentType, mediaType, seen.length, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, setSocialRecommendations, setNotInterestedMovies, selectedMovie, closeDetailModal, seen]);
+  }, [contentType, mediaType, seen.length, setNotInterestedMovies, selectedMovie, closeDetailModal, seen, removeMovieFromAllSections]);
 
   // Removed openRatingModal and cancelSentimentSelection - handled by SentimentRatingModal
 
@@ -2152,35 +2465,13 @@ function HomeScreen({
       if (!seen.some(movie => movie.id === selectedMovie.id)) {
         onAddToUnseen(normalizedMovie);
         
-        // Remove movie from all home screen sections when added to watchlist
-        setPopularMovies(prev => {
-          const filtered = prev.filter(movie => movie.id !== movieId);
-          console.log(`🗑️ Removed watchlisted movie from popularMovies: ${prev.length} -> ${filtered.length}`);
-          return filtered;
-        });
-        setRecentReleases(prev => {
-          const filtered = prev.filter(movie => movie.id !== movieId);
-          console.log(`🗑️ Removed watchlisted movie from recentReleases: ${prev.length} -> ${filtered.length}`);
-          return filtered;
-        });
-        if (mediaType === 'movie') {
-          setAiMovieRecommendations(prev => {
-            const filtered = prev.filter(movie => movie.id !== movieId);
-            console.log(`🗑️ Removed watchlisted movie from aiRecommendations: ${prev.length} -> ${filtered.length}`);
-            return filtered;
-          });
-        } else {
-          setAiTvRecommendations(prev => {
-            const filtered = prev.filter(movie => movie.id !== movieId);
-            console.log(`🗑️ Removed watchlisted movie from aiRecommendations: ${prev.length} -> ${filtered.length}`);
-            return filtered;
-          });
-        }
+        // **CODE_BIBLE Fix: Use unified removal utility to ensure ALL sections are cleaned including action, thriller, comedy**
+        removeMovieFromAllSections(movieId);
       }
     }
     
     closeDetailModal();
-  }, [selectedMovie, seen, onAddToUnseen, closeDetailModal, contentType, mediaType, setPopularMovies, setRecentReleases, setAiMovieRecommendations, setAiTvRecommendations]);
+  }, [selectedMovie, seen, onAddToUnseen, closeDetailModal, contentType, mediaType, removeMovieFromAllSections]);
 
   // ============================================================================
   // **COMPUTED VALUES - ENGINEER TEAM 14**
@@ -2639,6 +2930,129 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
   );
 }, [homeStyles, popularMovies, handleMovieSelect, mediaType, isDarkMode, getRatingBorderColor, handleNotInterested, contentType]);
 
+  const renderActionMoviesSection = useCallback(() => {
+    return (
+      <View style={homeStyles.section}>
+        <Text style={homeStyles.sectionTitle}>
+          Action {contentType === 'movies' ? 'Movies' : 'TV Shows'}
+        </Text>
+        <FlatList
+          data={actionMovies}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={homeStyles.carouselContent}
+          keyExtractor={item => item.id.toString()}
+          removeClippedSubviews={false}
+          snapToInterval={MOVIE_CARD_WIDTH + 12}
+          decelerationRate="fast"
+          renderItem={({ item, index }) => {
+            const movieCardItem = {
+              ...item,
+              discoveryScore: index + 1,
+              discoverySession: false,
+              friendsRating: item.friendsRating || null
+            };
+            
+            return (
+              <MovieCard
+                item={movieCardItem}
+                handleMovieSelect={handleMovieSelect}
+                handleNotInterested={handleNotInterested}
+                mediaType={mediaType}
+                context="home"
+                isDarkMode={isDarkMode}
+                currentSession={null}
+                getRatingBorderColor={getRatingBorderColor}
+              />
+            );
+          }}
+        />
+      </View>
+    );
+  }, [homeStyles, actionMovies, handleMovieSelect, mediaType, isDarkMode, getRatingBorderColor, handleNotInterested, contentType]);
+
+  const renderThrillerMoviesSection = useCallback(() => {
+    return (
+      <View style={homeStyles.section}>
+        <Text style={homeStyles.sectionTitle}>
+          Thriller {contentType === 'movies' ? 'Movies' : 'TV Shows'}
+        </Text>
+        <FlatList
+          data={thrillerMovies}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={homeStyles.carouselContent}
+          keyExtractor={item => item.id.toString()}
+          removeClippedSubviews={false}
+          snapToInterval={MOVIE_CARD_WIDTH + 12}
+          decelerationRate="fast"
+          renderItem={({ item, index }) => {
+            const movieCardItem = {
+              ...item,
+              discoveryScore: index + 1,
+              discoverySession: false,
+              friendsRating: item.friendsRating || null
+            };
+            
+            return (
+              <MovieCard
+                item={movieCardItem}
+                handleMovieSelect={handleMovieSelect}
+                handleNotInterested={handleNotInterested}
+                mediaType={mediaType}
+                context="home"
+                isDarkMode={isDarkMode}
+                currentSession={null}
+                getRatingBorderColor={getRatingBorderColor}
+              />
+            );
+          }}
+        />
+      </View>
+    );
+  }, [homeStyles, thrillerMovies, handleMovieSelect, mediaType, isDarkMode, getRatingBorderColor, handleNotInterested, contentType]);
+
+  const renderComedyMoviesSection = useCallback(() => {
+    return (
+      <View style={homeStyles.section}>
+        <Text style={homeStyles.sectionTitle}>
+          Comedy {contentType === 'movies' ? 'Movies' : 'TV Shows'}
+        </Text>
+        <FlatList
+          data={comedyMovies}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={homeStyles.carouselContent}
+          keyExtractor={item => item.id.toString()}
+          removeClippedSubviews={false}
+          snapToInterval={MOVIE_CARD_WIDTH + 12}
+          decelerationRate="fast"
+          renderItem={({ item, index }) => {
+            const movieCardItem = {
+              ...item,
+              discoveryScore: index + 1,
+              discoverySession: false,
+              friendsRating: item.friendsRating || null
+            };
+            
+            return (
+              <MovieCard
+                item={movieCardItem}
+                handleMovieSelect={handleMovieSelect}
+                handleNotInterested={handleNotInterested}
+                mediaType={mediaType}
+                context="home"
+                isDarkMode={isDarkMode}
+                currentSession={null}
+                getRatingBorderColor={getRatingBorderColor}
+              />
+            );
+          }}
+        />
+      </View>
+    );
+  }, [homeStyles, comedyMovies, handleMovieSelect, mediaType, isDarkMode, getRatingBorderColor, handleNotInterested, contentType]);
+
   const renderWhatsOutNowSection = useCallback(() => {
     return (
       <View style={homeStyles.section}>
@@ -2692,7 +3106,10 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
     console.log('🔄 Content type changed to:', contentType);
     fetchRecentReleases();
     fetchPopularMovies();
-  }, [contentType, fetchRecentReleases, fetchPopularMovies]);
+    fetchActionMovies();
+    fetchThrillerMovies();
+    fetchComedyMovies();
+  }, [contentType, fetchRecentReleases, fetchPopularMovies, fetchActionMovies, fetchThrillerMovies, fetchComedyMovies]);
 
   // **🏠 AUTO-REFRESH WHEN MOVIES ARE RATED**
   useEffect(() => {
@@ -2700,8 +3117,11 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
     // Refresh home screen data when movies are rated to remove them from display
     fetchRecentReleases();
     fetchPopularMovies();
+    fetchActionMovies();
+    fetchThrillerMovies();
+    fetchComedyMovies();
     // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static to prevent reloading
-  }, [currentSeenContent.length, fetchRecentReleases, fetchPopularMovies, mediaType, seen]);
+  }, [currentSeenContent.length, fetchRecentReleases, fetchPopularMovies, fetchActionMovies, fetchThrillerMovies, fetchComedyMovies, mediaType, seen]);
 
   // AUTO-SCROLL DISABLED: Prevented unwanted scrolling when movies are removed via X button
   // useEffect(() => {
@@ -2764,6 +3184,9 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
     if (skippedMovies.length > 0) {
       console.log('🔄 Re-fetching data due to skippedMovies change');
       fetchPopularMovies();
+      fetchActionMovies();
+      fetchThrillerMovies();
+      fetchComedyMovies();
       fetchRecentReleases();
       // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static
     }
@@ -2773,9 +3196,12 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
     console.log('🔄 watchlist (unseen) updated:', unseen.length);
     console.log('🔄 Re-fetching data due to watchlist change');
     fetchPopularMovies();
+    fetchActionMovies();
+    fetchThrillerMovies();
+    fetchComedyMovies();
     fetchRecentReleases();
     // fetchAIRecommendations(); // REMOVED: Keep AI recommendations static
-  }, [unseen.length, fetchPopularMovies, fetchRecentReleases]);
+  }, [unseen.length, fetchPopularMovies, fetchActionMovies, fetchThrillerMovies, fetchComedyMovies, fetchRecentReleases]);
 
   // ============================================================================
   // **MAIN RENDER - COLLABORATIVE UI MASTERPIECE**
@@ -2869,6 +3295,9 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
 />
                 {renderAIRecommendationsSection()}
                 {renderPopularMoviesSection()}
+                {renderActionMoviesSection()}
+                {renderThrillerMoviesSection()}
+                {renderComedyMoviesSection()}
                 {renderWhatsOutNowSection()}
               </ScrollView>
             )}
@@ -2965,6 +3394,9 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
 />
                 {renderAIRecommendationsSection()}
                 {renderPopularMoviesSection()}
+                {renderActionMoviesSection()}
+                {renderThrillerMoviesSection()}
+                {renderComedyMoviesSection()}
               </ScrollView>
             )}
             

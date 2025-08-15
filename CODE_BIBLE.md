@@ -1,7 +1,6 @@
 # CODE_BIBLE.md
 type: guide
 scope: project-wide
-updated: 2025-07-25
 
 ---
 
@@ -59,6 +58,23 @@ When in doubt, read the code. If it’s unclear, fix the clarity.
 
 ---
 
+## 📋 Mandatory Requirement Articulation Process
+
+**BEFORE ANY IMPLEMENTATION**, you MUST follow this process:
+
+1. **Re-articulate requirements** in your own words
+2. **Identify specific actions** needed for each requirement  
+3. **Define implementation steps** with clear dependencies
+4. **Plan Sub-Agent usage** and parallel/series execution
+5. **Create complete TODO list** and wait for confirmation
+
+**Template to follow:**
+```
+Can you please re-articulate to me the concrete and specific requirements I have given you using your own words, include what those specific requirements are and for each requirement what actions you need to take, what steps you need to take to implement my requirements, and a short plain text description of how you are going to complete the task, include how you will use of Sub-Agents and what will be done in series and what can be done in parallel. Also, re-organise the requirements into their logical & sequential order of implementation including any dependancies, and finally finish with a complete TODO list, then wait for my confirmation.
+```
+
+---
+
 ## 🚨 Core Reminder
 
 > Write code as if the person maintaining it is a violent psychopath who knows where you live.  
@@ -67,5 +83,4 @@ When in doubt, read the code. If it’s unclear, fix the clarity.
 ---
 
 _This file shall be reviewed after **every** update to ensure compliance.
-
-list **every** file name that were modified, added or deleted. Just the file name, nothing more
+After completing changes, list **every** file name that were modified, added or deleted. Just the file name, nothing more

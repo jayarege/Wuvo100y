@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   SafeAreaView
 } from 'react-native';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../hooks/useAuth.js';
 
 const FirebaseAuthTest = ({ onClose }) => {
   const [email, setEmail] = useState('test@wuvo100y.com');

@@ -116,7 +116,6 @@ export const StreamingProviders = ({ movie, visible, style, userSubscriptions = 
             </View>
           );
         })}
-      </View>}
       </View>
     </View>
   );

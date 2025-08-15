@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, Alert, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Alert, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MovieCard from './MovieCard/MovieCard';
 
 // Console log to verify file is loading
 console.log('✅ Enhanced Confidence-Based Rating System loaded successfully!');
@@ -50,7 +49,7 @@ const getSentimentBaseline = (sentiment, userMovies = []) => {
     const end = Math.floor(userRatings.length * 0.75);
     sentimentMovies = userRatings.slice(start, end);
   } else if (sentiment === 'AVERAGE') {
-    // 25-50% percentile  
+    // 25-50% percentile
     const start = Math.floor(userRatings.length * 0.25);
     const end = Math.floor(userRatings.length * 0.50);
     sentimentMovies = userRatings.slice(start, end);
@@ -63,7 +62,6 @@ const getSentimentBaseline = (sentiment, userMovies = []) => {
   if (sentimentMovies.length > 0) {
     // Use user's actual average for this sentiment
     const userSentimentAvg = sentimentMovies.reduce((a, b) => a + b, 0) / sentimentMovies.length;
-    
     // Ensure it's reasonable (within broad bounds)
     const { idealRange } = baseline;
     return Math.max(idealRange[0] - 1, Math.min(idealRange[1] + 1, userSentimentAvg));
@@ -72,83 +70,87 @@ const getSentimentBaseline = (sentiment, userMovies = []) => {
   return baseline.fallback;
 };
 
-// **UNIFIED RATING KERNEL CONFIGURATION**
-// Following CODE_BIBLE: Single-source mathematical model with clear assumptions
-const UNIFIED_RATING_CONFIG = {
+// **ENHANCED RATING SYSTEM CONFIGURATION**
+const ENHANCED_RATING_CONFIG = {
   RATING_BOUNDS: {
     MIN: 1,
     MAX: 10,
-    DEFAULT_INITIAL: null // Always start unrated for sentiment-based placement
+    INITIAL_ELO: 1500 // Standard ELO baseline
   },
-  
-  // **SINGLE PROBABILITY MODEL: Bradley-Terry Logistic**
-  // P(A beats B) = 1 / (1 + exp(-(rating_A - rating_B) / scale))
-  PROBABILITY: {
-    SCALE: 1.8, // Logistic scale parameter (controls spread)
-    MODEL: 'bradley-terry-logistic'
-  },
-  
-  // **UNIFIED UNCERTAINTY SCHEDULE**
-  // σ (standard error) directly drives K-factor via information theory
-  UNCERTAINTY: {
-    INITIAL: 2.0,           // Starting uncertainty (rating points)
-    MIN: 0.1,               // Minimum uncertainty when highly confident
-    DECAY_RATE: 0.85,       // How fast uncertainty shrinks with info
-    K_MULTIPLIER: 48        // K = K_MULTIPLIER * σ
-  },
-  
-  // **STOPPING CRITERIA**
   CONFIDENCE: {
-    TARGET_INTERVAL_WIDTH: 0.3, // Stop when 95% CI < 0.3 points
-    MIN_COMPARISONS: 3,
-    MAX_COMPARISONS: 15,
-    CONFIDENCE_LEVEL: 0.95
+    TARGET_INTERVAL_WIDTH: 0.6, // Stop when 95% CI width < 0.6 points (85% confidence target)
+    MIN_COMPARISONS: 3, // Minimum comparisons required before checking confidence
+    MAX_COMPARISONS: 6, // Maximum comparisons (3-6 dynamic range)
+    CONFIDENCE_LEVEL: 0.95, // 95% confidence intervals
+    INITIAL_UNCERTAINTY: 2.0, // Initial rating standard deviation
+    // Dynamic round termination thresholds (85% confidence = ±0.6 points)
+    CONFIDENCE_GOOD: 0.6, // 85% confidence threshold for early stop
+    CONFIDENCE_EXCELLENT: 0.4, // Excellent confidence for immediate stop
+    RATING_STABILITY_THRESHOLD: 0.2 // Consider stable if rating changes < 0.2
   },
-  
-  // **SENTIMENT BASELINES** (unchanged - user-tested)
-  SENTIMENT_BASELINES: {
-    'LOVED': { idealRange: [8.5, 9.5], fallback: 9.0 },
-    'LIKED': { idealRange: [7.0, 8.5], fallback: 7.5 },
-    'AVERAGE': { idealRange: [5.5, 7.0], fallback: 6.0 },
-    'DISLIKED': { idealRange: [3.0, 5.5], fallback: 4.0 },
-    'HATED': { idealRange: [1.0, 3.0], fallback: 2.5 }
+  K_FACTORS: {
+    HIGH_UNCERTAINTY: 64, // Large changes when uncertain
+    MEDIUM_UNCERTAINTY: 32, // Medium changes
+    LOW_UNCERTAINTY: 16, // Small changes when confident
+    MINIMUM: 8 // Minimum K-factor
   },
-
-  // **PERCENTILE RANGES** (for opponent selection)
-  PERCENTILE_RANGES: {
-    'LOVED': [0.75, 1.0],   // Top 25% of ratings
-    'LIKED': [0.5, 0.75],   // 50-75th percentile  
-    'AVERAGE': [0.25, 0.5], // 25-50th percentile
-    'DISLIKED': [0.0, 0.25] // Bottom 25% of ratings
-  },
-
-  // **DYNAMIC PERCENTILE RANGES** (adaptive based on user data)
-  DYNAMIC_PERCENTILE_RANGES: {
-    'LOVED': [0.75, 1.0],
-    'LIKED': [0.5, 0.75],
-    'AVERAGE': [0.25, 0.5], 
-    'DISLIKED': [0.0, 0.25]
-  },
-
-  // **UI COLORS** (for confidence indicators)
-  COLORS: {
-    CONFIDENCE_HIGH: '#4CAF50',   // Green - high confidence
-    CONFIDENCE_MEDIUM: '#FF9800', // Orange - medium confidence  
-    CONFIDENCE_LOW: '#F44336',    // Red - low confidence
-    LIKED: '#4CAF50'              // Default liked color
-  },
-
-  // **LEGACY ELO CONFIG** (for backward compatibility - will be removed)
   ELO_CONFIG: {
-    SCALE_FACTOR: 10,       // ELO to 10-point scale conversion
-    BASE: 10,               // Base for probability calculations
-    DIVISOR: 400,           // Standard ELO divisor
-    TIE_SCORE: 0.5          // Score for ties
+    SCALE_FACTOR: 10, // ELO to 10-point scale conversion
+    BASE: 10, // Base for probability calculations
+    DIVISOR: 400, // Standard ELO divisor
+    TIE_SCORE: 0.5
+  },
+  PERCENTILE_RANGES: {
+    LOVED: [0.75, 1.0], // Top 25% (highest rated movies)
+    LIKED: [0.50, 0.75], // Upper-middle 25%
+    AVERAGE: [0.25, 0.50], // Lower-middle 25%
+    DISLIKED: [0.0, 0.25] // Bottom 25% (lowest rated movies)
+  },
+  // Sentiment-aware starting baselines (consultant's good idea)
+  SENTIMENT_BASELINES: {
+    LOVED: { idealRange: [7.5, 9.5], fallback: 8.5 },
+    LIKED: { idealRange: [6.0, 8.0], fallback: 7.0 },
+    AVERAGE: { idealRange: [4.5, 6.5], fallback: 5.5 },
+    DISLIKED: { idealRange: [1.5, 4.5], fallback: 3.0 }
+  },
+  DYNAMIC_PERCENTILE_RANGES: {
+    LOVED: [0.75, 1.0], // Top 25% (highest rated movies)
+    LIKED: [0.50, 0.75], // Upper-middle 25%
+    AVERAGE: [0.25, 0.50], // Lower-middle 25%
+    DISLIKED: [0.0, 0.25] // Bottom 25% (lowest rated movies)
+  },
+  PERCENTILE_THRESHOLDS: {
+    QUARTER: 0.25,
+    HALF: 0.5,
+    THREE_QUARTER: 0.75
+  },
+  COMPARISON_CONFIG: {
+    MIN_MOVIES: 3
+  },
+  ADAPTIVE_ELO: {
+    TARGET_OFFSET: 0.8, // How much higher/lower to target after win/loss
+    SEARCH_RANGES: [0.3, 0.6, 1.0, 1.5], // Expanding search radius for opponents
+    DEFAULT_RATING_FALLBACK: 5.5 // Default rating when no rating available
+  },
+  COLORS: {
+    LOVED: '#FF0000',
+    LIKED: '#4CAF50',
+    AVERAGE: '#FF9800',
+    DISLIKED: '#F44336',
+    CONFIDENCE_HIGH: '#4CAF50',
+    CONFIDENCE_MEDIUM: '#FF9800',
+    CONFIDENCE_LOW: '#F44336'
+  },
+  BORDER_COLORS: {
+    LOVED: '#FF4444',
+    LIKED: '#66BB6A',
+    AVERAGE: '#FFB74D',
+    DISLIKED: '#EF5350'
   }
 };
 
 // **CONFIDENCE-BASED RATING SYSTEM CONFIGURATION** (alias for backward compatibility)
-const CONFIDENCE_RATING_CONFIG = UNIFIED_RATING_CONFIG;
+const CONFIDENCE_RATING_CONFIG = ENHANCED_RATING_CONFIG;
 
 // **COMPARISON RESULT TYPES**
 export const ComparisonResults = {
@@ -163,28 +165,75 @@ export const ComparisonResults = {
  * Calculate confidence interval for ELO rating using standard error
  * Based on statistical theory for pairwise comparison systems
  */
-// calculateConfidenceInterval removed - now handled internally by unifiedRatingKernel
+const calculateConfidenceInterval = (rating, standardError, confidenceLevel = 0.95) => {
+  // Z-score for 95% confidence = 1.96, 99% confidence = 2.576
+  const zScore = confidenceLevel === 0.95 ? 1.96 : 2.576;
+  const margin = zScore * standardError;
+  
+  return {
+    lowerBound: Math.max(CONFIDENCE_RATING_CONFIG.RATING_BOUNDS.MIN, rating - margin),
+    upperBound: Math.min(CONFIDENCE_RATING_CONFIG.RATING_BOUNDS.MAX, rating + margin),
+    width: 2 * margin,
+    confidenceLevel
+  };
 };
 
 /**
  * Calculate standard error based on number of comparisons and rating variance
  * Uses Bayesian approach for uncertainty estimation
  */
-// calculateStandardError removed - now handled internally by unifiedRatingKernel
+const calculateStandardError = (comparisons, wins, losses, ties = 0) => {
+  if (comparisons === 0) return CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY;
+  
+  // Bayesian standard error calculation
+  const totalGames = wins + losses + ties;
+  const winRate = (wins + ties * 0.5) / totalGames;
+  
+  // Wilson score interval for binomial confidence
+  const n = totalGames;
+  const p = winRate;
+  const variance = (p * (1 - p)) / n;
+  
+  // Convert to rating scale standard error (uses /4 for variance scaling, not probability)
+  const ratingVariance = variance * Math.pow(CONFIDENCE_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR / 4, 2);
+  
+  return Math.sqrt(ratingVariance / 100); // Scale to 1-10 rating system
+};
 
 /**
- * INFORMATION GAIN CALCULATION (Updated for unified kernel)
- * Higher information gain = better opponent choice for rating convergence
+ * Dynamic K-factor based on confidence level
+ * Higher uncertainty = higher K-factor for faster convergence
+ */
+const calculateDynamicKFactor = (standardError, comparisons) => {
+  const baseK = CONFIDENCE_RATING_CONFIG.K_FACTORS.MINIMUM;
+  
+  if (standardError > 1.0 || comparisons < 5) {
+    return CONFIDENCE_RATING_CONFIG.K_FACTORS.HIGH_UNCERTAINTY;
+  } else if (standardError > 0.5 || comparisons < 10) {
+    return CONFIDENCE_RATING_CONFIG.K_FACTORS.MEDIUM_UNCERTAINTY;
+  } else {
+    return CONFIDENCE_RATING_CONFIG.K_FACTORS.LOW_UNCERTAINTY;
+  }
+};
+
+/**
+ * ADAPTIVE OPPONENT SELECTION - INFORMATION THEORY BASED
+ * Selects opponents that maximize information gain for rating confidence
+ */
+
+/**
+ * Calculate expected information gain from comparing against an opponent
+ * Higher information gain = better opponent choice
  */
 const calculateInformationGain = (currentRating, currentStandardError, opponentRating, opponentStandardError) => {
-  // **UNIFIED PROBABILITY MODEL**: Bradley-Terry logistic
-  const ratingDiff = currentRating - opponentRating;
-  const expectedWinProb = 1 / (1 + Math.exp(-ratingDiff / UNIFIED_RATING_CONFIG.PROBABILITY.SCALE));
+  // Expected win probability using ELO formula
+  const ratingDiff = opponentRating - currentRating;
+  const expectedWinProb = 1 / (1 + Math.pow(CONFIDENCE_RATING_CONFIG.ELO_CONFIG.BASE, ratingDiff / CONFIDENCE_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
   
-  // Information gain maximized when outcome is most uncertain (p=0.5)
-  // Also weight by opponent's rating reliability
+  // Information gain is maximized when outcome is most uncertain (p=0.5)
+  // Also consider opponent's rating reliability
   const outcomeUncertainty = 4 * expectedWinProb * (1 - expectedWinProb); // Max at p=0.5
-  const opponentReliability = 1 / (1 + opponentStandardError); // More reliable = more info
+  const opponentReliability = 1 / (1 + opponentStandardError); // More reliable opponents give more info
   
   return outcomeUncertainty * opponentReliability;
 };
@@ -193,11 +242,10 @@ const calculateInformationGain = (currentRating, currentStandardError, opponentR
  * Select optimal opponent for maximum information gain
  * Balances rating similarity with opponent reliability
  */
-const selectOptimalOpponent = (currentRating, currentStandardError, availableOpponents, excludeIds = [], mediaType) => {
+const selectOptimalOpponent = (currentRating, currentStandardError, availableOpponents, excludeIds = []) => {
   const validOpponents = availableOpponents.filter(movie => 
     movie.userRating && 
     !excludeIds.includes(movie.id) &&
-    (!mediaType || (movie.mediaType || 'movie') === mediaType) &&
     movie.ratingStats && // Must have confidence statistics
     movie.ratingStats.standardError !== undefined
   );
@@ -205,9 +253,7 @@ const selectOptimalOpponent = (currentRating, currentStandardError, availableOpp
   if (validOpponents.length === 0) {
     // Fallback to random selection if no confidence stats available
     const fallbackOpponents = availableOpponents.filter(movie => 
-      movie.userRating && 
-      !excludeIds.includes(movie.id) &&
-      (!mediaType || (movie.mediaType || 'movie') === mediaType)
+      movie.userRating && !excludeIds.includes(movie.id)
     );
     return fallbackOpponents[Math.floor(Math.random() * fallbackOpponents.length)] || null;
   }
@@ -216,10 +262,8 @@ const selectOptimalOpponent = (currentRating, currentStandardError, availableOpp
   const opponentsWithGain = validOpponents.map(opponent => ({
     ...opponent,
     informationGain: calculateInformationGain(
-      currentRating,
-      currentStandardError,
-      opponent.userRating,
-      opponent.ratingStats.standardError
+      currentRating, currentStandardError,
+      opponent.userRating, opponent.ratingStats.standardError
     )
   }));
   
@@ -238,7 +282,7 @@ const selectOptimalOpponent = (currentRating, currentStandardError, availableOpp
 const selectInitialOpponent = (sentiment, availableMovies, excludeIds = []) => {
   console.log('🎯 selectInitialOpponent called:', { sentiment, movieCount: availableMovies.length, excludeIds });
   
-  const percentileRange = UNIFIED_RATING_CONFIG.PERCENTILE_RANGES[sentiment];
+  const percentileRange = ENHANCED_RATING_CONFIG.PERCENTILE_RANGES[sentiment];
   console.log('📊 Percentile range for', sentiment, ':', percentileRange);
   
   if (!percentileRange || !availableMovies.length) {
@@ -279,115 +323,54 @@ const selectInitialOpponent = (sentiment, availableMovies, excludeIds = []) => {
  */
 
 /**
- * UNIFIED RATING KERNEL
- * Following CODE_BIBLE: Single probability model, unified math, explicit error handling
+ * Update movie rating using ELO with confidence tracking
  */
-const unifiedRatingKernel = (currentStats, opponentRating, result, opponentStats = null) => {
-  // **VALIDATION** - CODE_BIBLE: Never assume, validate inputs
-  if (!currentStats) {
-    throw new Error('Current stats required for rating update');
-  }
-  if (typeof opponentRating !== 'number' || opponentRating < 1 || opponentRating > 10) {
-    throw new Error('Valid opponent rating (1-10) required');
-  }
-  if (!['win', 'loss', 'tie'].includes(result)) {
-    throw new Error('Result must be win, loss, or tie');
-  }
-
-  // **CURRENT STATE EXTRACTION**
-  const currentRating = currentStats.rating; // Can be null for first comparison
-  const currentUncertainty = currentStats.standardError || UNIFIED_RATING_CONFIG.UNCERTAINTY.INITIAL;
-  const comparisons = currentStats.comparisons || 0;
-
-  // **UNIFIED PROBABILITY MODEL: Bradley-Terry Logistic**
-  // P(A beats B) = 1 / (1 + exp(-(rating_A - rating_B) / scale))
-  const calculateWinProbability = (ratingA, ratingB) => {
-    const diff = ratingA - ratingB;
-    return 1 / (1 + Math.exp(-diff / UNIFIED_RATING_CONFIG.PROBABILITY.SCALE));
-  };
-
-  // **RESULT SCORING**
-  const actualScore = {
-    'win': 1.0,
-    'loss': 0.0,
-    'tie': 0.5
-  }[result];
-
-  // **UNCERTAINTY-DRIVEN K-FACTOR**
-  // K = K_MULTIPLIER * σ (directly tied to uncertainty)
-  const kFactor = UNIFIED_RATING_CONFIG.UNCERTAINTY.K_MULTIPLIER * currentUncertainty;
-
-  let newRating;
-  let newUncertainty;
-
-  if (currentRating === null) {
-    // **FIRST COMPARISON: Initialize rating based on result**
-    if (result === 'win') {
-      newRating = Math.min(10, opponentRating + 1.0);
-    } else if (result === 'loss') {
-      newRating = Math.max(1, opponentRating - 1.0);
-    } else { // tie
-      newRating = opponentRating;
-    }
-    
-    // Start with reduced uncertainty after first comparison
-    newUncertainty = currentUncertainty * UNIFIED_RATING_CONFIG.UNCERTAINTY.DECAY_RATE;
-  } else {
-    // **SUBSEQUENT COMPARISONS: Update using Bradley-Terry model**
-    const expectedScore = calculateWinProbability(currentRating, opponentRating);
-    const prediction_error = actualScore - expectedScore;
-    
-    // Apply update with bounds checking
-    const ratingChange = kFactor * prediction_error;
-    newRating = Math.max(
-      UNIFIED_RATING_CONFIG.RATING_BOUNDS.MIN,
-      Math.min(UNIFIED_RATING_CONFIG.RATING_BOUNDS.MAX, currentRating + ratingChange)
-    );
-    
-    // **UNCERTAINTY UPDATE: Decreases with information gained**
-    // More uncertain predictions give more information when resolved
-    const informationGain = Math.abs(prediction_error);
-    const uncertaintyReduction = UNIFIED_RATING_CONFIG.UNCERTAINTY.DECAY_RATE * informationGain;
-    newUncertainty = Math.max(
-      UNIFIED_RATING_CONFIG.UNCERTAINTY.MIN,
-      currentUncertainty * (1 - uncertaintyReduction)
-    );
-  }
-
-  // **UPDATED STATISTICS**
-  const newComparisons = comparisons + 1;
-  const newWins = (currentStats.wins || 0) + (result === 'win' ? 1 : 0);
-  const newLosses = (currentStats.losses || 0) + (result === 'loss' ? 1 : 0);
-  const newTies = (currentStats.ties || 0) + (result === 'tie' ? 1 : 0);
-
-  // **CONFIDENCE INTERVAL CALCULATION**
-  // 95% CI = rating ± 1.96 * σ
-  const margin = 1.96 * newUncertainty;
-  const confidenceInterval = {
-    lower: Math.max(1, newRating - margin),
-    upper: Math.min(10, newRating + margin),
-    width: 2 * margin,
-    level: UNIFIED_RATING_CONFIG.CONFIDENCE.CONFIDENCE_LEVEL
-  };
-
-  // **RETURN UPDATED STATS**
+const updateRatingWithConfidence = (movieStats, opponentRating, result, opponentStats = null) => {
+  const currentRating = movieStats.rating || (CONFIDENCE_RATING_CONFIG.RATING_BOUNDS.MIN + CONFIDENCE_RATING_CONFIG.RATING_BOUNDS.MAX) / 2;
+  const currentStandardError = movieStats.standardError || CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY;
+  
+  // Calculate expected win probability
+  const ratingDiff = opponentRating - currentRating;
+  const expectedWinProb = 1 / (1 + Math.pow(CONFIDENCE_RATING_CONFIG.ELO_CONFIG.BASE, ratingDiff / CONFIDENCE_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
+  
+  // Determine actual score
+  let actualScore;
+  if (result === ComparisonResults.A_WINS) actualScore = 1.0;
+  else if (result === ComparisonResults.B_WINS) actualScore = 0.0;
+  else actualScore = CONFIDENCE_RATING_CONFIG.ELO_CONFIG.TIE_SCORE;
+  
+  // Dynamic K-factor based on current confidence
+  const kFactor = calculateDynamicKFactor(currentStandardError, movieStats.comparisons || 0);
+  
+  // Update rating using ELO formula
+  const ratingChange = (kFactor / 100) * (actualScore - expectedWinProb);
+  const newRating = Math.max(
+    CONFIDENCE_RATING_CONFIG.RATING_BOUNDS.MIN,
+    Math.min(CONFIDENCE_RATING_CONFIG.RATING_BOUNDS.MAX, currentRating + ratingChange)
+  );
+  
+  // Update comparison statistics
+  const newComparisons = (movieStats.comparisons || 0) + 1;
+  const newWins = (movieStats.wins || 0) + (actualScore === 1.0 ? 1 : 0);
+  const newLosses = (movieStats.losses || 0) + (actualScore === 0.0 ? 1 : 0);
+  const newTies = (movieStats.ties || 0) + (actualScore === 0.5 ? 1 : 0);
+  
+  // Calculate new standard error
+  const newStandardError = calculateStandardError(newComparisons, newWins, newLosses, newTies);
+  
+  // Calculate confidence interval
+  const confidenceInterval = calculateConfidenceInterval(newRating, newStandardError);
+  
   return {
     rating: newRating,
-    standardError: newUncertainty,
+    standardError: newStandardError,
     comparisons: newComparisons,
     wins: newWins,
     losses: newLosses,
     ties: newTies,
     confidenceInterval,
-    lastUpdated: new Date().toISOString(),
-    // Debugging info
-    debug: {
-      kFactor,
-      informationGain: currentRating ? Math.abs(actualScore - calculateWinProbability(currentRating, opponentRating)) : 'first_comparison',
-      model: 'unified-bradley-terry'
-    }
+    lastUpdated: new Date().toISOString()
   };
-};
 };
 
 /**
@@ -400,8 +383,8 @@ const hasTargetConfidence = (ratingStats) => {
   const intervalWidth = ratingStats.confidenceInterval.width;
   
   // Must meet minimum comparisons AND have narrow enough confidence interval
-  return comparisons >= UNIFIED_RATING_CONFIG.CONFIDENCE.MIN_COMPARISONS &&
-         intervalWidth <= UNIFIED_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH;
+  return comparisons >= CONFIDENCE_RATING_CONFIG.CONFIDENCE.MIN_COMPARISONS &&
+         intervalWidth <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH;
 };
 
 /**
@@ -420,14 +403,14 @@ const processConfidenceBasedRating = async (config) => {
     onFinalRating,
     onError
   } = config;
-
+  
   try {
     console.log(`🎬 Starting confidence-based rating for: ${newMovie.title}`);
     console.log(`🎭 User sentiment: ${selectedSentiment}`);
-
+    
     // Initialize movie statistics
     let movieStats = {
-      rating: null, // start unrated so round 1 honors sentiment
+      rating: Math.max(1, Math.min(10, newMovie?.suggestedRating ?? 7.0)),
       standardError: CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
       comparisons: 0,
       wins: 0,
@@ -435,11 +418,11 @@ const processConfidenceBasedRating = async (config) => {
       ties: 0,
       confidenceInterval: null
     };
-
+    
     let comparisonHistory = [];
     let usedOpponentIds = [];
     let comparisonCount = 0;
-
+    
     // Continue comparisons until confidence target is met
     while (comparisonCount < CONFIDENCE_RATING_CONFIG.CONFIDENCE.MAX_COMPARISONS && 
            !hasTargetConfidence(movieStats)) {
@@ -454,21 +437,18 @@ const processConfidenceBasedRating = async (config) => {
       } else {
         // Subsequent comparisons: use information-gain-based selection
         opponent = selectOptimalOpponent(
-          movieStats.rating,
-          movieStats.standardError,
-          availableMovies,
-          [...usedOpponentIds, newMovie.id],
-          mediaType
+          movieStats.rating, movieStats.standardError,
+          availableMovies, [...usedOpponentIds, newMovie.id]
         );
       }
-
+      
       if (!opponent) {
         console.log(`⚠️ No more opponents available after ${comparisonCount - 1} comparisons`);
         break;
       }
-
+      
       usedOpponentIds.push(opponent.id);
-
+      
       // Notify UI of comparison start
       if (onComparisonStart) {
         onComparisonStart({
@@ -478,7 +458,7 @@ const processConfidenceBasedRating = async (config) => {
           targetConfidence: CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH
         });
       }
-
+      
       // Wait for user's comparison choice
       const userChoice = await new Promise((resolve) => {
         if (onComparisonResult) {
@@ -491,21 +471,21 @@ const processConfidenceBasedRating = async (config) => {
           });
         }
       });
-
+      
       // Process comparison result
       let result;
       if (userChoice === 'too_tough') {
-        result = 'tie';
+        result = ComparisonResults.TIE;
       } else if (userChoice === 'new') {
-        result = 'win';
+        result = ComparisonResults.A_WINS;
       } else {
-        result = 'loss';
+        result = ComparisonResults.B_WINS;
       }
-
-      // Update movie statistics using unified kernel
+      
+      // Update movie statistics
       const previousStats = { ...movieStats };
-      movieStats = unifiedRatingKernel(movieStats, opponent.userRating, result, opponent.ratingStats);
-
+      movieStats = updateRatingWithConfidence(movieStats, opponent.userRating, result, opponent.ratingStats);
+      
       // Record comparison in history
       comparisonHistory.push({
         comparison: comparisonCount,
@@ -515,30 +495,27 @@ const processConfidenceBasedRating = async (config) => {
         ratingAfter: movieStats.rating,
         confidenceInterval: movieStats.confidenceInterval,
         informationGain: movieStats.rating !== null ? calculateInformationGain(
-          previousStats.rating || 5.5,
-          previousStats.standardError,
-          opponent.userRating,
-          opponent.ratingStats?.standardError || 1.0
+          previousStats.rating || 5.5, previousStats.standardError,
+          opponent.userRating, opponent.ratingStats?.standardError || 1.0
         ) : null
       });
-
+      
       // Update opponent's statistics as well (if they have stats)
       if (opponent.ratingStats) {
-        const opponentResult = result === 'win' ? 'loss' :
-                             result === 'loss' ? 'win' :
-                             'tie';
+        const opponentResult = result === ComparisonResults.A_WINS ? 
+          ComparisonResults.B_WINS : 
+          result === ComparisonResults.B_WINS ? 
+          ComparisonResults.A_WINS : 
+          ComparisonResults.TIE;
         
-        const updatedOpponentStats = unifiedRatingKernel(
-          opponent.ratingStats,
-          movieStats.rating,
-          opponentResult,
-          movieStats
+        const updatedOpponentStats = updateRatingWithConfidence(
+          opponent.ratingStats, movieStats.rating, opponentResult, movieStats
         );
         
         // Update opponent in storage
         await updateOpponentInStorage(opponent, updatedOpponentStats, mediaType);
       }
-
+      
       // Notify UI of confidence update
       if (onConfidenceUpdate) {
         onConfidenceUpdate({
@@ -548,10 +525,10 @@ const processConfidenceBasedRating = async (config) => {
           targetReached: hasTargetConfidence(movieStats)
         });
       }
-
+      
       console.log(`📊 Comparison ${comparisonCount}: Rating ${movieStats.rating?.toFixed(2)} ± ${movieStats.confidenceInterval?.width?.toFixed(2)}`);
     }
-
+    
     // Final rating callback
     if (onFinalRating && movieStats.rating !== null) {
       onFinalRating({
@@ -563,7 +540,7 @@ const processConfidenceBasedRating = async (config) => {
         targetConfidenceReached: hasTargetConfidence(movieStats)
       });
     }
-
+    
     return {
       success: true,
       finalRating: movieStats.rating,
@@ -571,16 +548,13 @@ const processConfidenceBasedRating = async (config) => {
       comparisonHistory,
       targetConfidenceReached: hasTargetConfidence(movieStats)
     };
-
+    
   } catch (error) {
     console.error('Confidence-Based Rating Engine Error:', error);
     if (onError) {
       onError(error);
     }
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 };
 
@@ -591,18 +565,15 @@ const updateOpponentInStorage = async (opponent, newStats, mediaType) => {
   try {
     const storageKey = getStorageKey(mediaType);
     const storedMovies = await AsyncStorage.getItem(storageKey);
-    
     if (storedMovies) {
       const movies = JSON.parse(storedMovies);
       const movieIndex = movies.findIndex(m => m.id === opponent.id);
-      
       if (movieIndex !== -1) {
         movies[movieIndex] = {
           ...movies[movieIndex],
           userRating: newStats.rating,
           ratingStats: newStats
         };
-        
         await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
         console.log(`📊 Updated opponent ${opponent.title}: ${newStats.rating?.toFixed(2)} ± ${newStats.confidenceInterval?.width?.toFixed(2)}`);
       }
@@ -620,9 +591,9 @@ const calculateMidRatingFromPercentile = (userMovies, percentileRange) => {
   
   const sortedRatings = userMovies
     .filter(m => m.userRating)
-    .map(m => m.userRating || (m.eloRating / UNIFIED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
+    .map(m => m.userRating || (m.eloRating / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
     .sort((a, b) => b - a);
-    
+  
   if (sortedRatings.length === 0) return 7.0;
   
   // Get midpoint of percentile range
@@ -633,55 +604,56 @@ const calculateMidRatingFromPercentile = (userMovies, percentileRange) => {
 };
 
 // **DYNAMIC PERCENTILE-BASED RATING CATEGORIES**
+
 const calculateDynamicRatingCategories = (userMovies, mediaType = 'movie') => {
   if (!userMovies || userMovies.length === 0) {
     // Fallback to default percentiles if no user data
     return {
-      LOVED: { 
-        percentile: UNIFIED_RATING_CONFIG.PERCENTILE_RANGES.LOVED, 
-        color: ENHANCED_RATING_CONFIG.COLORS.LOVED, 
-        borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.LOVED, 
-        label: 'Love', 
-        description: 'This was amazing!' 
+      LOVED: {
+        percentile: ENHANCED_RATING_CONFIG.PERCENTILE_RANGES.LOVED,
+        color: ENHANCED_RATING_CONFIG.COLORS.LOVED,
+        borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.LOVED,
+        label: 'Love',
+        description: 'This was amazing!'
       },
-      LIKED: { 
-        percentile: UNIFIED_RATING_CONFIG.PERCENTILE_RANGES.LIKED, 
-        color: ENHANCED_RATING_CONFIG.COLORS.LIKED, 
-        borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.LIKED, 
-        label: 'Like', 
-        description: 'Pretty good!' 
+      LIKED: {
+        percentile: ENHANCED_RATING_CONFIG.PERCENTILE_RANGES.LIKED,
+        color: ENHANCED_RATING_CONFIG.COLORS.LIKED,
+        borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.LIKED,
+        label: 'Like',
+        description: 'Pretty good!'
       },
-      AVERAGE: { 
-        percentile: UNIFIED_RATING_CONFIG.PERCENTILE_RANGES.AVERAGE, 
-        color: ENHANCED_RATING_CONFIG.COLORS.AVERAGE, 
-        borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.AVERAGE, 
-        label: 'Okay', 
-        description: 'Nothing special' 
+      AVERAGE: {
+        percentile: ENHANCED_RATING_CONFIG.PERCENTILE_RANGES.AVERAGE,
+        color: ENHANCED_RATING_CONFIG.COLORS.AVERAGE,
+        borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.AVERAGE,
+        label: 'Okay',
+        description: 'Nothing special'
       },
-      DISLIKED: { 
-        percentile: UNIFIED_RATING_CONFIG.PERCENTILE_RANGES.DISLIKED, 
-        color: ENHANCED_RATING_CONFIG.COLORS.DISLIKED, 
-        borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.DISLIKED, 
-        label: 'Dislike', 
-        description: 'Not for me' 
+      DISLIKED: {
+        percentile: ENHANCED_RATING_CONFIG.PERCENTILE_RANGES.DISLIKED,
+        color: ENHANCED_RATING_CONFIG.COLORS.DISLIKED,
+        borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.DISLIKED,
+        label: 'Dislike',
+        description: 'Not for me'
       }
     };
   }
-
+  
   // Sort user ratings to calculate percentiles, filtered by media type
   const filteredMovies = userMovies.filter(movie => 
     (movie.mediaType || 'movie') === mediaType
   );
   
   const sortedRatings = filteredMovies
-    .map(m => m.userRating || (m.eloRating / UNIFIED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
+    .map(m => m.userRating || (m.eloRating / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
     .filter(rating => rating && !isNaN(rating))
     .sort((a, b) => a - b);
-
+    
   if (sortedRatings.length === 0) {
     return calculateDynamicRatingCategories([]);
   }
-
+  
   // Calculate percentile thresholds
   const get25thPercentile = () => sortedRatings[Math.floor(sortedRatings.length * ENHANCED_RATING_CONFIG.PERCENTILE_THRESHOLDS.QUARTER)] || sortedRatings[0];
   const get50thPercentile = () => sortedRatings[Math.floor(sortedRatings.length * ENHANCED_RATING_CONFIG.PERCENTILE_THRESHOLDS.HALF)] || sortedRatings[0];
@@ -692,33 +664,33 @@ const calculateDynamicRatingCategories = (userMovies, mediaType = 'movie') => {
   const p25 = get25thPercentile();
   const p50 = get50thPercentile();
   const p75 = get75thPercentile();
-
+  
   console.log(`📊 Dynamic Rating Ranges - Min: ${minRating}, 25th: ${p25}, 50th: ${p50}, 75th: ${p75}, Max: ${maxRating}`);
-
+  
   return {
-    LOVED: { 
-      percentile: UNIFIED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.LOVED,
+    LOVED: {
+      percentile: ENHANCED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.LOVED,
       color: ENHANCED_RATING_CONFIG.COLORS.LOVED,
       borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.LOVED,
       label: 'Love',
       description: 'This was amazing!'
     },
-    LIKED: { 
-      percentile: UNIFIED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.LIKED,
+    LIKED: {
+      percentile: ENHANCED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.LIKED,
       color: ENHANCED_RATING_CONFIG.COLORS.LIKED,
       borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.LIKED,
       label: 'Like',
       description: 'Pretty good!'
     },
-    AVERAGE: { 
-      percentile: UNIFIED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.AVERAGE,
+    AVERAGE: {
+      percentile: ENHANCED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.AVERAGE,
       color: ENHANCED_RATING_CONFIG.COLORS.AVERAGE,
       borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.AVERAGE,
       label: 'Okay',
       description: 'Nothing special'
     },
-    DISLIKED: { 
-      percentile: UNIFIED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.DISLIKED,
+    DISLIKED: {
+      percentile: ENHANCED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.DISLIKED,
       color: ENHANCED_RATING_CONFIG.COLORS.DISLIKED,
       borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.DISLIKED,
       label: 'Dislike',
@@ -742,7 +714,7 @@ const selectOpponentFromPercentile = (percentileRange, seenMovies, excludeMovieI
     .filter(movie => movie.userRating && movie.id !== excludeMovieId)
     .filter(movie => (movie.mediaType || 'movie') === mediaType)
     .sort((a, b) => b.userRating - a.userRating);
-  
+    
   if (sortedMovies.length === 0) return null;
   
   // Calculate percentile indices
@@ -756,6 +728,68 @@ const selectOpponentFromPercentile = (percentileRange, seenMovies, excludeMovieI
   
   // Return random movie from range
   return moviesInRange[Math.floor(Math.random() * moviesInRange.length)];
+};
+
+/**
+ * Adaptive ELO opponent selection for rounds 2+ (Known vs Known)
+ * Won last round → find slightly higher opponent, Lost → find slightly lower
+ */
+const selectAdaptiveELOOpponent = (seenMovies, currentRating, lastRoundWon, excludeMovieIds = [], mediaType = 'movie') => {
+  if (!seenMovies || seenMovies.length === 0) return null;
+  
+  // Filter available movies by media type and exclusions
+  const availableMovies = seenMovies.filter(movie => 
+    movie.userRating && 
+    !excludeMovieIds.includes(movie.id) &&
+    (movie.mediaType || 'movie') === mediaType
+  );
+  
+  if (availableMovies.length === 0) return null;
+  
+  // Adaptive targeting based on last result
+  let targetRating;
+  let searchDirection;
+  
+  if (lastRoundWon) {
+    // Won last round → find slightly higher opponent to test upper limit
+    targetRating = currentRating + ENHANCED_RATING_CONFIG.ADAPTIVE_ELO.TARGET_OFFSET;
+    searchDirection = 'higher';
+  } else {
+    // Lost last round → find slightly lower opponent to establish floor
+    targetRating = currentRating - ENHANCED_RATING_CONFIG.ADAPTIVE_ELO.TARGET_OFFSET;
+    searchDirection = 'lower';
+  }
+  
+  console.log(`🎯 Adaptive ELO: ${searchDirection} after ${lastRoundWon ? 'WIN' : 'LOSS'}, targeting ${targetRating.toFixed(2)} from current ${currentRating.toFixed(2)}`);
+  
+  // Find best candidate in target direction with expanding search ranges
+  const searchRanges = ENHANCED_RATING_CONFIG.ADAPTIVE_ELO.SEARCH_RANGES;
+  
+  for (const range of searchRanges) {
+    const candidatesInRange = availableMovies.filter(movie => {
+      const ratingDiff = movie.userRating - targetRating;
+      return Math.abs(ratingDiff) <= range;
+    });
+    
+    if (candidatesInRange.length > 0) {
+      // Sort by proximity to target rating and pick closest
+      candidatesInRange.sort((a, b) => 
+        Math.abs(a.userRating - targetRating) - Math.abs(b.userRating - targetRating)
+      );
+      
+      const selected = candidatesInRange[0];
+      console.log(`🎯 Selected opponent: ${selected.title} (${selected.userRating.toFixed(2)}) within ±${range} of target ${targetRating.toFixed(2)}`);
+      return selected;
+    }
+  }
+  
+  // Fallback: find closest available opponent in any direction
+  availableMovies.sort((a, b) => 
+    Math.abs(a.userRating - currentRating) - Math.abs(b.userRating - currentRating)
+  );
+  
+  console.log(`⚠️ Fallback: Using closest available opponent ${availableMovies[0].title} (${availableMovies[0].userRating.toFixed(2)})`);
+  return availableMovies[0];
 };
 
 // selectRandomOpponent is now defined in the legacy exports section at the end of the file
@@ -789,13 +823,32 @@ const updateOpponentRating = async (opponentMovie, newRating, storageKey) => {
 /**
  * ELO single-game update with draw support
  * @param {number} Ra - Rating of player A
- * @param {number} Rb - Rating of player B  
+ * @param {number} Rb - Rating of player B
  * @param {number} Sa - Actual score for A (1 = win, 0.5 = draw, 0 = loss)
  * @param {number} Ka - K-factor for player A
  * @param {number} Kb - K-factor for player B
  * @returns {Array} [newRatingA, newRatingB]
  */
-// eloUpdate function removed - replaced by unifiedRatingKernel
+const eloUpdate = (Ra, Rb, Sa, Ka, Kb) => {
+  // Input validation
+  if (!Ra || !Rb || Sa === undefined || !Ka || !Kb) {
+    console.error('Invalid ELO parameters:', { Ra, Rb, Sa, Ka, Kb });
+    const fallback = (ENHANCED_RATING_CONFIG.RATING_BOUNDS.MIN + ENHANCED_RATING_CONFIG.RATING_BOUNDS.MAX) / 2;
+    return [Ra || fallback, Rb || fallback]; // Safe fallback
+  }
+  
+  const Ea = 1 / (1 + Math.pow(ENHANCED_RATING_CONFIG.ELO_CONFIG.BASE, (Rb - Ra) / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
+  const Eb = 1 - Ea;
+  
+  const newRatingA = Ra + Ka * (Sa - Ea);
+  const newRatingB = Rb + Kb * ((1 - Sa) - Eb);
+  
+  // Apply boundary constraints (1-10 range)
+  return [
+    Math.max(ENHANCED_RATING_CONFIG.RATING_BOUNDS.MIN, Math.min(ENHANCED_RATING_CONFIG.RATING_BOUNDS.MAX, newRatingA)),
+    Math.max(ENHANCED_RATING_CONFIG.RATING_BOUNDS.MIN, Math.min(ENHANCED_RATING_CONFIG.RATING_BOUNDS.MAX, newRatingB))
+  ];
+};
 
 // calculatePairwiseRating is defined below for pairwise movie comparisons
 
@@ -814,35 +867,36 @@ const processUnifiedRatingFlow = async (config) => {
     onFinalRating,
     onError
   } = config;
-
+  
   try {
     // Validate inputs
     if (!newMovie || !selectedCategory || !seenMovies) {
       throw new Error('Missing required parameters for rating flow');
     }
-
+    
     if (seenMovies.length < ENHANCED_RATING_CONFIG.COMPARISON_CONFIG.MIN_MOVIES) {
       throw new Error(`Need at least ${ENHANCED_RATING_CONFIG.COMPARISON_CONFIG.MIN_MOVIES} rated movies for comparison system`);
     }
-
+    
     console.log(`🎬 Starting unified rating flow for: ${newMovie.title}`);
     console.log(`🎭 User sentiment: ${selectedCategory}`);
-
+    
     // Get dynamic categories and percentile for selected sentiment
     const categories = calculateDynamicRatingCategories(seenMovies, mediaType);
     const selectedCategoryData = categories[selectedCategory];
     const percentileRange = selectedCategoryData.percentile;
-
+    
     // Round 1: Unknown vs Known (sentiment-based opponent using dynamic percentiles)
     const round1Opponent = selectOpponentFromPercentile(percentileRange, seenMovies, newMovie.id, mediaType);
+    
     if (!round1Opponent) {
       throw new Error('No suitable opponent found for sentiment-based comparison');
     }
-
+    
     let currentRating = null;
     let comparisonHistory = [];
     let usedOpponentIds = [round1Opponent.id];
-
+    
     // Start comparison flow
     if (onComparisonStart) {
       onComparisonStart({
@@ -853,23 +907,61 @@ const processUnifiedRatingFlow = async (config) => {
         sentimentData: selectedCategoryData
       });
     }
-
-    // Process each round
-    for (let round = 1; round <= 3; round++) {
+    
+    // Dynamic rounds based on confidence (3-6 range)
+    let round = 1;
+    
+    while (round <= ENHANCED_RATING_CONFIG.CONFIDENCE.MAX_COMPARISONS) {
       let opponent;
       
       if (round === 1) {
         opponent = round1Opponent;
       } else {
-        // Rounds 2-3: Random opponents (original Wildcard logic)
-        opponent = selectRandomOpponent(seenMovies, [...usedOpponentIds, newMovie.id], mediaType);
+        // Check if we should stop due to confidence achieved
+        if (round > ENHANCED_RATING_CONFIG.CONFIDENCE.MIN_COMPARISONS && currentRating !== null) {
+          const currentStats = {
+            rating: currentRating,
+            standardError: calculateStandardError(comparisonHistory.length, 
+              comparisonHistory.filter(h => h.result === 'win').length,
+              comparisonHistory.filter(h => h.result === 'loss').length,
+              comparisonHistory.filter(h => h.result === 'neutral').length),
+            comparisons: comparisonHistory.length
+          };
+          
+          // Calculate confidence interval
+          const confidenceInterval = calculateConfidenceInterval(currentStats.rating, currentStats.standardError);
+          
+          // Stop if target confidence reached
+          if (confidenceInterval.width <= ENHANCED_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH) {
+            console.log(`🎯 Target confidence reached after ${round-1} rounds: ±${confidenceInterval.width.toFixed(2)} ≤ ±${ENHANCED_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH}`);
+            break;
+          }
+        }
+        
+        // Rounds 2+: Adaptive ELO opponent selection (Known vs Known)
+        const currentMovieRating = newMovie.userRating || newMovie.eloRating / 100 || ENHANCED_RATING_CONFIG.ADAPTIVE_ELO.DEFAULT_RATING_FALLBACK;
+        
+        // Determine if we won the last round to guide opponent selection
+        const lastRoundWon = comparisonHistory.length > 0 ? 
+          comparisonHistory[comparisonHistory.length - 1].result === 'win' : true;
+        
+        console.log(`🎯 Round ${round}: Adaptive ELO selection, current rating ${currentRating?.toFixed(2)}, last round: ${lastRoundWon ? 'WON' : 'LOST'}`);
+        
+        opponent = selectAdaptiveELOOpponent(seenMovies, currentRating, lastRoundWon, [...usedOpponentIds, newMovie.id], mediaType);
+        
+        // Fallback to random if no adaptive opponent found
+        if (!opponent) {
+          console.log(`⚠️ No adaptive opponent found, falling back to random selection`);
+          opponent = selectRandomOpponent(seenMovies, [...usedOpponentIds, newMovie.id], mediaType);
+        }
+        
         if (!opponent) {
           console.log(`⚠️ No more opponents available for round ${round}`);
           break;
         }
         usedOpponentIds.push(opponent.id);
       }
-
+      
       // Wait for user's comparison choice
       const userChoice = await new Promise((resolve) => {
         if (onComparisonResult) {
@@ -882,7 +974,7 @@ const processUnifiedRatingFlow = async (config) => {
           });
         }
       });
-
+      
       // Process the comparison result
       if (userChoice === 'too_tough') {
         // Handle "Too Tough to Decide" - use unified pairwise calculation
@@ -919,7 +1011,6 @@ const processUnifiedRatingFlow = async (config) => {
         });
         
         // Continue to next round instead of breaking early
-        
       } else {
         // Regular win/loss outcome - use unified pairwise calculation
         const newMovieWon = userChoice === 'new';
@@ -959,8 +1050,11 @@ const processUnifiedRatingFlow = async (config) => {
           opponentRating
         });
       }
+      
+      // Increment round for next iteration
+      round++;
     }
-
+    
     // Final rating callback
     if (onFinalRating && currentRating !== null) {
       onFinalRating({
@@ -972,23 +1066,20 @@ const processUnifiedRatingFlow = async (config) => {
         sentimentData: selectedCategoryData
       });
     }
-
+    
     return {
       success: true,
       finalRating: currentRating,
       comparisonHistory,
       sentiment: selectedCategory
     };
-
+    
   } catch (error) {
     console.error('Unified Enhanced Rating Engine Error:', error);
     if (onError) {
       onError(error);
     }
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 };
 
@@ -1000,18 +1091,16 @@ const MovieComparisonEngine = {
     const sortedMovies = [...userMovies]
       .filter(movie => movie.id !== excludeMovieId && movie.userRating)
       .sort((a, b) => b.userRating - a.userRating);
-    
+      
     if (sortedMovies.length === 0) return [];
     
     const totalMovies = sortedMovies.length;
-    const p0 = targetPercentile[0] <= 1 ? targetPercentile[0] : targetPercentile[0] / 100;
-    const p1 = targetPercentile[1] <= 1 ? targetPercentile[1] : targetPercentile[1] / 100;
-    const startIndex = Math.floor(p0 * totalMovies);
-    const endIndex = Math.ceil(p1 * totalMovies);
+    const startIndex = Math.floor((targetPercentile[0] / 100) * totalMovies);
+    const endIndex = Math.ceil((targetPercentile[1] / 100) * totalMovies);
     
     return sortedMovies.slice(startIndex, Math.min(endIndex, totalMovies));
   },
-
+  
   calculateComparisonScore(movie, newMovie, genres) {
     let score = 0;
     
@@ -1033,7 +1122,7 @@ const MovieComparisonEngine = {
     
     return score;
   },
-
+  
   findBestComparison(categoryMovies, newMovie, genres) {
     if (categoryMovies.length === 0) return null;
     
@@ -1047,20 +1136,11 @@ const MovieComparisonEngine = {
 };
 
 // **CONFIDENCE-BASED COMPARISON MODAL**
-const ConfidenceBasedComparison = ({ 
-  visible, 
-  newMovie, 
-  availableMovies,
-  selectedSentiment, 
-  onClose, 
-  onComparisonComplete,
-  colors,
-  mediaType = 'movie'
-}) => {
+const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selectedSentiment, onClose, onComparisonComplete, colors, mediaType = 'movie' }) => {
   const [currentComparison, setCurrentComparison] = useState(0);
   const [currentOpponent, setCurrentOpponent] = useState(null);
   const [movieStats, setMovieStats] = useState({
-    rating: null, // Start unrated for true sentiment-based placement
+    rating: Math.max(1, Math.min(10, newMovie?.suggestedRating ?? 7.0)),
     standardError: CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
     comparisons: 0,
     wins: 0,
@@ -1078,14 +1158,14 @@ const ConfidenceBasedComparison = ({
       .map(m => m.userRating)
       .filter(r => r != null)
       .sort((a, b) => a - b);
-    
+
     const bands = [
-      [0.0, 0.25],   // LOVED: Top 25%
-      [0.25, 0.50],  // LIKED: Upper-middle 25%
-      [0.50, 0.75],  // AVERAGE: Lower-middle 25%
-      [0.75, 1.0]    // DISLIKED: Bottom 25%
+      [0.0, 0.25], // LOVED: Top 25%
+      [0.25, 0.50], // LIKED: Upper-middle 25%
+      [0.50, 0.75], // AVERAGE: Lower-middle 25%
+      [0.75, 1.0] // DISLIKED: Bottom 25%
     ];
-    
+
     // Start from sentiment band
     const sentimentToBand = {
       'LOVED': 0,
@@ -1093,9 +1173,9 @@ const ConfidenceBasedComparison = ({
       'AVERAGE': 2,
       'DISLIKED': 3
     };
-    
+
     const currentBand = sentimentToBand[selectedSentiment] || 1; // Default to LIKED if unknown
-    
+
     return {
       sorted: sortedRatings,
       bands: bands,
@@ -1109,50 +1189,33 @@ const ConfidenceBasedComparison = ({
     const [minPercentile, maxPercentile] = placementState.bands[bandIndex];
     const sortedMovies = seen
       .filter(m => m.userRating != null && !excludeIds.includes(m.id))
-      .filter(m => (m.mediaType || 'movie') === mediaType) // FIXED: Add mediaType safety
       .sort((a, b) => a.userRating - b.userRating);
-    
+
     if (sortedMovies.length === 0) return null;
-    
+
     const minIndex = Math.floor(minPercentile * sortedMovies.length);
     const maxIndex = Math.min(Math.ceil(maxPercentile * sortedMovies.length), sortedMovies.length - 1);
-    
     const bandMovies = sortedMovies.slice(minIndex, maxIndex + 1);
+
     if (bandMovies.length === 0) return null;
-    
+
     // Sample one randomly from the band
     const randomIndex = Math.floor(Math.random() * bandMovies.length);
     return bandMovies[randomIndex];
-  }, [placementState.bands, mediaType]);
+  }, [placementState.bands]);
 
   const placeAfterResult = useCallback((currentRating, opponentRating, didWin) => {
-    // Handle null rating (first comparison)
-    if (currentRating === null) {
-      if (didWin) {
-        // Place slightly above opponent
-        return Math.min(10, opponentRating + 0.2);
-      } else {
-        // Place slightly below opponent
-        return Math.max(1, opponentRating - 0.2);
-      }
-    }
-    
     if (didWin) {
       // **EDGE CASE: If opponent = 10.0 and user picks new movie → set 10.0 (cap)**
       if (opponentRating >= 10.0) {
         return 10.0;
       }
-      // Move above opponent
-      const step = 0.15;
+      // One spot above opponent; minimal tick
+      const step = 0.1;
       return Math.min(10, Math.max(opponentRating + step, currentRating));
     } else {
-      // **CRITICAL FIX: Move rating DOWN on losses (CODE_BIBLE: "Write code that's clear and obvious")**
-      if (opponentRating <= 1.0) {
-        return 1.0;
-      }
-      // Move below opponent  
-      const step = 0.15;
-      return Math.max(1, Math.min(opponentRating - step, currentRating));
+      // No immediate rating change; we'll probe lower band next
+      return currentRating;
     }
   }, []);
 
@@ -1166,6 +1229,7 @@ const ConfidenceBasedComparison = ({
   // Get confidence color based on interval width
   const getConfidenceColor = (intervalWidth) => {
     if (!intervalWidth) return CONFIDENCE_RATING_CONFIG.COLORS.CONFIDENCE_LOW;
+    
     if (intervalWidth <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH) {
       return CONFIDENCE_RATING_CONFIG.COLORS.CONFIDENCE_HIGH;
     } else if (intervalWidth <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH * 2) {
@@ -1175,21 +1239,11 @@ const ConfidenceBasedComparison = ({
     }
   };
 
-  // Get next opponent - sentiment-based for first, optimal for rest
+  // Get next opponent from current placement band
   const getNextOpponent = useCallback(() => {
-    // **PATCH #4: True sentiment-based first opponent**
-    const opponent = movieStats.rating == null
-      ? selectInitialOpponent(selectedSentiment, availableMovies.filter(m => (m.mediaType||'movie')===mediaType), [...usedOpponentIds, newMovie.id])
-      : selectOptimalOpponent(
-          movieStats.rating ?? 5.5,
-          movieStats.standardError ?? CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
-          availableMovies,
-          [...usedOpponentIds, newMovie.id],
-          mediaType
-        );
-    
-    return opponent;
-  }, [movieStats.rating, movieStats.standardError, selectedSentiment, availableMovies, usedOpponentIds, newMovie.id, mediaType]);
+    // Use deterministic band-based selection
+    return pickOpponentFromBand(availableMovies, placementState.currentBand, [...usedOpponentIds, newMovie.id]);
+  }, [pickOpponentFromBand, availableMovies, placementState.currentBand, usedOpponentIds, newMovie.id]);
 
   // Initialize comparison on modal open
   useEffect(() => {
@@ -1215,7 +1269,7 @@ const ConfidenceBasedComparison = ({
         }, 1000);
         return;
       }
-      
+
       const opponent = getNextOpponent();
       if (opponent) {
         setCurrentOpponent(opponent);
@@ -1227,125 +1281,155 @@ const ConfidenceBasedComparison = ({
   const handleComparison = useCallback(async (userChoice) => {
     if (!currentOpponent) return;
 
-    // **PATCH #2: Seed from sentiment if first comparison**
-    let seedStats = movieStats;
-    if (seedStats.rating == null) {
-      const seed = getSentimentBaseline(selectedSentiment, availableMovies);
-      seedStats = { ...movieStats, rating: seed };
-      console.log(`🎯 Seeded rating from sentiment ${selectedSentiment}: ${seed}`);
-    }
+    // **DETERMINISTIC PLACEMENT LOGIC**
+    const didWin = (userChoice === 'new');
+    const didTie = (userChoice === 'too_tough');
 
-    // **PATCH #3: Use unified kernel (no deterministic placement)**
-    const outcome = userChoice === 'new' ? 1 : (userChoice === 'too_tough' ? 0.5 : 0);
+    // Apply placement result rule
+    const newRating = placeAfterResult(movieStats.rating, currentOpponent.userRating, didWin);
 
-    // Build opponent stats
-    const oppStats = {
-      rating: currentOpponent.userRating ?? 5.5,
-      standardError: currentOpponent.ratingStats?.standardError ?? CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
-      comparisons: currentOpponent.ratingStats?.comparisons ?? 5
+    // Update movie statistics with deterministic placement
+    const newStats = {
+      ...movieStats,
+      rating: newRating,
+      comparisons: movieStats.comparisons + 1,
+      wins: movieStats.wins + (didWin ? 1 : 0),
+      losses: movieStats.losses + (!didWin && !didTie ? 1 : 0),
+      ties: movieStats.ties + (didTie ? 1 : 0)
     };
 
-    // Use unified confidence engine
-    const updated = unifiedRatingKernel(
-      seedStats,
-      oppStats.rating,
-      outcome === 1 ? 'win' : outcome === 0 ? 'loss' : 'tie',
-      oppStats
-    );
-    
-    setMovieStats(updated);
+    // Calculate confidence interval (fixed SE floor)
+    const n = Math.max(1, newStats.comparisons);
+    const winRate = Math.max(0.05, Math.min(0.95, newStats.wins / n)); // Clamp between 0.05-0.95
+    const se = Math.max(0.15, Math.sqrt((winRate * (1 - winRate)) / n) * 2.0); // Floor at 0.15
+
+    newStats.standardError = se;
+    newStats.confidenceInterval = {
+      lower: Math.max(1, newRating - 1.96 * se),
+      upper: Math.min(10, newRating + 1.96 * se),
+      width: 2 * 1.96 * se
+    };
+
+    setMovieStats(newStats);
 
     // Record comparison in history
     const comparisonRecord = {
       comparison: currentComparison,
       opponent: currentOpponent.title,
       result: userChoice,
-      ratingBefore: seedStats.rating,
-      ratingAfter: updated.rating,
-      confidenceInterval: updated.confidenceInterval
+      ratingBefore: movieStats.rating,
+      ratingAfter: newRating,
+      confidenceInterval: newStats.confidenceInterval
     };
+
     setComparisonHistory(prev => [...prev, comparisonRecord]);
 
     // Update used opponents
     setUsedOpponentIds(prev => [...prev, currentOpponent.id]);
-    
+
     // Update placement state
     setPlacementState(prev => ({
       ...prev,
-      lastOpponent: { id: currentOpponent.id, rating: currentOpponent.userRating }
+      lastOpponent: {
+        id: currentOpponent.id,
+        rating: currentOpponent.userRating
+      }
     }));
 
-    console.log(`📊 Comparison ${currentComparison}: Rating ${updated.rating?.toFixed(2)} ± ${updated.confidenceInterval?.width?.toFixed(2)}`);
+    console.log(`📊 Comparison ${currentComparison}: Rating ${newRating?.toFixed(2)} ± ${newStats.confidenceInterval?.width?.toFixed(2)}`);
 
-    // **FIXED STOPPING CRITERIA** (CODE_BIBLE: "Handle errors explicitly")
-    const shouldStop = (() => {
-      // Minimum rounds safety check
-      if (updated.comparisons < 3) return false;
+    // **DYNAMIC 3-6 ROUNDS STOPPING CRITERIA**
+    let shouldStop = false;
+    let stopReason = '';
+    
+    // Check if we've reached minimum comparisons
+    if (newStats.comparisons >= CONFIDENCE_RATING_CONFIG.CONFIDENCE.MIN_COMPARISONS) {
+      const confidenceWidth = newStats.confidenceInterval?.width || Infinity;
+      const ratingStability = comparisonHistory.length >= 1 ? 
+        Math.abs(newRating - (comparisonHistory[comparisonHistory.length - 1]?.ratingAfter || newRating)) : 
+        Infinity;
       
-      // Primary: Target confidence reached
-      const targetConfidenceReached = updated.confidenceInterval?.width <= 
-        CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH;
-      if (targetConfidenceReached && updated.comparisons >= 3) return true;
-      
-      // Secondary: Rating stability (only check if we have enough history)
-      if (updated.comparisons >= 4 && comparisonHistory.length >= 2) {
-        const lastTwoChanges = comparisonHistory.slice(-2);
-        const totalChange = Math.abs(
-          lastTwoChanges[1]?.ratingAfter - lastTwoChanges[0]?.ratingAfter
-        );
-        if (totalChange < 0.15) return true; // Stable rating found
+      // Check for excellent confidence (immediate stop)
+      if (confidenceWidth <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.CONFIDENCE_EXCELLENT) {
+        shouldStop = true;
+        stopReason = 'Excellent confidence achieved';
       }
-      
-      // Hard limits
-      return updated.comparisons >= 6 || // Maximum rounds
-             availableMovies.length <= usedOpponentIds.length + 1; // No opponents
-    })();
+      // Check for good confidence AND rating stability
+      else if (confidenceWidth <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.CONFIDENCE_GOOD && 
+               ratingStability <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.RATING_STABILITY_THRESHOLD) {
+        shouldStop = true;
+        stopReason = 'Good confidence with stable rating';
+      }
+      // Check if maximum comparisons reached
+      else if (newStats.comparisons >= CONFIDENCE_RATING_CONFIG.CONFIDENCE.MAX_COMPARISONS) {
+        shouldStop = true;
+        stopReason = 'Maximum comparisons reached';
+      }
+    }
+    
+    // Also stop if no more opponents available
+    if (availableMovies.length <= usedOpponentIds.length + 1) {
+      shouldStop = true;
+      stopReason = 'No more opponents available';
+    }
+    
+    console.log(`🎯 Round ${newStats.comparisons}: Confidence width=${newStats.confidenceInterval?.width?.toFixed(2)}, Stop=${shouldStop} (${stopReason})`);
 
     if (shouldStop) {
       // Rating complete
       setIsComplete(true);
       setTimeout(() => {
         onComparisonComplete({
-          finalRating: updated.rating,
-          ratingStats: updated,
+          finalRating: newRating,
+          ratingStats: newStats,
           comparisonHistory: [...comparisonHistory, comparisonRecord],
-          targetConfidenceReached: updated.confidenceInterval?.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH
+          targetConfidenceReached: newStats.confidenceInterval?.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH,
+          stopReason: stopReason,
+          totalRounds: newStats.comparisons
         });
       }, 2000);
     } else {
-      // **PATCH #3: Simplified opponent selection using unified kernel**
-      const nextOpponent = selectOptimalOpponent(
-        updated.rating ?? 5.5,
-        updated.standardError ?? CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
-        availableMovies,
-        [...usedOpponentIds, newMovie.id],
-        mediaType
-      );
+      // **FIX STATE LAG: Compute next band index synchronously**
+      const nextBandIndex = (!didWin && !didTie) ? 
+        Math.min(placementState.currentBand + 1, placementState.bands.length - 1) : 
+        placementState.currentBand;
+
+      // Get next opponent from correct band (sync calculation)
+      const nextOpponent = pickOpponentFromBand(availableMovies, nextBandIndex, [...usedOpponentIds, newMovie.id]);
+
+      // Update state to match what we just used
+      if (!didWin && !didTie) {
+        setPlacementState(prev => ({
+          ...prev,
+          currentBand: nextBandIndex
+        }));
+      }
 
       if (nextOpponent) {
         setCurrentOpponent(nextOpponent);
         setCurrentComparison(prev => prev + 1);
       } else {
-        // No more opponents available
+        // No more opponents available in any band
         setIsComplete(true);
         setTimeout(() => {
           onComparisonComplete({
-            finalRating: updated.rating,
-            ratingStats: updated,
+            finalRating: newRating,
+            ratingStats: newStats,
             comparisonHistory: [...comparisonHistory, comparisonRecord],
-            targetConfidenceReached: updated.confidenceInterval?.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH
+            targetConfidenceReached: newStats.confidenceInterval?.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH,
+            stopReason: 'No more opponents available',
+            totalRounds: newStats.comparisons
           });
         }, 2000);
       }
     }
   }, [currentOpponent, movieStats, currentComparison, comparisonHistory, getNextOpponent, onComparisonComplete]);
 
-
   const resetComparison = () => {
     setCurrentComparison(0);
     setCurrentOpponent(null);
     setMovieStats({
-      rating: null, // Start unrated for true sentiment-based placement
+      rating: Math.max(1, Math.min(10, newMovie?.suggestedRating ?? 7.0)),
       standardError: CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
       comparisons: 0,
       wins: 0,
@@ -1385,18 +1469,114 @@ const ConfidenceBasedComparison = ({
                 
                 {/* Confidence Indicator */}
                 <View style={styles.confidenceIndicator}>
+                  <Text style={[styles.confidenceLabel, { color: colors.subText }]}>
+                    Current Confidence:
+                  </Text>
+                  <View style={[
+                    styles.confidenceBadge,
+                    { backgroundColor: getConfidenceColor(movieStats.confidenceInterval?.width) }
+                  ]}>
+                    <Text style={styles.confidenceText}>
+                      {movieStats.confidenceInterval ? 
+                        `±${movieStats.confidenceInterval.width.toFixed(2)}` : 
+                        'Calculating...'
+                      }
+                    </Text>
+                  </View>
+                  <Text style={[styles.targetLabel, { color: colors.subText }]}>
+                    Target: ±{CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH}
+                  </Text>
+                </View>
 
+                {/* Current Rating Display */}
+                {movieStats.rating && (
+                  <View style={styles.currentRatingDisplay}>
+                    <Text style={[styles.currentRatingLabel, { color: colors.subText }]}>
+                      Current Rating:
+                    </Text>
+                    <Text style={[styles.currentRatingValue, { color: colors.accent }]}>
+                      {movieStats.rating.toFixed(2)}/10
+                    </Text>
+                  </View>
+                )}
+              </View>
 
+              <View style={styles.moviesComparison}>
+                {/* New Movie */}
+                <TouchableOpacity
+                  style={[styles.movieComparisonCard, styles.wildcardStyleCard]}
+                  onPress={() => handleComparison('new')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.posterContainer}>
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w500${newMovie?.poster_path}` }}
+                      style={styles.comparisonPoster}
+                      resizeMode="cover"
+                    />
+                    <View style={[styles.newMovieBadge, { backgroundColor: colors.accent }]}>
+                      <Text style={styles.newMovieText}>NEW</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                    {newMovie?.title || newMovie?.name}
+                  </Text>
+                  <Text style={[styles.movieCardYear, { color: colors.subText }]}>
+                    {newMovie?.release_date ? new Date(newMovie.release_date).getFullYear() : 'N/A'}
+                  </Text>
+                  {movieStats.rating && (
+                    <View style={[styles.ratingBadgeWildcard, { backgroundColor: colors.accent }]}>
+                      <Ionicons name="star" size={12} color="#FFF" />
+                      <Text style={styles.ratingTextWildcard}>
+                        {movieStats.rating.toFixed(1)}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
 
-                
                 {/* VS Indicator with Confidence */}
                 <View style={styles.vsIndicatorWildcard}>
+                  <View style={[styles.vsCircle, { borderColor: colors.accent }]}>
+                    <Text style={[styles.vsText, { color: colors.accent }]}>VS</Text>
+                  </View>
+                  <Text style={[styles.comparisonCountText, { color: colors.subText }]}>
+                    Round {currentComparison} of 3-6
+                  </Text>
+                  <Text style={[styles.informationGainText, { color: colors.subText }]}>
+                    Info Gain: High
+                  </Text>
+                </View>
 
+                {/* Opponent Movie */}
+                <TouchableOpacity
+                  style={[styles.movieComparisonCard, styles.wildcardStyleCard]}
+                  onPress={() => handleComparison('opponent')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.posterContainer}>
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w500${currentOpponent?.poster_path}` }}
+                      style={styles.comparisonPoster}
+                      resizeMode="cover"
+                    />
+                  </View>
+                  <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                    {currentOpponent?.title || currentOpponent?.name}
+                  </Text>
+                  <Text style={[styles.movieCardYear, { color: colors.subText }]}>
+                    {currentOpponent?.release_date ? new Date(currentOpponent.release_date).getFullYear() : 'N/A'}
+                  </Text>
+                  <View style={[styles.ratingBadgeWildcard, { backgroundColor: CONFIDENCE_RATING_CONFIG.COLORS.LIKED }]}>
+                    <Ionicons name="star" size={12} color="#FFF" />
+                    <Text style={styles.ratingTextWildcard}>
+                      {currentOpponent?.userRating?.toFixed(1)}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               </View>
-              
+
               {/* Too Tough to Decide Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.tooToughButton, { borderColor: colors.subText }]}
                 onPress={() => handleComparison('too_tough')}
                 activeOpacity={0.8}
@@ -1404,16 +1584,46 @@ const ConfidenceBasedComparison = ({
                 <Text style={[styles.tooToughText, { color: colors.subText }]}>
                   Too Tough to Decide
                 </Text>
-              
+              </TouchableOpacity>
+
+              {/* Confidence Indicator */}
+              {movieStats.comparisons > 0 && (
+                <View style={styles.confidenceContainer}>
+                  <Text style={[styles.confidenceLabel, { color: colors.subText }]}>
+                    Confidence Level
+                  </Text>
+                  <View style={[styles.confidenceBar, { backgroundColor: colors.surface }]}>
+                    <View 
+                      style={[
+                        styles.confidenceFill, 
+                        { 
+                          backgroundColor: getConfidenceColor(movieStats.confidenceInterval?.width),
+                          width: `${Math.max(0, Math.min(100, (1 - (movieStats.confidenceInterval?.width || 2) / 2) * 100))}%`
+                        }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={[styles.confidenceText, { color: colors.subText }]}>
+                    {movieStats.confidenceInterval ? 
+                      `±${movieStats.confidenceInterval.width.toFixed(2)} points` : 
+                      'Calculating...'}
+                  </Text>
+                </View>
+              )}
+
               {/* Progress Indicator */}
               <View style={styles.progressIndicator}>
-                {[0, 1, 2].map(index => (
+                {[0, 1, 2, 3, 4, 5].map(index => (
                   <View
                     key={index}
                     style={[
                       styles.progressDot,
                       { 
-                        backgroundColor: index <= currentComparison ? colors.accent : colors.border?.color || '#ccc'
+                        backgroundColor: index < currentComparison ? colors.accent : colors.border?.color || '#ccc',
+                        // Make dots smaller to fit 6 in the same space
+                        width: 8,
+                        height: 8,
+                        marginHorizontal: 3
                       }
                     ]}
                   />
@@ -1432,7 +1642,6 @@ const ConfidenceBasedComparison = ({
                     {comparisonHistory.filter(r => r.result === 'new').length}/{movieStats.comparisons} Wins
                   </Text>
                 </View>
-                
                 {/* Show final rating with confidence interval */}
                 <View style={[styles.ratingPreview, { borderColor: colors.accent }]}>
                   <Text style={[styles.ratingPreviewLabel, { color: colors.subText }]}>Final Rating:</Text>
@@ -1443,17 +1652,20 @@ const ConfidenceBasedComparison = ({
                     </Text>
                     {movieStats.confidenceInterval && (
                       <Text style={[styles.confidenceText, { color: colors.subText }]}>
-                        ±{(movieStats.confidenceInterval.width ?? 0).toFixed(2)}
+                        ±{movieStats.confidenceInterval.width.toFixed(2)}
                       </Text>
                     )}
                   </View>
                 </View>
               </View>
-              
+
               <View style={styles.resultsContainer}>
                 <Text style={[styles.resultsHeader, { color: colors.text }]}>Comparison Results:</Text>
                 {comparisonHistory.map((record, index) => (
-                  <View key={index} style={[styles.resultRowWildcard, { borderLeftColor: record.result === 'new' ? '#4CAF50' : record.result === 'too_tough' ? '#FF9800' : '#F44336' }]}>
+                  <View key={index} style={[styles.resultRowWildcard, { 
+                    borderLeftColor: record.result === 'new' ? '#4CAF50' : 
+                                   record.result === 'too_tough' ? '#FF9800' : '#F44336' 
+                  }]}>
                     <View style={styles.resultContent}>
                       <Text style={[styles.resultNumber, { color: colors.accent }]}>
                         #{record.comparison}
@@ -1461,19 +1673,22 @@ const ConfidenceBasedComparison = ({
                       <Text style={[styles.resultText, { color: colors.text }]}>
                         vs {record.opponent}
                       </Text>
-                      <View style={[styles.resultBadge, { backgroundColor: record.result === 'new' ? '#4CAF50' : record.result === 'too_tough' ? '#FF9800' : '#F44336' }]}>
+                      <View style={[styles.resultBadge, { 
+                        backgroundColor: record.result === 'new' ? '#4CAF50' : 
+                                       record.result === 'too_tough' ? '#FF9800' : '#F44336' 
+                      }]}>
                         <Text style={styles.resultBadgeText}>
-                          {record.result === 'new' ? 'WON' : record.result === 'too_tough' ? 'TIE' : 'LOST'}
+                          {record.result === 'new' ? 'WON' : 
+                           record.result === 'too_tough' ? 'TIE' : 'LOST'}
                         </Text>
                       </View>
                     </View>
                   </View>
                 ))}
-                
+
                 <View style={[styles.performanceSummary, { backgroundColor: colors.card || 'rgba(255,255,255,0.05)' }]}>
                   <Text style={[styles.performanceSummaryText, { color: colors.subText }]}>
-                    Performance Summary: 
-                    <Text style={{ color: colors.accent, fontWeight: 'bold' }}>
+                    Performance Summary: <Text style={{ color: colors.accent, fontWeight: 'bold' }}>
                       {movieStats.wins} wins, {movieStats.losses} losses, {movieStats.ties} ties
                     </Text>
                   </Text>
@@ -1486,8 +1701,8 @@ const ConfidenceBasedComparison = ({
               </View>
             </View>
           )}
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
             onPress={onClose}
           >
@@ -1504,10 +1719,10 @@ const ConfidenceBasedComparison = ({
 // Sentiment Rating Modal Component  
 const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors, userMovies }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
-
+  
   // Calculate dynamic categories based on user's rating history
   const RATING_CATEGORIES = calculateDynamicRatingCategories(userMovies);
-
+  
   // Default rating helper function
   const getDefaultRatingForCategory = (categoryKey) => {
     const defaults = {
@@ -1518,21 +1733,26 @@ const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors,
     };
     return defaults[categoryKey] || 5.0;
   };
-
+  
   const handleCategorySelect = useCallback((categoryKey) => {
     console.log('🎭 User selected sentiment:', categoryKey);
     setSelectedCategory(categoryKey);
     
     const category = RATING_CATEGORIES[categoryKey];
+    
     // Calculate mid-rating based on percentile position (default to dynamic midpoint for new users)
-    const midRating = userMovies && userMovies.length > 0 ? 
-      calculateMidRatingFromPercentile(userMovies, category.percentile) : 
+    const midRating = userMovies && userMovies.length > 0 ?
+      calculateMidRatingFromPercentile(userMovies, category.percentile) :
       getDefaultRatingForCategory(categoryKey);
     
-    const movieWithRating = { ...movie, suggestedRating: midRating };
+    const movieWithRating = {
+      ...movie,
+      suggestedRating: midRating
+    };
+    
     onRatingSelect(movieWithRating, categoryKey, midRating);
   }, [movie, onRatingSelect, RATING_CATEGORIES, userMovies]);
-
+  
   const renderSentimentButton = (categoryKey) => {
     const category = RATING_CATEGORIES[categoryKey];
     const isSelected = selectedCategory === categoryKey;
@@ -1551,7 +1771,7 @@ const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors,
         <TouchableOpacity
           style={[
             styles.sentimentButton,
-            { 
+            {
               backgroundColor: `${category.color}15`,
               borderColor: category.color,
               borderWidth: 1.5,
@@ -1578,7 +1798,7 @@ const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors,
       </View>
     );
   };
-
+  
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.modalOverlay}>
@@ -1594,7 +1814,7 @@ const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors,
             {Object.keys(RATING_CATEGORIES).map(renderSentimentButton)}
           </View>
           
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
             onPress={onClose}
           >
@@ -1609,10 +1829,10 @@ const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors,
 };
 
 // **SINGLE UNIFIED ENHANCED RATING BUTTON COMPONENT**
-const EnhancedRatingButton = ({ 
-  movie, 
-  seen, 
-  onAddToSeen, 
+const EnhancedRatingButton = ({
+  movie,
+  seen,
+  onAddToSeen,
   onUpdateRating,
   colors,
   buttonStyles,
@@ -1631,22 +1851,23 @@ const EnhancedRatingButton = ({
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [suggestedRating, setSuggestedRating] = useState(null);
   const [comparisonMovies, setComparisonMovies] = useState([]);
-
+  
   const isAlreadyRated = useMemo(() => {
     return seen?.some(item => item.id === movie?.id) || false;
   }, [seen, movie?.id]);
-
+  
   const currentRating = useMemo(() => {
     const ratedMovie = seen?.find(item => item.id === movie?.id);
     return ratedMovie?.userRating || null;
   }, [seen, movie?.id]);
-
+  
   const handleRateButtonPress = useCallback(() => {
     console.log('📱 Rate button pressed for:', movie?.title);
     if (!movie) return;
+    
     setSentimentModalVisible(true);
   }, [movie]);
-
+  
   const handleSentimentSelect = useCallback((movieWithRating, categoryKey, rating) => {
     console.log('🎭 Sentiment selected:', categoryKey, 'Rating:', rating);
     setSelectedCategory(categoryKey);
@@ -1664,7 +1885,7 @@ const EnhancedRatingButton = ({
       movie.id
     );
     
-    // Always route through Wildcard UI for 3 comparisons if enough movies exist 
+    // Always route through Wildcard UI for 3 comparisons if enough movies exist
     if (categoryMovies.length >= 3) {
       // Get best 3 comparison movies
       const scoredMovies = categoryMovies.map(m => ({
@@ -1683,8 +1904,10 @@ const EnhancedRatingButton = ({
     
     // Not enough movies for comparison, use category average but still show in wildcard-style UI
     const categoryAverage = calculateMidRatingFromPercentile(seen, categoryInfo.percentile);
+    
     // Create mock comparison movies if needed to demonstrate the flow
     const mockComparisons = seen.slice(0, 3).map(m => ({ ...m, comparisonScore: 50 }));
+    
     if (mockComparisons.length >= 3) {
       setComparisonMovies(mockComparisons);
       setComparisonModalVisible(true);
@@ -1692,7 +1915,7 @@ const EnhancedRatingButton = ({
       handleConfirmRating(categoryAverage);
     }
   }, [seen, movie, genres, handleConfirmRating]);
-
+  
   const handleComparisonComplete = useCallback((result) => {
     console.log('✅ Confidence-based comparison complete:', result);
     setComparisonModalVisible(false);
@@ -1700,14 +1923,17 @@ const EnhancedRatingButton = ({
     // Handle both old format (just rating) and new format (object with stats)
     const finalRating = typeof result === 'number' ? result : result.finalRating;
     const ratingStats = typeof result === 'object' ? result.ratingStats : null;
+    const stopReason = result.stopReason || 'Comparison complete';
+    const totalRounds = result.totalRounds || ratingStats?.comparisons || 3;
     
     console.log(`🎯 Final Rating: ${finalRating?.toFixed(2)} with confidence ±${ratingStats?.confidenceInterval?.width?.toFixed(2) || 'Unknown'}`);
-    console.log(`📊 Comparisons: ${ratingStats?.comparisons || 'Unknown'}, Target reached: ${result.targetConfidenceReached || false}`);
+    console.log(`📊 Total Rounds: ${totalRounds}, Stop Reason: ${stopReason}`);
+    console.log(`✨ Target reached: ${result.targetConfidenceReached || false}`);
     
-    handleConfirmRating(finalRating, ratingStats);
+    handleConfirmRating(finalRating, ratingStats, stopReason, totalRounds);
   }, [handleConfirmRating]);
-
-  const handleConfirmRating = useCallback((finalRating, ratingStats = null) => {
+  
+  const handleConfirmRating = useCallback((finalRating, ratingStats = null, stopReason = '', totalRounds = 3) => {
     console.log('✅ Confirming rating:', finalRating, 'for:', movie?.title);
     if (!movie || !finalRating) return;
     
@@ -1750,27 +1976,33 @@ const EnhancedRatingButton = ({
     const RATING_CATEGORIES = calculateDynamicRatingCategories(seen);
     const categoryLabel = RATING_CATEGORIES[selectedCategory]?.label || 'rated';
     
-    // Create confidence-based success message
+    // Create dynamic success message with stop reason
     const confidenceInfo = ratingStats ? 
-      `Confidence: ±${ratingStats.confidenceInterval?.width?.toFixed(2) || 'Unknown'} (${ratingStats.comparisons} comparisons)` :
+      `Confidence: ±${ratingStats.confidenceInterval?.width?.toFixed(2) || 'Unknown'} points` :
       'Standard rating applied';
     
     const targetReached = ratingStats?.confidenceInterval?.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH;
     
+    // Dynamic message based on stop reason
+    let statusEmoji = '✅';
+    if (stopReason.includes('Excellent')) statusEmoji = '🎯';
+    else if (stopReason.includes('Good')) statusEmoji = '✨';
+    else if (stopReason.includes('Maximum')) statusEmoji = '⏰';
+    
     Alert.alert(
-      `Rating Complete!`, 
-      `You ${categoryLabel.toLowerCase()} "${movie.title}" (${finalRating.toFixed(1)}/10)\n\n${confidenceInfo}\n${targetReached ? '✅ Target confidence reached!' : '⚠️ Stopped at maximum comparisons'}`,
+      "Rating Complete!",
+      `You ${categoryLabel.toLowerCase()} "${movie.title}" (${finalRating.toFixed(1)}/10)\n\n${confidenceInfo}\nCompleted in ${totalRounds} rounds\n\n${statusEmoji} ${stopReason}`,
       [
         {
           text: "Perfect!",
           onPress: () => {
-            console.log('🏠 Confidence-based rating completed, returning to app');
+            console.log(`🎊 Dynamic rating completed: ${totalRounds} rounds, ${stopReason}`);
           }
         }
       ]
     );
   }, [movie, selectedCategory, isAlreadyRated, onUpdateRating, onAddToSeen, mediaType, seen, onSuccess]);
-
+  
   const handleCloseModals = useCallback(() => {
     console.log('🚫 Closing modals');
     setSentimentModalVisible(false);
@@ -1779,7 +2011,7 @@ const EnhancedRatingButton = ({
     setSuggestedRating(null);
     setComparisonMovies([]);
   }, []);
-
+  
   // Dynamic button styles based on size and variant
   const getButtonStyles = () => {
     const baseStyle = {
@@ -1789,9 +2021,11 @@ const EnhancedRatingButton = ({
       borderRadius: size === 'small' ? 6 : size === 'large' ? 12 : 8,
       borderWidth: 1,
       borderColor: colors.accent,
-      backgroundColor: isAlreadyRated ? (colors.secondary || colors.primary) : colors.primary,
+      backgroundColor: isAlreadyRated ? 
+        (colors.secondary || colors.primary) : 
+        colors.primary,
     };
-
+    
     // Size-based padding
     if (size === 'small') {
       baseStyle.paddingVertical = 4;
@@ -1803,39 +2037,41 @@ const EnhancedRatingButton = ({
       baseStyle.paddingVertical = 8;
       baseStyle.paddingHorizontal = variant === 'icon-only' ? 12 : 16;
     }
-
+    
     // Variant-based adjustments
     if (variant === 'compact') {
       baseStyle.paddingVertical = Math.max(4, baseStyle.paddingVertical - 2);
       baseStyle.paddingHorizontal = Math.max(6, baseStyle.paddingHorizontal - 2);
     }
-
+    
     return baseStyle;
   };
-
+  
   const getIconSize = () => {
     if (size === 'small') return 12;
     if (size === 'large') return 20;
     return 16;
   };
-
+  
   const getTextSize = () => {
     if (size === 'small') return 12;
     if (size === 'large') return 16;
     return 14;
   };
-
+  
   const getButtonText = () => {
     if (variant === 'icon-only') return '';
+    
     if (isAlreadyRated) {
       if (showRatingValue && currentRating) {
         return variant === 'compact' ? `${currentRating.toFixed(1)}★` : `${currentRating.toFixed(1)}/10`;
       }
       return variant === 'compact' ? 'Edit' : 'Update Rating';
     }
+    
     return variant === 'compact' ? 'Rate' : 'Rate';
   };
-
+  
   return (
     <>
       <TouchableOpacity
@@ -1847,16 +2083,16 @@ const EnhancedRatingButton = ({
         onPress={handleRateButtonPress}
         activeOpacity={0.8}
       >
-        <Ionicons 
-          name={isAlreadyRated ? "star" : "star-outline"} 
-          size={getIconSize()} 
-          color={colors.accent} 
+        <Ionicons
+          name={isAlreadyRated ? "star" : "star-outline"}
+          size={getIconSize()}
+          color={colors.accent}
         />
         {variant !== 'icon-only' && (
           <Text style={[
             buttonStyles?.primaryButtonText || styles.defaultButtonText,
             styles.enhancedRateButtonText,
-            { 
+            {
               color: colors.accent,
               fontSize: getTextSize(),
               marginLeft: variant === 'compact' ? 4 : 6,
@@ -2108,7 +2344,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  
+
   // **Wildcard-Style Comparison Cards**
   wildcardStyleCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -2204,6 +2440,35 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginHorizontal: 4,
   },
+  confidenceContainer: {
+    marginTop: 20,
+    marginBottom: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center'
+  },
+  confidenceLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
+  },
+  confidenceBar: {
+    width: '100%',
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6
+  },
+  confidenceFill: {
+    height: '100%',
+    borderRadius: 4
+  },
+  confidenceText: {
+    fontSize: 11,
+    fontWeight: '500'
+  },
+
   // **Enhanced Completion Screen**
   completionScreen: {
     paddingVertical: 20,
@@ -2269,7 +2534,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  
+
   // **Rating Preview & Performance Summary**
   ratingPreview: {
     marginTop: 16,
@@ -2305,7 +2570,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-
   // Cancel Button
   cancelButton: {
     paddingVertical: 12,
@@ -2335,14 +2599,7 @@ const styles = StyleSheet.create({
 });
 
 // Quick Rating Button for Home Screen Cards
-const QuickRatingButton = ({ 
-  movie, 
-  seen, 
-  onAddToSeen, 
-  onUpdateRating,
-  colors,
-  onSuccess
-}) => {
+const QuickRatingButton = ({ movie, seen, onAddToSeen, onUpdateRating, colors, onSuccess }) => {
   return (
     <EnhancedRatingButton
       movie={movie}
@@ -2359,14 +2616,7 @@ const QuickRatingButton = ({
 };
 
 // Compact Rating Button for Lists
-const CompactRatingButton = ({ 
-  movie, 
-  seen, 
-  onAddToSeen, 
-  onUpdateRating,
-  colors,
-  onSuccess
-}) => {
+const CompactRatingButton = ({ movie, seen, onAddToSeen, onUpdateRating, colors, onSuccess }) => {
   return (
     <EnhancedRatingButton
       movie={movie}
@@ -2401,17 +2651,16 @@ const getRatingCategory = (rating, userMovies) => {
   }
   
   const sortedRatings = userMovies
-    .map(m => m.userRating || (m.eloRating / UNIFIED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
+    .map(m => m.userRating || (m.eloRating / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
     .filter(r => r && !isNaN(r))
     .sort((a, b) => a - b);
   
-  // Find rating's percentile position (FIXED: Normalize to 0-1)
+  // Find rating's percentile position
   const position = sortedRatings.findIndex(r => r >= rating);
-  const pct = position === -1 ? 1 : position / sortedRatings.length; // 0..1
+  const percentile = position === -1 ? 100 : (position / sortedRatings.length) * 100;
   
   for (const [key, category] of Object.entries(categories)) {
-    const [lo, hi] = category.percentile; // assumed 0..1
-    if (pct >= lo && pct <= hi) {
+    if (percentile >= category.percentile[0] && percentile <= category.percentile[1]) {
       return { key, ...category };
     }
   }
@@ -2427,7 +2676,7 @@ const getRatingCategory = (rating, userMovies) => {
  */
 export const adjustRatingWildcard = (winnerRating, loserRating, winnerWon, winnerGamesPlayed = 0, loserGamesPlayed = 5) => {
   const ratingDifference = Math.abs(winnerRating - loserRating);
-  const expectedWinProbability = 1 / (1 + Math.pow(UNIFIED_RATING_CONFIG.ELO_CONFIG.BASE, (loserRating - winnerRating) / UNIFIED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
+  const expectedWinProbability = 1 / (1 + Math.pow(ENHANCED_RATING_CONFIG.ELO_CONFIG.BASE, (loserRating - winnerRating) / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
   
   const winnerK = calculateDynamicKFactor(winnerGamesPlayed < 5 ? 2.0 : 1.0, winnerGamesPlayed);
   const loserK = calculateDynamicKFactor(loserGamesPlayed < 5 ? 2.0 : 1.0, loserGamesPlayed);
@@ -2503,90 +2752,121 @@ export const handleTooToughToDecide = (currentRating, opponentRating) => {
 };
 
 /**
- * Pairwise rating calculation using unified kernel
- * Updated to use the new unified rating system
+ * Pairwise rating calculation for backward compatibility
  */
 export const calculatePairwiseRating = (config) => {
-  const { 
-    aRating, 
-    bRating, 
-    aGames = 0, 
-    bGames = 0, 
-    result,
-    sentiment = null,
-    userMovies = []
-  } = config;
-
-  // Convert old result format to new format
-  let unifiedResult;
-  if (result === ComparisonResults.A_WINS) {
-    unifiedResult = 'win';
-  } else if (result === ComparisonResults.B_WINS) {
-    unifiedResult = 'loss';
-  } else {
-    unifiedResult = 'tie';
+  const { aRating, bRating, aGames = 0, bGames = 0, result, sentiment = null, userMovies = [] } = config;
+  
+  // Validate result parameter
+  const validResults = Object.values(ComparisonResults);
+  if (!validResults.includes(result)) {
+    throw new Error(`Invalid result: ${result}. Must be one of: ${validResults.join(', ')}`);
   }
-
-  // Handle case where movie A has no rating (first comparison)
+  
+  // Handle Round 1 case where new movie has no rating
   if (!aRating && bRating) {
-    const initialStats = {
-      rating: null,
-      standardError: UNIFIED_RATING_CONFIG.UNCERTAINTY.INITIAL,
-      comparisons: 0,
-      wins: 0,
-      losses: 0,
-      ties: 0
-    };
+    if (result === ComparisonResults.TIE) {
+      // For ties, still average but consider sentiment if available
+      const baseline = sentiment ? getSentimentBaseline(sentiment, userMovies) : bRating;
+      const avgRating = (baseline + bRating) / 2;
+      return {
+        updatedARating: Math.min(10, Math.max(1, avgRating + 0.05)),
+        updatedBRating: Math.min(10, Math.max(1, avgRating - 0.05))
+      };
+    }
     
-    const updatedStats = unifiedRatingKernel(initialStats, bRating, unifiedResult);
+    // FIXED: Use sentiment-aware baseline instead of blind ± 0.5
+    let newMovieRating;
+    if (sentiment) {
+      const sentimentBaseline = getSentimentBaseline(sentiment, userMovies);
+      
+      if (result === ComparisonResults.A_WINS) {
+        // New movie won - should be higher than opponent, but respect sentiment
+        newMovieRating = Math.max(sentimentBaseline, bRating + 0.3);
+      } else {
+        // New movie lost - should be lower than opponent, but respect sentiment
+        newMovieRating = Math.min(sentimentBaseline, bRating - 0.3);
+      }
+      
+      // Apply soft bounds based on sentiment (consultant's good idea, softly applied)
+      const baseline = ENHANCED_RATING_CONFIG.SENTIMENT_BASELINES[sentiment];
+      if (baseline) {
+        const { idealRange } = baseline;
+        // Soft enforcement - allow some drift but pull toward reasonable range
+        if (newMovieRating < idealRange[0] - 1.5) {
+          newMovieRating = idealRange[0] - 1.0; // Allow some flexibility
+        } else if (newMovieRating > idealRange[1] + 1.5) {
+          newMovieRating = idealRange[1] + 1.0; // Allow some flexibility
+        }
+      }
+    } else {
+      // Fallback to old logic if no sentiment
+      newMovieRating = bRating + (result === ComparisonResults.A_WINS ? 0.5 : -0.5);
+    }
     
     return {
-      updatedARating: updatedStats.rating,
-      updatedBRating: bRating // Opponent rating unchanged in simple mode
-    };
-  }
-
-  // Handle case where both movies have ratings
-  if (aRating && bRating) {
-    const aStats = {
-      rating: aRating,
-      standardError: Math.max(UNIFIED_RATING_CONFIG.UNCERTAINTY.MIN, 
-                             UNIFIED_RATING_CONFIG.UNCERTAINTY.INITIAL * Math.pow(0.9, aGames)),
-      comparisons: aGames,
-      wins: 0, // These could be tracked if needed
-      losses: 0,
-      ties: 0
-    };
-
-    const updatedAStats = unifiedRatingKernel(aStats, bRating, unifiedResult);
-    
-    // For simple pairwise, we only update A's rating
-    return {
-      updatedARating: updatedAStats.rating,
+      updatedARating: Math.min(10, Math.max(1, newMovieRating)),
       updatedBRating: bRating
     };
   }
-
-  // Fallback case
-  return {
-    updatedARating: aRating || 5.0,
-    updatedBRating: bRating || 5.0
-  };
+  
+  // For both movies having ratings
+  if (aRating && bRating) {
+    if (result === ComparisonResults.TIE) {
+      const averageRating = (aRating + bRating) / 2;
+      return {
+        updatedARating: Math.min(10, Math.max(1, averageRating + 0.05)),
+        updatedBRating: Math.min(10, Math.max(1, averageRating - 0.05))
+      };
+    }
+    
+    const aWon = result === ComparisonResults.A_WINS;
+    const eloResult = adjustRatingWildcard(
+      aWon ? aRating : bRating,
+      aWon ? bRating : aRating,
+      true,
+      aWon ? aGames : bGames,
+      aWon ? bGames : aGames
+    );
+    
+    return {
+      updatedARating: aWon ? eloResult.updatedSeenContent : eloResult.updatedNewContent,
+      updatedBRating: aWon ? eloResult.updatedNewContent : eloResult.updatedSeenContent
+    };
+  }
+  
+  throw new Error('Invalid pairwise rating configuration');
 };
 
 /**
- * Legacy K-factor calculation - now uses unified uncertainty model
+ * Legacy K-factor calculation for backward compatibility
  */
 export const calculateKFactor = (gamesPlayed) => {
-  // Convert games played to uncertainty estimate
-  const uncertainty = UNIFIED_RATING_CONFIG.UNCERTAINTY.INITIAL * 
-                     Math.pow(UNIFIED_RATING_CONFIG.UNCERTAINTY.DECAY_RATE, gamesPlayed);
-  
-  // Convert to legacy K-factor scale (0-1 range)
-  return Math.min(1.0, uncertainty / UNIFIED_RATING_CONFIG.UNCERTAINTY.INITIAL);
+  if (gamesPlayed < 5) return 0.5;
+  if (gamesPlayed < 10) return 0.25;
+  if (gamesPlayed < 20) return 0.125;
+  return 0.1;
 };
 
-// **CONSOLIDATED CALCULATION FUNCTIONS** 
+/**
+ * Legacy expected win probability calculation
+ */
+export const calculateExpectedWinProbability = (ratingA, ratingB) => {
+  return 1 / (1 + Math.pow(ENHANCED_RATING_CONFIG.ELO_CONFIG.BASE, (ratingB - ratingA) / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR));
+};
+
+/**
+ * Legacy rating calculation for InitialRatingFlow
+ */
+export const calculateNewRating = (currentRating, gamesPlayed, actualScore, expectedScore) => {
+  const kFactor = calculateKFactor(gamesPlayed);
+  const ratingChange = kFactor * 32 * (actualScore - expectedScore);
+  const newRating = currentRating + ratingChange;
+  
+  return Math.max(1.0, Math.min(10.0, newRating));
+};
+
+// **CONSOLIDATED CALCULATION FUNCTIONS**
 // Following CODE_BIBLE: Single source of truth for all rating calculations
 
 /**
@@ -2631,42 +2911,33 @@ const calculateRatingFromELOComparisons = (results, selectedMovie) => {
  * Consolidates all selectMovieFromPercentile implementations
  */
 const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => {
-  const { 
-    mediaType = null, 
-    excludeMovieId = null,
-    enableMediaTypeFilter = false,
-    enhancedLogging = false 
-  } = options;
-
-  const percentileRanges = UNIFIED_RATING_CONFIG.PERCENTILE_RANGES;
-
+  const { mediaType = null, excludeMovieId = null, enableMediaTypeFilter = false, enhancedLogging = false } = options;
+  const percentileRanges = ENHANCED_RATING_CONFIG.PERCENTILE_RANGES;
+  
   if (!seenMovies || seenMovies.length === 0) {
     if (enhancedLogging) console.log('🚨 No seen movies available');
     return null;
   }
-
+  
   // Apply media type filtering if enabled
   let filteredMovies = seenMovies;
   if (enableMediaTypeFilter && mediaType) {
     filteredMovies = seenMovies.filter(movie => 
-      movie.id !== excludeMovieId &&
-      (movie.mediaType || 'movie') === mediaType
+      movie.id !== excludeMovieId && (movie.mediaType || 'movie') === mediaType
     );
-    
     if (enhancedLogging) {
       console.log(`🎯 Available opponents for ${mediaType}:`, filteredMovies.length);
-      console.log(`🎯 Media type filter: ${mediaType}, Sample opponents:`, 
-        filteredMovies.slice(0, 3).map(m => `${m.title} (${m.mediaType || 'movie'})`));
+      console.log(`🎯 Media type filter: ${mediaType}, Sample opponents:`, filteredMovies.slice(0, 3).map(m => `${m.title} (${m.mediaType || 'movie'})`));
     }
   } else {
     // Standard filtering without media type
     filteredMovies = seenMovies.filter(movie => movie.id !== excludeMovieId);
   }
-
+  
   // Sort movies by rating to establish percentile ranges
   const sortedMovies = [...filteredMovies].sort((a, b) => (a.userRating || 0) - (b.userRating || 0));
-  const [minPercent, maxPercent] = percentileRanges[emotion] || [0.5, 0.75];
   
+  const [minPercent, maxPercent] = percentileRanges[emotion] || [0.5, 0.75];
   const startIndex = Math.floor(sortedMovies.length * minPercent);
   const endIndex = Math.min(Math.floor(sortedMovies.length * maxPercent), sortedMovies.length - 1);
   
@@ -2692,23 +2963,15 @@ const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => 
  * Consolidates handleComparison logic with screen-specific behavior
  */
 const handleComparisonUnified = async (screenConfig, comparisonParams) => {
-  const {
-    winner,
-    currentComparison,
-    comparisonMovies,
-    selectedMovie,
-    mediaType,
-    setCurrentMovieRating,
-    updateMovieInStorage
-  } = comparisonParams;
-
+  const { winner, currentComparison, comparisonMovies, selectedMovie, mediaType, setCurrentMovieRating, updateMovieInStorage } = comparisonParams;
+  
   const currentComparisonMovie = comparisonMovies[currentComparison];
   
   if (currentComparison === 0) {
     // FIRST COMPARISON: Unknown vs Known (use unified pairwise calculation)
     const opponentRating = currentComparisonMovie.userRating;
-    let result;
     
+    let result;
     if (winner === 'new') {
       result = ComparisonResults.A_WINS;
     } else if (winner === 'comparison') {
@@ -2738,11 +3001,7 @@ const handleComparisonUnified = async (screenConfig, comparisonParams) => {
     
     console.log(`🎯 Round 1 result: ${winner} -> Derived rating: ${derivedRating?.toFixed(2)}, Opponent updated: ${opponentNewRating?.toFixed(2)}`);
     
-    return {
-      derivedRating,
-      opponentNewRating,
-      isComplete: false
-    };
+    return { derivedRating, opponentNewRating, isComplete: false };
   }
   
   // Subsequent comparisons handled by existing logic
@@ -2758,13 +3017,13 @@ const calculateAverageRating = (rating1, rating2) => {
   return Math.max(1, Math.min(10, avg));
 };
 
-export { 
-  EnhancedRatingButton, 
-  QuickRatingButton, 
-  CompactRatingButton, 
+export {
+  EnhancedRatingButton,
+  QuickRatingButton,
+  CompactRatingButton,
   SentimentRatingModal,
   ConfidenceBasedComparison,
-  getRatingCategory, 
+  getRatingCategory,
   calculateDynamicRatingCategories,
   processConfidenceBasedRating,
   updateRatingWithConfidence,

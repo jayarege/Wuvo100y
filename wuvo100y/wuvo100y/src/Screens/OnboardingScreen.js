@@ -150,22 +150,10 @@ class OnboardingErrorBoundary extends React.Component {
   }
 }
 
-// COMMANDMENT 3: Handle errors explicitly - User-friendly error UI
-const OnboardingErrorFallback = ({ errorInfo, errorId, onRetry, onSkip, isDarkMode }) => {
-  const colors = {
-    background: isDarkMode ? '#1C2526' : '#FFFFFF',
-    text: isDarkMode ? '#F5F5F5' : '#333333',
-    error: '#FF6B6B',
-    warning: '#FFD93D',
-    button: '#FFD700'
-  };
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
 // COMMANDMENT 9: Unified removal utilities - Centralized cleanup
 const OnboardingCleanup = {
   // Clear all onboarding-related state and caches
-  clearAll: async (stateSetters = {}) => {
+  clearAll: async function(stateSetters = {}) {
     const operations = [
       // State cleanup
       () => stateSetters.setImageLoadErrors?.(new Set()),
@@ -176,9 +164,9 @@ const OnboardingCleanup = {
       
       // AsyncStorage cleanup
       () => AsyncStorage.multiRemove([
-        'temp_onboarding_selections',
-        'temp_onboarding_errors',
-        'onboarding_session_id',
+        'wuvo_user_preferences',
+        'last_onboarding_error',
+        'onboarding_complete',
         'onboarding_retry_count'
       ]).catch(error => console.warn('AsyncStorage cleanup failed:', error)),
       
@@ -242,6 +230,19 @@ const OnboardingCleanup = {
     }
   }
 };
+
+// COMMANDMENT 3: Handle errors explicitly - User-friendly error UI
+const OnboardingErrorFallback = ({ errorInfo, errorId, onRetry, onSkip, isDarkMode }) => {
+  const colors = {
+    background: isDarkMode ? '#1C2526' : '#FFFFFF',
+    text: isDarkMode ? '#F5F5F5' : '#333333',
+    error: '#FF6B6B',
+    warning: '#FFD93D',
+    button: '#FFD700'
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ 
         flex: 1, 
         justifyContent: 'center', 
@@ -538,14 +539,6 @@ const OnboardingScreen = ({ onComplete, isDarkMode = false }) => {
   }, []);
 
   // Render movie item with error handling
-  const renderMovieItem = useCallback(({ item: movie }) => {
-    const isSelected = selectedMovies.some(m => m.id === movie.id);
-    const hasImageError = imageLoadErrors.has(movie.id);
-    
-    return (
-      <TouchableOpacity
-        style={[styles.movieItem, isSelected && styles.selectedMovieItem]}
-        onPress={() => toggleMovieSelection(movie)}
   // COMMANDMENT 9: Unified removal utilities - Create cleanup handlers
   const movieCacheRef = useRef(new Map());
   const streamingCacheRef = useRef(new Set());
@@ -575,6 +568,40 @@ const OnboardingScreen = ({ onComplete, isDarkMode = false }) => {
       OnboardingCleanup.clearErrors(cleanupHandlers);
     }
   }, [criticalError, cleanupHandlers]);
+
+  const renderMovieItem = useCallback(({ item: movie }) => {
+    const isSelected = selectedMovies.some(m => m.id === movie.id);
+    const hasImageError = imageLoadErrors.has(movie.id);
+    
+    return (
+      <TouchableOpacity
+        style={[styles.movieItem, isSelected && styles.selectedMovieItem]}
+        onPress={() => toggleMovieSelection(movie)}
+      >
+        {hasImageError ? (
+          <View style={styles.moviePoster}>
+            <Text style={styles.errorText}>Image not available</Text>
+          </View>
+        ) : (
+          <Image
+            source={{ uri: getPosterUrl(movie.poster_path) }}
+            style={styles.moviePoster}
+            resizeMode="cover"
+            onError={(error) => handleImageError(movie.id, error)}
+            onLoadStart={() => console.log(`Loading image for ${movie.title}`)}
+          />
+        )}
+        {isSelected && (
+          <View style={styles.selectedOverlay}>
+            <Ionicons name="checkmark-circle" size={24} color="#FFD700" />
+          </View>
+        )}
+        <Text style={styles.movieTitle} numberOfLines={2}>
+          {movie.title}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [selectedMovies, toggleMovieSelection, getPosterUrl, imageLoadErrors, handleImageError]);
 // COMMANDMENT 1: Never assume - Validate props wrapper  
 // COMMANDMENT 3: Handle errors explicitly - Wrap with error boundary
 const SafeOnboardingScreen = ({ onComplete, isDarkMode = false, userId }) => {
@@ -610,33 +637,6 @@ const SafeOnboardingScreen = ({ onComplete, isDarkMode = false, userId }) => {
     </OnboardingErrorBoundary>
   );
 };
-        activeOpacity={0.7}
-      >
-        {hasImageError ? (
-          <View style={[styles.moviePoster, styles.errorPoster]}>
-            <Ionicons name="film-outline" size={40} color="#666" />
-            <Text style={styles.errorText}>Image Failed</Text>
-          </View>
-        ) : (
-          <Image
-            source={{ uri: getPosterUrl(movie.poster_path) }}
-            style={styles.moviePoster}
-            resizeMode="cover"
-            onError={(error) => handleImageError(movie.id, error)}
-            onLoadStart={() => console.log(`Loading image for ${movie.title}`)}
-          />
-        )}
-        {isSelected && (
-          <View style={styles.selectedOverlay}>
-            <Ionicons name="checkmark-circle" size={24} color="#FFD700" />
-          </View>
-        )}
-        <Text style={styles.movieTitle} numberOfLines={2}>
-          {movie.title}
-        </Text>
-      </TouchableOpacity>
-    );
-  }, [selectedMovies, toggleMovieSelection, getPosterUrl, imageLoadErrors, handleImageError]);
 
   // Render streaming service item
   const renderStreamingItem = useCallback(({ item: service }) => {

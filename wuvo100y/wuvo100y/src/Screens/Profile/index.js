@@ -96,7 +96,6 @@ import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
 import UserSearchModal from '../../Components/UserSearchModal';
 import { useAuth } from '../../hooks/useAuth';
-import FirebaseAuthTest from '../../Components/FirebaseAuthTest';
 // RatingModal replaced with EnhancedRatingSystem components
 import { 
   SentimentRatingModal, 
@@ -106,7 +105,7 @@ import {
 } from '../../Components/EnhancedRatingSystem';
 import MovieCard, { MOVIE_CARD_WIDTH } from '../../Components/MovieCard/MovieCard';
 import MovieDetailModal from '../../Components/MovieDetailModal/MovieDetailModal';
-import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion } from '../../Components/EnhancedRatingSystem';
+import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion, getStorageKey } from '../../Components/EnhancedRatingSystem';
 import { filterAdultContent } from '../../utils/ContentFiltering';
 import { movieUtils } from '../../utils/movieUtils';
 import { formatUtils } from '../../utils/formatUtils';
@@ -119,7 +118,7 @@ const POSTER_SIZE = (width - 60) / 3; // 3 columns with spacing
 const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows = [], isDarkMode, navigation, onUpdateRating, onAddToSeen, onRemoveFromWatchlist, genres, route }) => {
   const { mediaType } = useMediaType();
   const { handleLogout, userInfo } = useAuth();
-  const modalStyles = getModalStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
+  const styles = getModalStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const layoutStyles = getLayoutStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const headerStyles = getHeaderStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
@@ -154,7 +153,6 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const [showDropdown, setShowDropdown] = useState(false);
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
-  const [firebaseTestVisible, setFirebaseTestVisible] = useState(false);
   const [movieDetailModalVisible, setMovieDetailModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieCredits, setMovieCredits] = useState(null);
@@ -196,7 +194,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const [emotionModalVisible, setEmotionModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   
-  // Comparison modal state
+  // Comparison modal state - ALIGNED WITH GOLD STANDARD
   const [comparisonModalVisible, setComparisonModalVisible] = useState(false);
   const [comparisonMovies, setComparisonMovies] = useState([]);
   const [currentComparison, setCurrentComparison] = useState(0);
@@ -204,6 +202,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const [isComparisonComplete, setIsComparisonComplete] = useState(false);
   const [currentMovieRating, setCurrentMovieRating] = useState(null);
   const [selectedEmotion, setSelectedEmotion] = useState(null);
+  const [finalCalculatedRating, setFinalCalculatedRating] = useState(null);
   
   // Animation refs
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -883,11 +882,11 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       let result;
       
       if (winner === 'new') {
-        result = 'A_WINS';
+        result = ComparisonResults.A_WINS;
       } else if (winner === 'comparison') {
-        result = 'B_WINS';
+        result = ComparisonResults.B_WINS;
       } else if (winner === 'tie') {
-        result = 'TIE';
+        result = ComparisonResults.TIE;
       }
       
       const pairwiseResult = calculatePairwiseRating({
@@ -895,13 +894,40 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         bRating: opponentRating, // Opponent rating
         aGames: 0, // New movie has no games
         bGames: currentComparisonMovie.gamesPlayed || 5,
-        result: result
+        result: result,
+        sentiment: selectedEmotion, // Pass user's emotion selection - GOLD STANDARD COMPLIANCE
+        userMovies: seen // Pass user's movie history for baseline calculation - GOLD STANDARD COMPLIANCE
       });
       
       const derivedRating = pairwiseResult.updatedARating;
+      const opponentNewRating = pairwiseResult.updatedBRating;
+      
       setCurrentMovieRating(derivedRating);
       
-      console.log(`🎯 ROUND 1 BASELINE-FREE: ${selectedMovie?.title} derived rating: ${derivedRating} (from ${winner} vs ${currentComparisonMovie.title})`);
+      // Update opponent rating if it changed - GOLD STANDARD COMPLIANCE
+      if (opponentNewRating !== opponentRating) {
+        currentComparisonMovie.userRating = opponentNewRating;
+        // Save to storage
+        const updateOpponentRating = async () => {
+          try {
+            const storageKey = getStorageKey(mediaType);
+            const storedMovies = await AsyncStorage.getItem(storageKey);
+            if (storedMovies) {
+              const movies = JSON.parse(storedMovies);
+              const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
+              if (movieIndex !== -1) {
+                movies[movieIndex].userRating = opponentNewRating;
+                await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
+              }
+            }
+          } catch (error) {
+            console.error('Error updating opponent rating in Round 1:', error);
+          }
+        };
+        updateOpponentRating();
+      }
+      
+      console.log(`🎯 Round 1 (Unknown vs Known): ${winner.toUpperCase()} vs ${currentComparisonMovie.title} (${opponentRating}) -> New: ${derivedRating}, Opponent: ${opponentNewRating}`);
       
       setComparisonResults([{ winner, opponentRating, derivedRating }]);
       setCurrentComparison(1);
@@ -925,20 +951,54 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         aRating: currentRating,
         bRating: opponentRating,
         aGames: currentComparison,
-        bGames: currentComparisonMovie.gamesPlayed || 0,
+        bGames: currentComparisonMovie.gamesPlayed || 5,
         result: result
       });
       
       const adjustedRating = pairwiseResult.updatedARating;
+      const opponentNewRating = pairwiseResult.updatedBRating;
+      
       setCurrentMovieRating(adjustedRating);
       
-      console.log(`🎯 ROUND ${currentComparison + 1} CENTRALIZED ELO: ${selectedMovie?.title} rating: ${currentRating} → ${adjustedRating} (${winner} vs ${currentComparisonMovie.title})`);
+      // Update opponent rating if it changed - GOLD STANDARD COMPLIANCE
+      if (opponentNewRating !== opponentRating) {
+        currentComparisonMovie.userRating = opponentNewRating;
+        // Save to storage
+        const updateOpponentRating = async () => {
+          try {
+            const storageKey = getStorageKey(mediaType);
+            const storedMovies = await AsyncStorage.getItem(storageKey);
+            if (storedMovies) {
+              const movies = JSON.parse(storedMovies);
+              const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
+              if (movieIndex !== -1) {
+                movies[movieIndex].userRating = opponentNewRating;
+                await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
+              }
+            }
+          } catch (error) {
+            console.error('Error updating opponent rating in Round ' + (currentComparison + 1) + ':', error);
+          }
+        };
+        updateOpponentRating();
+      }
+      
+      console.log(`🎯 Round ${currentComparison + 1} (Known vs Known): ${winner.toUpperCase()} vs ${currentComparisonMovie.title} (${opponentRating}) -> New: ${adjustedRating}, Opponent: ${opponentNewRating}`);
       
       setComparisonResults(prev => [...prev, { winner, opponentRating, newRating: adjustedRating }]);
       
       if (currentComparison === 2) {
-        // All comparisons complete
+        // FINAL COMPARISON: Known vs Known - GOLD STANDARD COMPLETION FLOW
+        console.log(`🎯 Round ${currentComparison + 1} (Known vs Known - FINAL): ${winner.toUpperCase()} vs ${currentComparisonMovie.title} (${opponentRating}) -> Final: ${adjustedRating}, Opponent: ${opponentNewRating}`);
+        
+        // SET RATING FIRST, then show completion screen - GOLD STANDARD COMPLIANCE
+        console.log('🎯 SETTING finalCalculatedRating BEFORE completion screen:', adjustedRating);
+        setFinalCalculatedRating(adjustedRating);
         setIsComparisonComplete(true);
+        setTimeout(() => {
+          setComparisonModalVisible(false);
+          handleConfirmRating(adjustedRating);
+        }, 1500);
       } else {
         setCurrentComparison(currentComparison + 1);
       }
@@ -1692,14 +1752,6 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
           <Ionicons name="search-outline" size={24} color="#fff" />
         </TouchableOpacity>
 
-        {/* Firebase Auth Test Button - positioned below search button */}
-        <TouchableOpacity 
-          style={styles.floatingFirebaseButton}
-          onPress={() => setFirebaseTestVisible(true)}
-        >
-          <Ionicons name="flame-outline" size={24} color="#fff" />
-        </TouchableOpacity>
-
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Info Row */}
         <View style={styles.profileInfoRow}>
@@ -1957,24 +2009,18 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         isDarkMode={isDarkMode}
       />
 
-      {/* Firebase Auth Test Modal */}
-      {firebaseTestVisible && (
-        <FirebaseAuthTest 
-          onClose={() => setFirebaseTestVisible(false)}
-        />
-      )}
       
       {/* TopRated Edit Modal - now uses EnhancedRatingButton components */}
       
       {/* Top Movies Modal */}
       <Modal visible={topMoviesModalVisible} transparent animationType="fade">
-        <View style={modalStyles.modalOverlay}>
+        <View style={styles.modalOverlay}>
           <LinearGradient
             colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
             locations={[0, 0.1, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[modalStyles.modalContent, { 
+            style={[styles.modalContent, { 
             flex: 0,
             height: '90%',
             width: '90%',
@@ -1988,7 +2034,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
               >
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
-              <Text style={[modalStyles.modalTitle, { color: colors.text }]}>Top Movies</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Top Movies</Text>
               <View style={{ width: 24 }} />
             </View>
             
@@ -2198,13 +2244,13 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       
       {/* Watchlist Modal */}
       <Modal visible={watchlistModalVisible} transparent animationType="fade">
-        <View style={modalStyles.modalOverlay}>
+        <View style={styles.modalOverlay}>
           <LinearGradient
             colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
             locations={[0, 0.1, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[modalStyles.modalContent, { 
+            style={[styles.modalContent, { 
             flex: 0,
             height: '90%',
             width: '90%',
@@ -2218,7 +2264,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
               >
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
-              <Text style={[modalStyles.modalTitle, { color: colors.text }]}>Watchlist</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Watchlist</Text>
               <View style={{ width: 24 }} />
             </View>
             
@@ -2535,73 +2581,73 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       
       {/* Comparison Modal - Using Home screen implementation with movie theme */}
       <Modal visible={comparisonModalVisible} transparent animationType="none">
-        <View style={modalStyles.modalOverlay}>
+        <View style={styles.modalOverlay}>
           <LinearGradient
             colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
             locations={[0, 0.1, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[modalStyles.comparisonModalContent, {
+            style={[styles.comparisonModalContent, {
               borderWidth: 0.5,
               borderColor: colors.primaryGradient[1],
             }]}
           >
             {!isComparisonComplete ? (
               <>
-                <View style={modalStyles.comparisonHeader}>
-                  <Text style={[modalStyles.modalTitle, { color: getModalColors(true).text }]}>
+                <View style={styles.comparisonHeader}>
+                  <Text style={[styles.modalTitle, { color: getModalColors(false).text }]}>
                     🎬 Comparison {currentComparison + 1}/3
                   </Text>
-                  <Text style={[modalStyles.comparisonSubtitle, { color: getModalColors(true).subText }]}>
+                  <Text style={[styles.comparisonSubtitle, { color: getModalColors(false).subText }]}>
                     Which one do you prefer?
                   </Text>
                 </View>
                 
-                <View style={modalStyles.moviesComparison}>
+                <View style={styles.moviesComparison}>
                   {/* New Movie */}
                   <TouchableOpacity 
-                    style={modalStyles.movieComparisonCard}
+                    style={styles.movieComparisonCard}
                     onPress={() => handleComparison('new')}
                     activeOpacity={0.8}
                   >
                     <Image
                       source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
-                      style={modalStyles.comparisonPoster}
+                      style={styles.comparisonPoster}
                       resizeMode="cover"
                     />
-                    <Text style={[modalStyles.movieCardName, { color: getModalColors(true).text }]} numberOfLines={2}>
+                    <Text style={[styles.movieCardName, { color: getModalColors(false).text }]} numberOfLines={2}>
                       {selectedMovie?.title || selectedMovie?.name}
                     </Text>
-                    <Text style={[modalStyles.movieCardYear, { color: getModalColors(true).subText }]}>
+                    <Text style={[styles.movieCardYear, { color: getModalColors(false).subText }]}>
                       {selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 'N/A'}
                     </Text>
                   </TouchableOpacity>
                   
                   {/* VS Indicator */}
-                  <View style={modalStyles.vsIndicator}>
-                    <Text style={[modalStyles.vsText, { color: getModalColors(true).accent }]}>VS</Text>
+                  <View style={styles.vsIndicator}>
+                    <Text style={[styles.vsText, { color: getModalColors(false).accent }]}>VS</Text>
                   </View>
                   
                   {/* Comparison Movie */}
                   {comparisonMovies[currentComparison] && (
                     <TouchableOpacity 
-                      style={modalStyles.movieComparisonCard}
+                      style={styles.movieComparisonCard}
                       onPress={() => handleComparison('comparison')}
                       activeOpacity={0.8}
                     >
                       <Image
                         source={{ uri: `https://image.tmdb.org/t/p/w500${comparisonMovies[currentComparison]?.poster_path}` }}
-                        style={modalStyles.comparisonPoster}
+                        style={styles.comparisonPoster}
                         resizeMode="cover"
                       />
-                      <Text style={[modalStyles.movieCardName, { color: getModalColors(true).text }]} numberOfLines={2}>
+                      <Text style={[styles.movieCardName, { color: getModalColors(false).text }]} numberOfLines={2}>
                         {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
                       </Text>
-                      <Text style={[modalStyles.movieCardYear, { color: getModalColors(true).subText }]}>
+                      <Text style={[styles.movieCardYear, { color: getModalColors(false).subText }]}>
                         {comparisonMovies[currentComparison]?.release_date ? new Date(comparisonMovies[currentComparison].release_date).getFullYear() : 'N/A'}
                       </Text>
-                      <View style={[modalStyles.ratingBadge, { backgroundColor: getModalColors(true).accent }]}>
-                        <Text style={modalStyles.ratingText}>
+                      <View style={[styles.ratingBadge, { backgroundColor: getModalColors(false).accent }]}>
+                        <Text style={styles.ratingText}>
                           {comparisonMovies[currentComparison]?.userRating?.toFixed(1)}
                         </Text>
                       </View>
@@ -2610,14 +2656,14 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
                 </View>
 
                 {/* Progress Indicator */}
-                <View style={modalStyles.progressIndicator}>
+                <View style={styles.progressIndicator}>
                   {[0, 1, 2].map(index => (
                     <View
                       key={index}
                       style={[
-                        modalStyles.progressDot,
+                        styles.progressDot,
                         { 
-                          backgroundColor: index <= currentComparison ? getModalColors(true).accent : getModalColors(true).border?.color || '#ccc'
+                          backgroundColor: index <= currentComparison ? getModalColors(false).accent : getModalColors(false).border?.color || '#ccc'
                         }
                       ]}
                     />
@@ -2626,39 +2672,39 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
 
                 {/* Too Tough to Decide Button */}
                 <TouchableOpacity 
-                  style={[modalStyles.cancelButton, { borderColor: getModalColors(true).border?.color || '#ccc' }]}
+                  style={[styles.cancelButton, { borderColor: getModalColors(false).border?.color || '#ccc' }]}
                   onPress={() => {
                     console.log('User selected: Too tough to decide');
                     // Use unified pairwise calculation for TIE result
                     handleComparison('tie');
                   }}
                 >
-                  <Text style={[modalStyles.cancelButtonText, { color: getModalColors(true).subText }]}>Too Tough to Decide</Text>
+                  <Text style={[styles.cancelButtonText, { color: getModalColors(false).subText }]}>Too Tough to Decide</Text>
                 </TouchableOpacity>
               </>
             ) : (
               // Completion Screen
-              <View style={modalStyles.finalRatingModal}>
+              <View style={styles.finalRatingModal}>
                 {console.log('🎬 COMPLETION SCREEN RENDERING - finalCalculatedRating:', finalCalculatedRating)}
                 {/* Movie Poster */}
                 <Image
                   source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
-                  style={modalStyles.finalRatingPoster}
+                  style={styles.finalRatingPoster}
                   resizeMode="cover"
                 />
                 
                 {/* Movie Title */}
-                <Text style={modalStyles.finalRatingTitle} numberOfLines={1} ellipsizeMode="tail">
+                <Text style={styles.finalRatingTitle} numberOfLines={1} ellipsizeMode="tail">
                   {selectedMovie?.title || selectedMovie?.name}
                 </Text>
                 
                 {/* Movie Year */}
-                <Text style={modalStyles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
+                <Text style={styles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
                   ({selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : selectedMovie?.first_air_date ? new Date(selectedMovie.first_air_date).getFullYear() : 'N/A'})
                 </Text>
                 
                 {/* Final Score */}
-                <Text style={[modalStyles.finalRatingScore, { color: getModalColors(true).secondary }]}>
+                <Text style={[styles.finalRatingScore, { color: getModalColors(false).secondary }]}>
                   {(() => {
                     console.log('🔍 Rendering final score, finalCalculatedRating is:', finalCalculatedRating);
                     return finalCalculatedRating?.toFixed(1) || 'test';
@@ -2668,10 +2714,10 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
             )}
             
             <TouchableOpacity 
-              style={[modalStyles.cancelButton, { borderColor: getModalColors(true).border?.color || '#ccc' }]}
+              style={[styles.cancelButton, { borderColor: getModalColors(false).border?.color || '#ccc' }]}
               onPress={handleCloseEnhancedModals}
             >
-              <Text style={[modalStyles.cancelButtonText, { color: getModalColors(true).subText }]}>
+              <Text style={[styles.cancelButtonText, { color: getModalColors(false).subText }]}>
                 {isComparisonComplete ? 'Close' : 'Cancel'}
               </Text>
             </TouchableOpacity>
@@ -3113,15 +3159,6 @@ const styles = StyleSheet.create({
     right: 20,
     zIndex: 100,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  floatingFirebaseButton: {
-    position: 'absolute',
-    top: 110, // Below search button
-    right: 20,
-    zIndex: 100,
-    backgroundColor: 'rgba(255, 69, 0, 0.7)', // Firebase orange
     borderRadius: 20,
     padding: 8,
   },
@@ -3570,8 +3607,136 @@ const profileStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  // **Comparison Modal Styles from Home screen**
-  // **Final Rating Modal Styles**
+  
+  // **COMPARISON MODAL STYLES - EXACT COPY FROM HOME SCREEN GOLD STANDARD**
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  comparisonModalContent: {
+    width: '95%',
+    maxWidth: 500,
+    padding: 20,
+    borderRadius: 16,
+    maxHeight: '80%',
+  },
+  comparisonHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  comparisonSubtitle: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  moviesComparison: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  movieComparisonCard: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 8,
+  },
+  comparisonPoster: {
+    width: 120,
+    height: 180,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  movieCardName: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  movieCardYear: {
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  ratingBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  ratingText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  vsIndicator: {
+    marginHorizontal: 16,
+    paddingVertical: 8,
+  },
+  vsText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  progressIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  progressDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginHorizontal: 4,
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  
+  // **Final Rating Modal Styles - EXACT COPY FROM HOME SCREEN GOLD STANDARD**
+  finalRatingModal: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  finalRatingPoster: {
+    width: 120,
+    height: 180,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  finalRatingTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  finalRatingYear: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  finalRatingScore: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
 });
 
 export default ProfileScreen;
