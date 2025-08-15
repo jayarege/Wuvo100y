@@ -945,9 +945,9 @@ const processUnifiedRatingFlow = async (config) => {
         const lastRoundWon = comparisonHistory.length > 0 ? 
           comparisonHistory[comparisonHistory.length - 1].result === 'win' : true;
         
-        console.log(`🎯 Round ${round}: Adaptive ELO selection, current rating ${currentRating?.toFixed(2)}, last round: ${lastRoundWon ? 'WON' : 'LOST'}`);
+        console.log(`🎯 Round ${round}: Adaptive ELO selection, current rating ${currentMovieRating?.toFixed(2)}, last round: ${lastRoundWon ? 'WON' : 'LOST'}`);
         
-        opponent = selectAdaptiveELOOpponent(seenMovies, currentRating, lastRoundWon, [...usedOpponentIds, newMovie.id], mediaType);
+        opponent = selectAdaptiveELOOpponent(seenMovies, currentMovieRating, lastRoundWon, [...usedOpponentIds, newMovie.id], mediaType);
         
         // Fallback to random if no adaptive opponent found
         if (!opponent) {
