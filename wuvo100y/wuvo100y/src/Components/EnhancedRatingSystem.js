@@ -1151,6 +1151,9 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
   const [comparisonHistory, setComparisonHistory] = useState([]);
   const [isComplete, setIsComplete] = useState(false);
   const [usedOpponentIds, setUsedOpponentIds] = useState([]);
+  
+  // **CODE_BIBLE: "Update both ref and state" - Immediate exclusion tracking**
+  const usedOpponentIdsRef = useRef([]);
 
   // **RATING-PROXIMITY SELECTION STATE**
   const [placementState, setPlacementState] = useState(() => {
@@ -1279,16 +1282,21 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
 
   // Get next opponent using rating proximity
   const getNextOpponent = useCallback(() => {
+    // **CODE_BIBLE: Test edge cases where state updates might be delayed**
+    console.log(`🔍 getNextOpponent called - ref has ${usedOpponentIdsRef.current.length} used IDs, state has ${usedOpponentIds.length} used IDs`);
+    
     // Use current rating estimate or sentiment baseline for first round
     const currentRating = movieStats.rating || placementState.currentEstimate;
     
     // Consistent ±1 point radius for all rounds
     const searchRadius = 1.0; // ±1 point for all rounds
     
+    // **CODE_BIBLE: Use ref for immediate exclusion (not stale state)**
     // Ensure no movie is used more than once (excludeIds includes usedOpponentIds + newMovie)
-    const excludeIds = [...usedOpponentIds, newMovie.id];
+    const excludeIds = [...usedOpponentIdsRef.current, newMovie.id];
     
     console.log(`🎯 Round ${movieStats.comparisons + 1}: Looking for opponent near ${currentRating?.toFixed(1) || 'unknown'} (±${searchRadius} pts)`);
+    console.log(`🔧 CODE_BIBLE Fix: Using immediate ref [${usedOpponentIdsRef.current.join(',')}] instead of stale state`);
     console.log(`🚫 Excluded opponents: [${excludeIds.map(id => {
       const movie = availableMovies.find(m => m.id === id);
       return movie ? `${movie.title}(${id})` : `Unknown(${id})`;
@@ -1311,9 +1319,9 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
     
     if (opponent) {
       // **CRITICAL VALIDATION: Double-check opponent isn't already used**
-      if (usedOpponentIds.includes(opponent.id)) {
+      if (usedOpponentIdsRef.current.includes(opponent.id)) {
         console.error(`🚨 DUPLICATE OPPONENT DETECTED: ${opponent.title} (${opponent.id}) was already used!`);
-        console.error(`🚨 Used IDs: [${usedOpponentIds.join(', ')}]`);
+        console.error(`🚨 Used IDs: [${usedOpponentIdsRef.current.join(', ')}]`);
         console.error(`🚨 This should NEVER happen - opponent selection failed!`);
         return null; // Reject duplicate opponent
       }
@@ -1458,7 +1466,20 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
 
     setComparisonHistory(prev => [...prev, comparisonRecord]);
 
-    // Update used opponents
+    // **CODE_BIBLE: Update both ref and state for immediate exclusion tracking**
+    // 
+    // WHY DUPLICATES OCCURRED:
+    // - React's setState is asynchronous and batched
+    // - setUsedOpponentIds() doesn't update immediately 
+    // - getNextOpponent() called on line 1532 sees stale usedOpponentIds state
+    // - Same opponent could be selected multiple times in rapid succession
+    //
+    // HOW WE PREVENT DUPLICATES:
+    // - Update usedOpponentIdsRef.current IMMEDIATELY (synchronous)
+    // - getNextOpponent() uses usedOpponentIdsRef.current (always current)
+    // - Also update state for UI consistency (asynchronous, for display)
+    //
+    usedOpponentIdsRef.current = [...usedOpponentIdsRef.current, currentOpponent.id];
     setUsedOpponentIds(prev => [...prev, currentOpponent.id]);
 
     // Update placement state
@@ -1532,6 +1553,16 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
       const nextOpponent = getNextOpponent();
 
       if (nextOpponent) {
+        // **CODE_BIBLE: Never assume exclusion worked - validate explicitly**
+        if (usedOpponentIdsRef.current.includes(nextOpponent.id)) {
+          console.error(`🚨 CRITICAL: Exclusion validation FAILED! ${nextOpponent.title} already used!`);
+          console.error(`🚨 This indicates a bug in opponent selection logic.`);
+          // Force completion to prevent infinite loop
+          setIsComplete(true);
+          return;
+        }
+        
+        console.log(`✅ Exclusion validation PASSED: ${nextOpponent.title} is unique`);
         setCurrentOpponent(nextOpponent);
         setCurrentComparison(prev => prev + 1);
       } else {
@@ -1566,6 +1597,8 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
     setComparisonHistory([]);
     setIsComplete(false);
     setUsedOpponentIds([]);
+    // **CODE_BIBLE: Reset ref to match state**
+    usedOpponentIdsRef.current = [];
   };
 
   useEffect(() => {

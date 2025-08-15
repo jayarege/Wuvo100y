@@ -330,6 +330,11 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   }, [currentSeen, currentUnseen]);
 
   // TopRated data processing
+  // Memoized rating categories for performance (CODE_BIBLE Commandment 8)
+  const memoizedRatingCategories = useMemo(() => {
+    return calculateDynamicRatingCategories(currentSeen);
+  }, [currentSeen]);
+
   const mediaFilteredMovies = useMemo(() => {
     if (!currentSeen || !Array.isArray(currentSeen)) return [];
     
@@ -2532,7 +2537,9 @@ Please rate a few more movies first!`,
           handleEmotionSelected(categoryKey);
         }}
         colors={colors}
-        userMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
+        userMovies={currentSeen}
+        mediaType={mediaType}
+        memoizedRatingCategories={memoizedRatingCategories}
       />
 
       {/* **CONFIDENCE-BASED COMPARISON MODAL** */}
