@@ -226,6 +226,124 @@ const getModalStyles = (mediaType = 'movie', mode = 'light', theme) => {
       fontFamily: colors.font.body,
       textDecorationLine: 'underline',
     },
+
+    // COMPARISON MODAL STYLES - Added for Profile screen consistency with Home screen
+    comparisonModalContent: {
+      width: '95%',
+      maxWidth: 500,
+      padding: 20,
+      borderRadius: 16,
+      maxHeight: '80%',
+    },
+    comparisonHeader: {
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    comparisonSubtitle: {
+      fontSize: 14,
+      marginTop: 4,
+      color: colors.subText,
+    },
+    moviesComparison: {
+      flexDirection: 'row',
+      alignItems: 'flex-start', // Changed from 'center' to 'flex-start' for MovieCard alignment
+      justifyContent: 'space-around', // Added for better spacing
+      marginBottom: 20,
+      paddingHorizontal: 10, // Added padding for better spacing
+    },
+    movieComparisonCard: {
+      flex: 1,
+      alignItems: 'center',
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      marginHorizontal: 8,
+    },
+    comparisonPoster: {
+      width: 120,
+      height: 180,
+      borderRadius: 8,
+      marginBottom: 12,
+    },
+    movieCardName: {
+      fontSize: 14,
+      fontWeight: '600',
+      textAlign: 'center',
+      marginBottom: 4,
+      color: colors.text,
+    },
+    movieCardYear: {
+      fontSize: 12,
+      textAlign: 'center',
+      marginBottom: 8,
+      color: colors.subText,
+    },
+    vsIndicator: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginHorizontal: 8, // Reduced from 16 to 8 for tighter spacing
+      paddingVertical: 20, // Added vertical padding to center with MovieCards
+    },
+    vsText: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.accent,
+    },
+    ratingBadge: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderRadius: 12,
+    },
+    ratingText: {
+      color: '#FFF',
+      fontSize: 12,
+      fontWeight: 'bold',
+    },
+    progressIndicator: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    progressDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginHorizontal: 4,
+    },
+    finalRatingModal: {
+      alignItems: 'center',
+      paddingVertical: 20,
+    },
+    finalRatingPoster: {
+      width: 140,
+      height: 210,
+      borderRadius: 12,
+      marginBottom: 16,
+    },
+    finalRatingTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.text,
+      textAlign: 'center',
+      marginBottom: 8,
+      paddingHorizontal: 20,
+    },
+    finalRatingYear: {
+      fontSize: 12,
+      color: colors.subText,
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    finalRatingScore: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      textAlign: 'center',
+      color: colors.accent,
+    },
   });
 };
 

@@ -96,16 +96,23 @@ import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
 import UserSearchModal from '../../Components/UserSearchModal';
 import { useAuth } from '../../hooks/useAuth';
+import FirebaseAuthTest from '../../Components/FirebaseAuthTest';
 // RatingModal replaced with EnhancedRatingSystem components
 import { 
-  SentimentRatingModal, 
   calculateDynamicRatingCategories,
+  SentimentRatingModal, 
+  ConfidenceBasedComparison,
+  calculatePairwiseRating, 
+  ComparisonResults, 
+  selectOpponentFromEmotion, 
+  selectRandomOpponent, 
+  handleTooToughToDecide,
+  calculateRatingFromELOComparisons,
   selectMovieFromPercentileUnified,
   calculateAverageRating
 } from '../../Components/EnhancedRatingSystem';
 import MovieCard, { MOVIE_CARD_WIDTH } from '../../Components/MovieCard/MovieCard';
 import MovieDetailModal from '../../Components/MovieDetailModal/MovieDetailModal';
-import { calculatePairwiseRating, ComparisonResults, selectOpponentFromEmotion, getStorageKey } from '../../Components/EnhancedRatingSystem';
 import { filterAdultContent } from '../../utils/ContentFiltering';
 import { movieUtils } from '../../utils/movieUtils';
 import { formatUtils } from '../../utils/formatUtils';
@@ -118,7 +125,7 @@ const POSTER_SIZE = (width - 60) / 3; // 3 columns with spacing
 const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows = [], isDarkMode, navigation, onUpdateRating, onAddToSeen, onRemoveFromWatchlist, genres, route }) => {
   const { mediaType } = useMediaType();
   const { handleLogout, userInfo } = useAuth();
-  const styles = getModalStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
+  const modalStyles = getModalStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const layoutStyles = getLayoutStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const headerStyles = getHeaderStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
   const homeStyles = getHomeStyles(mediaType, isDarkMode ? 'dark' : 'light', theme);
@@ -153,6 +160,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const [showDropdown, setShowDropdown] = useState(false);
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [firebaseTestVisible, setFirebaseTestVisible] = useState(false);
   const [movieDetailModalVisible, setMovieDetailModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieCredits, setMovieCredits] = useState(null);
@@ -191,10 +199,6 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const [streamingProviders, setStreamingProviders] = useState([]);
   
   // Enhanced rating modal state
-  const [emotionModalVisible, setEmotionModalVisible] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  
-  // Comparison modal state - ALIGNED WITH GOLD STANDARD
   const [comparisonModalVisible, setComparisonModalVisible] = useState(false);
   const [comparisonMovies, setComparisonMovies] = useState([]);
   const [currentComparison, setCurrentComparison] = useState(0);
@@ -202,7 +206,9 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const [isComparisonComplete, setIsComparisonComplete] = useState(false);
   const [currentMovieRating, setCurrentMovieRating] = useState(null);
   const [selectedEmotion, setSelectedEmotion] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [finalCalculatedRating, setFinalCalculatedRating] = useState(null);
+  const [emotionModalVisible, setEmotionModalVisible] = useState(false);
   
   // Animation refs
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -809,69 +815,53 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     setComparisonResults([]);
     setIsComparisonComplete(false);
     setFinalCalculatedRating(null);
+    
+    // Reset rating flag when modals are closed/cancelled
+    console.log('🔓 Enhanced modals closed - rating flag reset');
   }, []);
   
   // Select movie from percentile based on emotion (from Home screen logic)
   const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
-    // Use unified percentile selection function
     return selectMovieFromPercentileUnified(seenMovies, emotion, {
+      mediaType,
+      excludeMovieId: selectedMovie?.id,
+      enableMediaTypeFilter: true,
       enhancedLogging: true
     });
-  }, []);
+  }, [mediaType, selectedMovie?.id]);
 
   const handleEmotionSelected = useCallback((emotion) => {
     console.log('🎭 PROFILE EMOTION SELECTED:', emotion);
     console.log('🎭 SEEN MOVIES COUNT:', seen.length);
     
+    // Check minimum count for rating
+    if (seen.length < 3) {
+      Alert.alert(
+        '🎬 Need More Ratings', 
+        `You need at least 3 total rated movies to use this feature.
+
+Currently you have: ${seen.length} rated movies.
+
+Please rate a few more movies first!`,
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+    
     setSelectedEmotion(emotion);
-    setEmotionModalVisible(false);
     // Don't clear selectedMovie here - keep it for comparison modal
     
-    // Select first opponent from percentile - EXACT COPY FROM HOME SCREEN LOGIC
-    const firstOpponent = selectMovieFromPercentile(seen, emotion);
-    if (!firstOpponent) {
-      console.log('❌ NO FIRST OPPONENT FOUND');
-      const errorData = formatUtils.getMinimumRatingError(
-        movieUtils.getMovieCount(seen, 'movie'),
-        'movie',
-        3
-      );
-      Alert.alert(errorData.title, errorData.message, errorData.buttons);
-      return;
-    }
-    
-    // Select second and third opponents randomly from all seen movies (for known vs known)
-    const remainingMovies = seen.filter(movie => movie.id !== firstOpponent.id);
-    
-    if (remainingMovies.length < 2) {
-      console.log('❌ NOT ENOUGH REMAINING MOVIES');
-      const errorData = formatUtils.getMinimumRatingError(
-        movieUtils.getMovieCount(seen, 'movie'),
-        'movie',
-        3
-      );
-      Alert.alert(errorData.title, errorData.message, errorData.buttons);
-      return;
-    }
-    
-    // Shuffle remaining movies and pick 2
-    const shuffled = remainingMovies.sort(() => 0.5 - Math.random());
-    const secondOpponent = shuffled[0];
-    const thirdOpponent = shuffled[1];
-    
-    // Set up comparison movies and start
-    setComparisonMovies([firstOpponent, secondOpponent, thirdOpponent]);
+    // Set up for ConfidenceBasedComparison modal
+    setComparisonMovies(seen); // Pass all available movies for dynamic selection
     setCurrentComparison(0);
     setComparisonResults([]);
     setIsComparisonComplete(false);
     setCurrentMovieRating(null);
     setComparisonModalVisible(true);
     
-    console.log(`🎭 Starting rating for ${selectedMovie?.title} with emotion: ${emotion} (no baseline)`);
-    console.log(`🎯 First opponent (${emotion} percentile): ${firstOpponent.title} (${firstOpponent.userRating})`);
-    console.log(`🎯 Second opponent (random): ${secondOpponent.title} (${secondOpponent.userRating})`);
-    console.log(`🎯 Third opponent (random): ${thirdOpponent.title} (${thirdOpponent.userRating})`);
-  }, [selectedMovie, seen, selectMovieFromPercentile]);
+    console.log(`🎭 Starting ConfidenceBasedComparison for ${selectedMovie?.title} with sentiment: ${emotion}`);
+    console.log(`🎯 Available movies for comparison: ${seen.length} total`);
+  }, [selectedMovie, seen]);
 
   const handleComparison = useCallback((winner) => {
     const currentComparisonMovie = comparisonMovies[currentComparison];
@@ -882,11 +872,11 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       let result;
       
       if (winner === 'new') {
-        result = ComparisonResults.A_WINS;
+        result = 'A_WINS';
       } else if (winner === 'comparison') {
-        result = ComparisonResults.B_WINS;
+        result = 'B_WINS';
       } else if (winner === 'tie') {
-        result = ComparisonResults.TIE;
+        result = 'TIE';
       }
       
       const pairwiseResult = calculatePairwiseRating({
@@ -894,40 +884,13 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         bRating: opponentRating, // Opponent rating
         aGames: 0, // New movie has no games
         bGames: currentComparisonMovie.gamesPlayed || 5,
-        result: result,
-        sentiment: selectedEmotion, // Pass user's emotion selection - GOLD STANDARD COMPLIANCE
-        userMovies: seen // Pass user's movie history for baseline calculation - GOLD STANDARD COMPLIANCE
+        result: result
       });
       
       const derivedRating = pairwiseResult.updatedARating;
-      const opponentNewRating = pairwiseResult.updatedBRating;
-      
       setCurrentMovieRating(derivedRating);
       
-      // Update opponent rating if it changed - GOLD STANDARD COMPLIANCE
-      if (opponentNewRating !== opponentRating) {
-        currentComparisonMovie.userRating = opponentNewRating;
-        // Save to storage
-        const updateOpponentRating = async () => {
-          try {
-            const storageKey = getStorageKey(mediaType);
-            const storedMovies = await AsyncStorage.getItem(storageKey);
-            if (storedMovies) {
-              const movies = JSON.parse(storedMovies);
-              const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
-              if (movieIndex !== -1) {
-                movies[movieIndex].userRating = opponentNewRating;
-                await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
-              }
-            }
-          } catch (error) {
-            console.error('Error updating opponent rating in Round 1:', error);
-          }
-        };
-        updateOpponentRating();
-      }
-      
-      console.log(`🎯 Round 1 (Unknown vs Known): ${winner.toUpperCase()} vs ${currentComparisonMovie.title} (${opponentRating}) -> New: ${derivedRating}, Opponent: ${opponentNewRating}`);
+      console.log(`🎯 ROUND 1 BASELINE-FREE: ${selectedMovie?.title} derived rating: ${derivedRating} (from ${winner} vs ${currentComparisonMovie.title})`);
       
       setComparisonResults([{ winner, opponentRating, derivedRating }]);
       setCurrentComparison(1);
@@ -951,54 +914,20 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         aRating: currentRating,
         bRating: opponentRating,
         aGames: currentComparison,
-        bGames: currentComparisonMovie.gamesPlayed || 5,
+        bGames: currentComparisonMovie.gamesPlayed || 0,
         result: result
       });
       
       const adjustedRating = pairwiseResult.updatedARating;
-      const opponentNewRating = pairwiseResult.updatedBRating;
-      
       setCurrentMovieRating(adjustedRating);
       
-      // Update opponent rating if it changed - GOLD STANDARD COMPLIANCE
-      if (opponentNewRating !== opponentRating) {
-        currentComparisonMovie.userRating = opponentNewRating;
-        // Save to storage
-        const updateOpponentRating = async () => {
-          try {
-            const storageKey = getStorageKey(mediaType);
-            const storedMovies = await AsyncStorage.getItem(storageKey);
-            if (storedMovies) {
-              const movies = JSON.parse(storedMovies);
-              const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
-              if (movieIndex !== -1) {
-                movies[movieIndex].userRating = opponentNewRating;
-                await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
-              }
-            }
-          } catch (error) {
-            console.error('Error updating opponent rating in Round ' + (currentComparison + 1) + ':', error);
-          }
-        };
-        updateOpponentRating();
-      }
-      
-      console.log(`🎯 Round ${currentComparison + 1} (Known vs Known): ${winner.toUpperCase()} vs ${currentComparisonMovie.title} (${opponentRating}) -> New: ${adjustedRating}, Opponent: ${opponentNewRating}`);
+      console.log(`🎯 ROUND ${currentComparison + 1} CENTRALIZED ELO: ${selectedMovie?.title} rating: ${currentRating} → ${adjustedRating} (${winner} vs ${currentComparisonMovie.title})`);
       
       setComparisonResults(prev => [...prev, { winner, opponentRating, newRating: adjustedRating }]);
       
       if (currentComparison === 2) {
-        // FINAL COMPARISON: Known vs Known - GOLD STANDARD COMPLETION FLOW
-        console.log(`🎯 Round ${currentComparison + 1} (Known vs Known - FINAL): ${winner.toUpperCase()} vs ${currentComparisonMovie.title} (${opponentRating}) -> Final: ${adjustedRating}, Opponent: ${opponentNewRating}`);
-        
-        // SET RATING FIRST, then show completion screen - GOLD STANDARD COMPLIANCE
-        console.log('🎯 SETTING finalCalculatedRating BEFORE completion screen:', adjustedRating);
-        setFinalCalculatedRating(adjustedRating);
+        // All comparisons complete
         setIsComparisonComplete(true);
-        setTimeout(() => {
-          setComparisonModalVisible(false);
-          handleConfirmRating(adjustedRating);
-        }, 1500);
       } else {
         setCurrentComparison(currentComparison + 1);
       }
@@ -1010,19 +939,32 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const handleConfirmRating = useCallback((finalRating) => {
     console.log('✅ PROFILE: Confirming rating:', finalRating, 'for:', selectedMovie?.title);
     if (!selectedMovie || !finalRating) return;
-
-    // Add movie to seen list with the calculated rating
-    onAddToSeen({
-      ...selectedMovie,
+    
+    // Store the final calculated rating for display
+    setFinalCalculatedRating(finalRating);
+    
+    const movieToAdd = {
+      id: selectedMovie.id,
+      title: selectedMovie.title || selectedMovie.name,
+      poster: selectedMovie.poster_path || selectedMovie.poster,
+      poster_path: selectedMovie.poster_path,
+      score: selectedMovie.vote_average || selectedMovie.score || 0,
+      vote_average: selectedMovie.vote_average,
+      voteCount: selectedMovie.vote_count || 0,
+      release_date: selectedMovie.release_date || selectedMovie.first_air_date,
+      genre_ids: selectedMovie.genre_ids || [],
+      overview: selectedMovie.overview || "",
+      adult: selectedMovie.adult || false,
       userRating: finalRating,
-      sentimentCategory: selectedEmotion,
-      eloRating: finalRating * 100,
-      comparisonWins: comparisonResults.filter(r => r.winner === 'new').length,
-      gamesPlayed: 3,
-      comparisonHistory: comparisonResults,
-    });
+      ratingCategory: selectedCategory,
+      sentiment: selectedEmotion,
+      timestamp: new Date().toISOString(),
+      confidence: selectedMovie.confidence || null
+    };
 
-    // Close all modals and reset state
+    onAddToSeen(movieToAdd);
+    
+    // Close modals and reset states
     setComparisonModalVisible(false);
     setSelectedMovie(null);
     setSelectedCategory(null);
@@ -1035,10 +977,10 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
 
     Alert.alert(
       "Rating Added!", 
-      `You rated "${selectedMovie.title}" (${finalRating.toFixed(1)}/10) from Profile watchlist`,
+      `You rated "${selectedMovie.title}" (${finalRating.toFixed(1)}/10) using ConfidenceBasedComparison`,
       [{ text: "OK" }]
     );
-  }, [selectedMovie, selectedEmotion, comparisonResults, onAddToSeen]);
+  }, [selectedMovie, selectedCategory, selectedEmotion, onAddToSeen]);
 
   // Render functions
   const renderGenreButton = useCallback(({ item }) => {
@@ -1752,6 +1694,14 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
           <Ionicons name="search-outline" size={24} color="#fff" />
         </TouchableOpacity>
 
+        {/* Firebase Auth Test Button - positioned below search button */}
+        <TouchableOpacity 
+          style={styles.floatingFirebaseButton}
+          onPress={() => setFirebaseTestVisible(true)}
+        >
+          <Ionicons name="flame-outline" size={24} color="#fff" />
+        </TouchableOpacity>
+
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Info Row */}
         <View style={styles.profileInfoRow}>
@@ -2009,18 +1959,24 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         isDarkMode={isDarkMode}
       />
 
+      {/* Firebase Auth Test Modal */}
+      {firebaseTestVisible && (
+        <FirebaseAuthTest 
+          onClose={() => setFirebaseTestVisible(false)}
+        />
+      )}
       
       {/* TopRated Edit Modal - now uses EnhancedRatingButton components */}
       
       {/* Top Movies Modal */}
       <Modal visible={topMoviesModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
+        <View style={modalStyles.modalOverlay}>
           <LinearGradient
             colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
             locations={[0, 0.1, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[styles.modalContent, { 
+            style={[modalStyles.modalContent, { 
             flex: 0,
             height: '90%',
             width: '90%',
@@ -2034,7 +1990,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
               >
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Top Movies</Text>
+              <Text style={[modalStyles.modalTitle, { color: colors.text }]}>Top Movies</Text>
               <View style={{ width: 24 }} />
             </View>
             
@@ -2244,13 +2200,13 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       
       {/* Watchlist Modal */}
       <Modal visible={watchlistModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
+        <View style={modalStyles.modalOverlay}>
           <LinearGradient
             colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
             locations={[0, 0.1, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[styles.modalContent, { 
+            style={[modalStyles.modalContent, { 
             flex: 0,
             height: '90%',
             width: '90%',
@@ -2264,7 +2220,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
               >
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Watchlist</Text>
+              <Text style={[modalStyles.modalTitle, { color: colors.text }]}>Watchlist</Text>
               <View style={{ width: 24 }} />
             </View>
             
@@ -2578,152 +2534,25 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         colors={colors}
         userMovies={seen.filter(item => (item.mediaType || 'movie') === mediaType)}
       />
-      
-      {/* Comparison Modal - Using Home screen implementation with movie theme */}
-      <Modal visible={comparisonModalVisible} transparent animationType="none">
-        <View style={styles.modalOverlay}>
-          <LinearGradient
-            colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
-            locations={[0, 0.1, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.comparisonModalContent, {
-              borderWidth: 0.5,
-              borderColor: colors.primaryGradient[1],
-            }]}
-          >
-            {!isComparisonComplete ? (
-              <>
-                <View style={styles.comparisonHeader}>
-                  <Text style={[styles.modalTitle, { color: getModalColors(false).text }]}>
-                    🎬 Comparison {currentComparison + 1}/3
-                  </Text>
-                  <Text style={[styles.comparisonSubtitle, { color: getModalColors(false).subText }]}>
-                    Which one do you prefer?
-                  </Text>
-                </View>
-                
-                <View style={styles.moviesComparison}>
-                  {/* New Movie */}
-                  <TouchableOpacity 
-                    style={styles.movieComparisonCard}
-                    onPress={() => handleComparison('new')}
-                    activeOpacity={0.8}
-                  >
-                    <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
-                      style={styles.comparisonPoster}
-                      resizeMode="cover"
-                    />
-                    <Text style={[styles.movieCardName, { color: getModalColors(false).text }]} numberOfLines={2}>
-                      {selectedMovie?.title || selectedMovie?.name}
-                    </Text>
-                    <Text style={[styles.movieCardYear, { color: getModalColors(false).subText }]}>
-                      {selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : 'N/A'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {/* VS Indicator */}
-                  <View style={styles.vsIndicator}>
-                    <Text style={[styles.vsText, { color: getModalColors(false).accent }]}>VS</Text>
-                  </View>
-                  
-                  {/* Comparison Movie */}
-                  {comparisonMovies[currentComparison] && (
-                    <TouchableOpacity 
-                      style={styles.movieComparisonCard}
-                      onPress={() => handleComparison('comparison')}
-                      activeOpacity={0.8}
-                    >
-                      <Image
-                        source={{ uri: `https://image.tmdb.org/t/p/w500${comparisonMovies[currentComparison]?.poster_path}` }}
-                        style={styles.comparisonPoster}
-                        resizeMode="cover"
-                      />
-                      <Text style={[styles.movieCardName, { color: getModalColors(false).text }]} numberOfLines={2}>
-                        {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
-                      </Text>
-                      <Text style={[styles.movieCardYear, { color: getModalColors(false).subText }]}>
-                        {comparisonMovies[currentComparison]?.release_date ? new Date(comparisonMovies[currentComparison].release_date).getFullYear() : 'N/A'}
-                      </Text>
-                      <View style={[styles.ratingBadge, { backgroundColor: getModalColors(false).accent }]}>
-                        <Text style={styles.ratingText}>
-                          {comparisonMovies[currentComparison]?.userRating?.toFixed(1)}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                </View>
 
-                {/* Progress Indicator */}
-                <View style={styles.progressIndicator}>
-                  {[0, 1, 2].map(index => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.progressDot,
-                        { 
-                          backgroundColor: index <= currentComparison ? getModalColors(false).accent : getModalColors(false).border?.color || '#ccc'
-                        }
-                      ]}
-                    />
-                  ))}
-                </View>
-
-                {/* Too Tough to Decide Button */}
-                <TouchableOpacity 
-                  style={[styles.cancelButton, { borderColor: getModalColors(false).border?.color || '#ccc' }]}
-                  onPress={() => {
-                    console.log('User selected: Too tough to decide');
-                    // Use unified pairwise calculation for TIE result
-                    handleComparison('tie');
-                  }}
-                >
-                  <Text style={[styles.cancelButtonText, { color: getModalColors(false).subText }]}>Too Tough to Decide</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              // Completion Screen
-              <View style={styles.finalRatingModal}>
-                {console.log('🎬 COMPLETION SCREEN RENDERING - finalCalculatedRating:', finalCalculatedRating)}
-                {/* Movie Poster */}
-                <Image
-                  source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovie?.poster_path}` }}
-                  style={styles.finalRatingPoster}
-                  resizeMode="cover"
-                />
-                
-                {/* Movie Title */}
-                <Text style={styles.finalRatingTitle} numberOfLines={1} ellipsizeMode="tail">
-                  {selectedMovie?.title || selectedMovie?.name}
-                </Text>
-                
-                {/* Movie Year */}
-                <Text style={styles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
-                  ({selectedMovie?.release_date ? new Date(selectedMovie.release_date).getFullYear() : selectedMovie?.first_air_date ? new Date(selectedMovie.first_air_date).getFullYear() : 'N/A'})
-                </Text>
-                
-                {/* Final Score */}
-                <Text style={[styles.finalRatingScore, { color: getModalColors(false).secondary }]}>
-                  {(() => {
-                    console.log('🔍 Rendering final score, finalCalculatedRating is:', finalCalculatedRating);
-                    return finalCalculatedRating?.toFixed(1) || 'test';
-                  })()}
-                </Text>
-              </View>
-            )}
-            
-            <TouchableOpacity 
-              style={[styles.cancelButton, { borderColor: getModalColors(false).border?.color || '#ccc' }]}
-              onPress={handleCloseEnhancedModals}
-            >
-              <Text style={[styles.cancelButtonText, { color: getModalColors(false).subText }]}>
-                {isComparisonComplete ? 'Close' : 'Cancel'}
-              </Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </Modal>
+      {/* **CONFIDENCE-BASED COMPARISON MODAL** */}
+      <ConfidenceBasedComparison
+        visible={comparisonModalVisible}
+        newMovie={{
+          ...selectedMovie,
+          suggestedRating: 7.0
+        }}
+        availableMovies={seen}
+        selectedSentiment={selectedEmotion}
+        onClose={handleCloseEnhancedModals}
+        onComparisonComplete={(result) => {
+          console.log('🎯 ConfidenceBasedComparison completed:', result);
+          handleConfirmRating(result.finalRating);
+          setComparisonModalVisible(false);
+        }}
+        colors={colors}
+        mediaType={mediaType}
+      />
       
       {/* Enhanced Filter Modal */}
       <Modal
@@ -3159,6 +2988,15 @@ const styles = StyleSheet.create({
     right: 20,
     zIndex: 100,
     backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  floatingFirebaseButton: {
+    position: 'absolute',
+    top: 110, // Below search button
+    right: 20,
+    zIndex: 100,
+    backgroundColor: 'rgba(255, 69, 0, 0.7)', // Firebase orange
     borderRadius: 20,
     padding: 8,
   },
@@ -3607,136 +3445,8 @@ const profileStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  
-  // **COMPARISON MODAL STYLES - EXACT COPY FROM HOME SCREEN GOLD STANDARD**
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  comparisonModalContent: {
-    width: '95%',
-    maxWidth: 500,
-    padding: 20,
-    borderRadius: 16,
-    maxHeight: '80%',
-  },
-  comparisonHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  comparisonSubtitle: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  moviesComparison: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  movieComparisonCard: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    marginHorizontal: 8,
-  },
-  comparisonPoster: {
-    width: 120,
-    height: 180,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  movieCardName: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  movieCardYear: {
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  ratingBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  ratingText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  vsIndicator: {
-    marginHorizontal: 16,
-    paddingVertical: 8,
-  },
-  vsText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  progressIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  progressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginHorizontal: 4,
-  },
-  cancelButton: {
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  
-  // **Final Rating Modal Styles - EXACT COPY FROM HOME SCREEN GOLD STANDARD**
-  finalRatingModal: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  finalRatingPoster: {
-    width: 120,
-    height: 180,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  finalRatingTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 20,
-  },
-  finalRatingYear: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  finalRatingScore: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
+  // **Comparison Modal Styles from Home screen**
+  // **Final Rating Modal Styles**
 });
 
 export default ProfileScreen;

@@ -20,6 +20,9 @@ const MOVIE_CARD_WIDTH_PROFILE = Math.max(
   60 // Minimum width reduced 35% (was 90, now 60)
 );
 
+// Comparison modal sizing - compact for side-by-side layout
+const MOVIE_CARD_WIDTH_COMPARISON = 120;
+
 // Constants for external use - CODE_BIBLE Commandment #3: Clear naming
 export const MOVIE_CARD_WIDTH = MOVIE_CARD_WIDTH_HOME;
 
@@ -51,6 +54,8 @@ const MovieCard = ({
       case 'home':
       case 'general':
         return MOVIE_CARD_WIDTH_HOME; // Larger cards for horizontal scrolling
+      case 'comparison':
+        return MOVIE_CARD_WIDTH_COMPARISON; // Compact cards for modal comparison
       case 'profile':
       case 'grid':
       default:
@@ -97,8 +102,8 @@ const MovieCard = ({
             </Text>
           )} */}
           
-          {/* NOT INTERESTED X BUTTON - TOP RIGHT - Hidden for Profile screen top movies/shows */}
-          {!(context === 'toprated' || context === 'toppicks-grid') && (
+          {/* NOT INTERESTED X BUTTON - TOP RIGHT - Hidden for Profile screen top movies/shows and comparison modal */}
+          {!(context === 'toprated' || context === 'toppicks-grid' || context === 'comparison') && (
             <TouchableOpacity
               style={{
                 position: 'absolute',
@@ -146,8 +151,41 @@ const MovieCard = ({
             borderBottomLeftRadius: 12, // Match MovieCard corner radius
             borderBottomRightRadius: 12 // Match MovieCard corner radius
           }]}>
-            {/* Show title on Home screen OR scores on Profile screen */}
-            {context !== 'toprated' && context !== 'toppicks-grid' ? (
+            {/* Show title on Home screen OR scores on Profile screen OR simple display for comparison */}
+            {context === 'comparison' ? (
+              // Comparison modal: Show just title and year like current implementation
+              <>
+                <Text
+                  style={[homeStyles.genreName, { 
+                    fontSize: 12, 
+                    lineHeight: 16, 
+                    marginBottom: 2,
+                    width: '100%',
+                    textAlign: 'center'
+                  }]}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                  allowFontScaling={false}
+                >
+                  {item.title || item.name || ''}
+                </Text>
+                <Text
+                  style={[homeStyles.genreName, { 
+                    fontSize: 10, 
+                    lineHeight: 14, 
+                    width: '100%',
+                    textAlign: 'center',
+                    opacity: 0.7
+                  }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  allowFontScaling={false}
+                >
+                  {item.release_date ? new Date(item.release_date).getFullYear() : 
+                   item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
+                </Text>
+              </>
+            ) : context !== 'toprated' && context !== 'toppicks-grid' ? (
               <Text
                 style={[homeStyles.genreName, { 
                   fontSize: 14, 
@@ -184,8 +222,8 @@ const MovieCard = ({
                 </Text>
               </View>
             )}
-            {/* Only show ratings on Home screen, hide on Profile screen */}
-            {context !== 'toprated' && context !== 'toppicks-grid' && (
+            {/* Only show ratings on Home screen, hide on Profile screen and comparison modal */}
+            {context !== 'toprated' && context !== 'toppicks-grid' && context !== 'comparison' && (
               <View style={[homeStyles.ratingRow, { width: '100%' }]}>
                 <View style={[homeStyles.ratingLine, { flex: 1 }]}>
                   <Ionicons name="star" size={12} color={colors.accent} />
