@@ -1526,7 +1526,9 @@ function HomeScreen({
         bRating: opponentRating, // Opponent rating
         aGames: 0, // New movie has no games
         bGames: currentComparisonMovie.gamesPlayed || 5,
-        result: result
+        result: result,
+        sentiment: selectedEmotion, // Pass user's emotion selection
+        userMovies: seen // Pass user's movie history for baseline calculation
       });
       
       const derivedRating = pairwiseResult.updatedARating;
