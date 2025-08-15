@@ -23,10 +23,12 @@ import {
   EnhancedRatingButton, 
   SentimentRatingModal, 
   calculateDynamicRatingCategories,
-  adjustRatingWildcard,
+  calculatePairwiseRating,
+  ComparisonResults,
   selectMovieFromPercentileUnified,
   calculateAverageRating
 } from '../../Components/EnhancedRatingSystem';
+import { STORAGE_KEYS } from '../../config/storageConfig';
 import { 
   isObfuscatedAdultContent, 
   hasSuspiciousAdultStructure, 
@@ -87,6 +89,8 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
   
   // CRITICAL FIX: Helper functions to get appropriate arrays based on media type
   // This matches the pattern used in Home screen and other components
+  const getStorageKey = (mediaType) => mediaType === 'movie' ? STORAGE_KEYS.MOVIES.SEEN : STORAGE_KEYS.TV_SHOWS.SEEN;
+  
   const getCurrentSeen = () => {
     console.log(`🎭 getCurrentSeen() called with mediaType: ${mediaType}`);
     
@@ -252,24 +256,51 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     const newMovieWon = winner === 'new';
     
     if (currentComparison === 0) {
-      // FIRST COMPARISON: Unknown vs Known (no baseline - pure comparison result)
+      // FIRST COMPARISON: Unknown vs Known (use unified pairwise calculation)
       const opponentRating = currentComparisonMovie.userRating;
-      let derivedRating;
+      let result;
       
       if (newMovieWon) {
-        // If unknown movie won, it should be rated higher than opponent
-        // Use a simple heuristic: winner gets opponent rating + small bonus
-        derivedRating = Math.min(10, opponentRating + 0.5);
+        result = ComparisonResults.A_WINS;
       } else {
-        // If unknown movie lost, it should be rated lower than opponent  
-        // Use a simple heuristic: loser gets opponent rating - small penalty
-        derivedRating = Math.max(1, opponentRating - 0.5);
+        result = ComparisonResults.B_WINS;
       }
       
-      // Round to nearest 0.1
-      derivedRating = Math.round(derivedRating * 10) / 10;
+      const pairwiseResult = calculatePairwiseRating({
+        aRating: null, // New movie has no rating yet
+        bRating: opponentRating, // Opponent rating
+        aGames: 0, // New movie has no games
+        bGames: currentComparisonMovie.gamesPlayed || 5,
+        result: result
+      });
+      
+      const derivedRating = pairwiseResult.updatedARating;
+      const opponentNewRating = pairwiseResult.updatedBRating;
       
       setCurrentMovieRating(derivedRating);
+      
+      // Update opponent rating if it changed
+      if (opponentNewRating !== opponentRating) {
+        currentComparisonMovie.userRating = opponentNewRating;
+        // Save to storage (same pattern as Home screen)
+        const updateOpponentRating = async () => {
+          try {
+            const storageKey = getStorageKey(mediaType);
+            const storedMovies = await AsyncStorage.getItem(storageKey);
+            if (storedMovies) {
+              const movies = JSON.parse(storedMovies);
+              const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
+              if (movieIndex !== -1) {
+                movies[movieIndex].userRating = opponentNewRating;
+                await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
+              }
+            }
+          } catch (error) {
+            console.error('Error updating opponent rating in Round 1:', error);
+          }
+        };
+        updateOpponentRating();
+      }
       
       console.log(`🎯 Round 1 (Unknown vs Known): ${newMovieWon ? 'WIN' : 'LOSS'} vs ${currentComparisonMovie.title} (${opponentRating}) -> Initial Rating: ${derivedRating}`);
       
@@ -277,29 +308,51 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
       setCurrentComparison(1);
       
     } else if (currentComparison < comparisonMovies.length - 1) {
-      // SUBSEQUENT COMPARISONS: Known vs Known
-      let updatedRating;
+      // SUBSEQUENT COMPARISONS: Known vs Known (use unified pairwise calculation)
+      const opponentRating = currentComparisonMovie.userRating;
+      let result;
+      
       if (newMovieWon) {
-        const { updatedSeenContent, updatedNewContent } = adjustRatingWildcard(
-          currentMovieRating,  // New movie current rating
-          currentComparisonMovie.userRating,  // Opponent rating
-          true,  // New movie won
-          currentComparison,  // New movie now has currentComparison games played
-          5      // Opponent has experience
-        );
-        updatedRating = updatedSeenContent;
+        result = ComparisonResults.A_WINS;
       } else {
-        const { updatedSeenContent, updatedNewContent } = adjustRatingWildcard(
-          currentComparisonMovie.userRating,  // Opponent won
-          currentMovieRating,  // New movie current rating
-          true,  // Opponent won
-          5,     // Opponent has experience
-          currentComparison   // New movie now has currentComparison games played
-        );
-        updatedRating = updatedNewContent;
+        result = ComparisonResults.B_WINS;
       }
       
+      const pairwiseResult = calculatePairwiseRating({
+        aRating: currentMovieRating, // New movie current rating
+        bRating: opponentRating, // Opponent rating
+        aGames: currentComparison, // New movie games played so far
+        bGames: currentComparisonMovie.gamesPlayed || 5,
+        result: result
+      });
+      
+      const updatedRating = pairwiseResult.updatedARating;
+      const opponentNewRating = pairwiseResult.updatedBRating;
+      
       setCurrentMovieRating(updatedRating);
+      
+      // Update opponent rating if it changed
+      if (opponentNewRating !== opponentRating) {
+        currentComparisonMovie.userRating = opponentNewRating;
+        // Save to storage
+        const updateOpponentRating = async () => {
+          try {
+            const storageKey = getStorageKey(mediaType);
+            const storedMovies = await AsyncStorage.getItem(storageKey);
+            if (storedMovies) {
+              const movies = JSON.parse(storedMovies);
+              const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
+              if (movieIndex !== -1) {
+                movies[movieIndex].userRating = opponentNewRating;
+                await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
+              }
+            }
+          } catch (error) {
+            console.error('Error updating opponent rating in Round ' + (currentComparison + 1) + ':', error);
+          }
+        };
+        updateOpponentRating();
+      }
       
       console.log(`🎯 Round ${currentComparison + 1} (Known vs Known): ${newMovieWon ? 'WIN' : 'LOSS'} vs ${currentComparisonMovie.title} (${currentComparisonMovie.userRating}) -> Rating: ${updatedRating}`);
       
@@ -307,26 +360,48 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
       setCurrentComparison(currentComparison + 1);
       
     } else {
-      // FINAL COMPARISON: Known vs Known
-      let finalRating;
+      // FINAL COMPARISON: Known vs Known (use unified pairwise calculation)
+      const opponentRating = currentComparisonMovie.userRating;
+      let result;
+      
       if (newMovieWon) {
-        const { updatedSeenContent, updatedNewContent } = adjustRatingWildcard(
-          currentMovieRating,  // New movie current rating
-          currentComparisonMovie.userRating,  // Opponent rating
-          true,  // New movie won
-          currentComparison,  // New movie now has currentComparison games played
-          5      // Opponent has experience
-        );
-        finalRating = updatedSeenContent;
+        result = ComparisonResults.A_WINS;
       } else {
-        const { updatedSeenContent, updatedNewContent } = adjustRatingWildcard(
-          currentComparisonMovie.userRating,  // Opponent won
-          currentMovieRating,  // New movie current rating
-          true,  // Opponent won
-          5,     // Opponent has experience
-          currentComparison   // New movie now has currentComparison games played
-        );
-        finalRating = updatedNewContent;
+        result = ComparisonResults.B_WINS;
+      }
+      
+      const pairwiseResult = calculatePairwiseRating({
+        aRating: currentMovieRating, // New movie current rating
+        bRating: opponentRating, // Opponent rating
+        aGames: currentComparison, // New movie games played so far
+        bGames: currentComparisonMovie.gamesPlayed || 5,
+        result: result
+      });
+      
+      const finalRating = pairwiseResult.updatedARating;
+      const opponentNewRating = pairwiseResult.updatedBRating;
+      
+      // Update opponent rating if it changed
+      if (opponentNewRating !== opponentRating) {
+        currentComparisonMovie.userRating = opponentNewRating;
+        // Save to storage
+        const updateOpponentRating = async () => {
+          try {
+            const storageKey = getStorageKey(mediaType);
+            const storedMovies = await AsyncStorage.getItem(storageKey);
+            if (storedMovies) {
+              const movies = JSON.parse(storedMovies);
+              const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
+              if (movieIndex !== -1) {
+                movies[movieIndex].userRating = opponentNewRating;
+                await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
+              }
+            }
+          } catch (error) {
+            console.error('Error updating opponent rating in Final Round:', error);
+          }
+        };
+        updateOpponentRating();
       }
       
       console.log(`🎯 Round ${currentComparison + 1} (Known vs Known - FINAL): ${newMovieWon ? 'WIN' : 'LOSS'} vs ${currentComparisonMovie.title} (${currentComparisonMovie.userRating}) -> Final Rating: ${finalRating}`);

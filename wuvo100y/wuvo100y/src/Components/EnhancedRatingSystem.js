@@ -13,6 +13,64 @@ import { STORAGE_KEYS } from '../config/storageConfig';
 // Dynamic storage keys based on media type (matching useMovieData hook)
 const getStorageKey = (mediaType) => mediaType === 'movie' ? STORAGE_KEYS.MOVIES.SEEN : STORAGE_KEYS.TV_SHOWS.SEEN;
 
+/**
+ * Get sentiment-aware starting rating based on user's history and emotion
+ * Combines consultant's good idea with user data respect
+ */
+const getSentimentBaseline = (sentiment, userMovies = []) => {
+  const baseline = ENHANCED_RATING_CONFIG.SENTIMENT_BASELINES[sentiment];
+  if (!baseline) return 5.5; // fallback
+  
+  // If user has insufficient data, use sentiment fallback
+  if (!userMovies || userMovies.length < 10) {
+    return baseline.fallback;
+  }
+  
+  // Find user's typical ratings in this sentiment range
+  const userRatings = userMovies
+    .map(m => m.userRating)
+    .filter(r => r != null)
+    .sort((a, b) => a - b);
+    
+  if (userRatings.length < 5) {
+    return baseline.fallback;
+  }
+  
+  // Calculate user's actual sentiment ranges based on percentiles
+  let sentimentMovies = [];
+  
+  if (sentiment === 'LOVED') {
+    // Top 25% of user's ratings
+    const cutoff = Math.floor(userRatings.length * 0.75);
+    sentimentMovies = userRatings.slice(cutoff);
+  } else if (sentiment === 'LIKED') {
+    // 50-75% percentile
+    const start = Math.floor(userRatings.length * 0.50);
+    const end = Math.floor(userRatings.length * 0.75);
+    sentimentMovies = userRatings.slice(start, end);
+  } else if (sentiment === 'AVERAGE') {
+    // 25-50% percentile  
+    const start = Math.floor(userRatings.length * 0.25);
+    const end = Math.floor(userRatings.length * 0.50);
+    sentimentMovies = userRatings.slice(start, end);
+  } else if (sentiment === 'DISLIKED') {
+    // Bottom 25%
+    const end = Math.floor(userRatings.length * 0.25);
+    sentimentMovies = userRatings.slice(0, end);
+  }
+  
+  if (sentimentMovies.length > 0) {
+    // Use user's actual average for this sentiment
+    const userSentimentAvg = sentimentMovies.reduce((a, b) => a + b, 0) / sentimentMovies.length;
+    
+    // Ensure it's reasonable (within broad bounds)
+    const { idealRange } = baseline;
+    return Math.max(idealRange[0] - 1, Math.min(idealRange[1] + 1, userSentimentAvg));
+  }
+  
+  return baseline.fallback;
+};
+
 // **ENHANCED RATING SYSTEM CONFIGURATION**
 const ENHANCED_RATING_CONFIG = {
   RATING_BOUNDS: {
@@ -48,6 +106,14 @@ const ENHANCED_RATING_CONFIG = {
     LIKED: [0.25, 0.50],    // Upper-middle 25%
     AVERAGE: [0.50, 0.75],  // Lower-middle 25%
     DISLIKED: [0.75, 1.0]   // Bottom 25%
+  },
+  
+  // Sentiment-aware starting baselines (consultant's good idea)
+  SENTIMENT_BASELINES: {
+    LOVED: { idealRange: [7.5, 9.5], fallback: 8.5 },
+    LIKED: { idealRange: [6.0, 8.0], fallback: 7.0 },
+    AVERAGE: { idealRange: [4.5, 6.5], fallback: 5.5 },
+    DISLIKED: { idealRange: [1.5, 4.5], fallback: 3.0 }
   },
   
   DYNAMIC_PERCENTILE_RANGES: {
@@ -2507,7 +2573,9 @@ export const calculatePairwiseRating = (config) => {
     bRating, 
     aGames = 0, 
     bGames = 0, 
-    result
+    result,
+    sentiment = null,
+    userMovies = []
   } = config;
   
   // Validate result parameter

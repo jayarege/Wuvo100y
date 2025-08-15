@@ -2,19 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { TMDB_API_KEY, STREAMING_SERVICES_PRIORITY } from '../Constants';
 
-// **STREAMING PROVIDER PAYMENT TYPE MAPPING** - Based on common provider business models
-const getProviderPaymentType = (providerId) => {
-  // Free services (ad-supported)
-  const freeProviders = [
+// **ENHANCED STREAMING PROVIDER PAYMENT TYPE MAPPING** - Respects user subscriptions
+const getProviderPaymentType = (providerId, userSubscriptions = []) => {
+  // If user is subscribed to this service, it's FREE for them
+  if (userSubscriptions.includes(providerId)) {
+    return 'free';
+  }
+  
+  // Inherently free services (ad-supported)
+  const inherentlyFreeProviders = [
     546, // YouTube
     613, // Tubi
-    350, // Apple TV (has free content)
     283, // Crackle
     207, // YouTube Movies
     457, // Vudu (has free with ads)
   ];
   
-  // Most major streaming services are paid
+  // All major streaming services are paid unless user subscribes
   const paidProviders = [
     8,   // Netflix
     384, // HBO Max
@@ -22,6 +26,7 @@ const getProviderPaymentType = (providerId) => {
     15,  // Hulu
     337, // Disney+
     387, // Peacock Premium
+    350, // Apple TV+
     1899, // Max
     531, // Paramount+
     26,  // Crunchyroll
@@ -29,14 +34,14 @@ const getProviderPaymentType = (providerId) => {
     286, // Showtime
   ];
   
-  if (freeProviders.includes(providerId)) return 'free';
+  if (inherentlyFreeProviders.includes(providerId)) return 'free';
   if (paidProviders.includes(providerId)) return 'paid';
   
-  // Default to paid for unknown providers (most streaming services are paid)
+  // Default to paid for unknown providers
   return 'paid';
 };
 
-export const StreamingProviders = ({ movie, visible, style }) => {
+export const StreamingProviders = ({ movie, visible, style, userSubscriptions = [] }) => {
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -83,7 +88,9 @@ export const StreamingProviders = ({ movie, visible, style }) => {
     <View style={[styles.container, style]}>
       <View style={styles.providersRow}>
         {providers.map((provider) => {
-          const paymentType = getProviderPaymentType(provider.provider_id);
+          const paymentType = getProviderPaymentType(provider.provider_id, userSubscriptions);
+          const isSubscribed = userSubscriptions.includes(provider.provider_id);
+          
           return (
             <View key={provider.provider_id} style={styles.providerItem}>
               <Image
@@ -92,7 +99,7 @@ export const StreamingProviders = ({ movie, visible, style }) => {
                   styles.providerLogo,
                   {
                     borderColor: paymentType === 'paid' ? '#FF4444' : '#22C55E',
-                    borderWidth: 0.5,
+                    borderWidth: isSubscribed ? 2 : 0.5,  // Thicker border for subscribed
                   }
                 ]}
                 resizeMode="contain"
@@ -101,13 +108,15 @@ export const StreamingProviders = ({ movie, visible, style }) => {
                 styles.paymentIndicator,
                 {
                   color: paymentType === 'paid' ? '#FF4444' : '#22C55E',
+                  fontWeight: isSubscribed ? '900' : 'bold', // Bolder text for subscribed
                 }
               ]}>
-                {paymentType === 'paid' ? '$' : 'FREE'}
+                {paymentType === 'paid' ? '$' : (isSubscribed ? 'YOURS' : 'FREE')}
               </Text>
             </View>
           );
         })}
+      </View>}
       </View>
     </View>
   );
