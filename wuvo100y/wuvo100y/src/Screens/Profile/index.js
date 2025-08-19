@@ -119,6 +119,7 @@ import { formatUtils } from '../../utils/formatUtils';
 import { StreamingProviders } from '../../Components/StreamingProviders';
 import { TMDB_API_KEY, API_TIMEOUT, STREAMING_SERVICES, DECADES, STREAMING_SERVICES_PRIORITY } from '../../Constants';
 import { ENV } from '../../config/environment';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const POSTER_SIZE = (width - 60) / 3; // 3 columns with spacing
 
@@ -212,6 +213,14 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [finalCalculatedRating, setFinalCalculatedRating] = useState(null);
   const [emotionModalVisible, setEmotionModalVisible] = useState(false);
+  
+  // Advanced filter states
+  const [advancedFilterVisible, setAdvancedFilterVisible] = useState(false);
+  const [selectedAdvancedStreamingServices, setSelectedAdvancedStreamingServices] = useState([]);
+  const [userRatingMin, setUserRatingMin] = useState(null);
+  const [userRatingMax, setUserRatingMax] = useState(null);
+  const [friendRatingMin, setFriendRatingMin] = useState(null);
+  const [friendRatingMax, setFriendRatingMax] = useState(null);
   
   // Animation refs
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -503,10 +512,36 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       });
     }
 
-    return filtered;
-  }, [selectedGenres, selectedDecades, selectedStreamingServices, selectedPaymentTypes, selectedStreamingProviders, selectedGenreId, sortedMovies, mediaType]);
+    // Apply NEW advanced filters (our implementation)
+    const advancedFilters = {
+      selectedStreamingServices: selectedAdvancedStreamingServices,
+      userRatingMin,
+      userRatingMax,
+      friendRatingMin,
+      friendRatingMax
+    };
+    
+    filtered = applyAdvancedFilters(filtered, advancedFilters);
 
-  const hasActiveFilters = selectedGenres.length > 0 || selectedDecades.length > 0 || selectedStreamingServices.length > 0 || selectedPaymentTypes.length > 0 || selectedStreamingProviders.length > 0;
+    return filtered;
+  }, [
+    selectedGenres, 
+    selectedDecades, 
+    selectedStreamingServices, 
+    selectedPaymentTypes, 
+    selectedStreamingProviders, 
+    selectedGenreId, 
+    sortedMovies, 
+    mediaType,
+    selectedAdvancedStreamingServices,
+    userRatingMin,
+    userRatingMax,
+    friendRatingMin,
+    friendRatingMax,
+    applyAdvancedFilters
+  ]);
+
+  const hasActiveFilters = selectedGenres.length > 0 || selectedDecades.length > 0 || selectedStreamingServices.length > 0 || selectedPaymentTypes.length > 0 || selectedStreamingProviders.length > 0 || selectedAdvancedStreamingServices.length > 0 || userRatingMin !== null || userRatingMax !== null || friendRatingMin !== null || friendRatingMax !== null;
 
   // TopRated helper functions
   const fetchMovieCredits = useCallback(async (movieId) => {
@@ -616,6 +651,158 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       })));
     }
   }, [mediaType, getSecureImageUrl]);
+  
+  // Advanced filter state persistence
+  useEffect(() => {
+    const loadAdvancedFilterState = async () => {
+      try {
+        const savedState = await AsyncStorage.getItem('profileAdvancedFilters');
+        if (savedState) {
+          const filters = JSON.parse(savedState);
+          setSelectedAdvancedStreamingServices(filters.streamingServices || []);
+          setUserRatingMin(filters.userRatingMin || null);
+          setUserRatingMax(filters.userRatingMax || null);
+          setFriendRatingMin(filters.friendRatingMin || null);
+          setFriendRatingMax(filters.friendRatingMax || null);
+        }
+      } catch (error) {
+        console.error('Error loading advanced filter state:', error);
+      }
+    };
+    
+    loadAdvancedFilterState();
+  }, []);
+
+  // Save advanced filter state when any filter changes
+  useEffect(() => {
+    const saveAdvancedFilterState = async () => {
+      try {
+        const filterState = {
+          streamingServices: selectedAdvancedStreamingServices,
+          userRatingMin,
+          userRatingMax,
+          friendRatingMin,
+          friendRatingMax
+        };
+        await AsyncStorage.setItem('profileAdvancedFilters', JSON.stringify(filterState));
+      } catch (error) {
+        console.error('Error saving advanced filter state:', error);
+      }
+    };
+    
+    // Only save if any filters are set (avoid saving initial empty state)
+    if (selectedAdvancedStreamingServices.length > 0 || 
+        userRatingMin !== null || userRatingMax !== null ||
+        friendRatingMin !== null || friendRatingMax !== null) {
+      saveAdvancedFilterState();
+    }
+  }, [selectedAdvancedStreamingServices, userRatingMin, userRatingMax, friendRatingMin, friendRatingMax]);
+  // Friend rating aggregation functions
+  const aggregateFriendRatings = useCallback(async (movieId, userId) => {
+    try {
+      if (!movieId || !userId) return { friendCount: 0, averageRating: null, friendRatings: [] };
+      
+      // Import SocialRecommendationService
+      const { SocialRecommendationService } = require('../../services/SocialRecommendationService');
+      const socialService = new SocialRecommendationService();
+      
+      const socialProof = await socialService.getSocialProofForMovie(movieId, userId);
+      
+      return {
+        friendCount: socialProof.friendCount || 0,
+        averageRating: socialProof.averageRating,
+        friendRatings: socialProof.friendRatings || []
+      };
+    } catch (error) {
+      console.error('Error aggregating friend ratings:', error);
+      return { friendCount: 0, averageRating: null, friendRatings: [] };
+    }
+  }, []);
+
+  const enhanceMoviesWithFriendRatings = useCallback(async (movies, userId) => {
+    if (!movies || !Array.isArray(movies) || !userId) return movies;
+    
+    try {
+      const enhancedMovies = await Promise.all(
+        movies.map(async (movie) => {
+          const friendData = await aggregateFriendRatings(movie.id, userId);
+          return {
+            ...movie,
+            friendRatingData: friendData
+          };
+        })
+      );
+      
+      return enhancedMovies;
+    } catch (error) {
+      console.error('Error enhancing movies with friend ratings:', error);
+      return movies;
+    }
+  }, [aggregateFriendRatings]);
+  // Advanced filtering logic functions
+  const filterByStreamingServices = useCallback((movies, selectedServiceIds) => {
+    if (!selectedServiceIds || selectedServiceIds.length === 0) return movies;
+    
+    return movies.filter(movie => {
+      const movieProviders = movie.streamingServices || [];
+      return movieProviders.some(provider => 
+        selectedServiceIds.includes(provider.provider_id)
+      );
+    });
+  }, []);
+
+  const filterByUserRating = useCallback((movies, minRating, maxRating) => {
+    if (minRating === null && maxRating === null) return movies;
+    
+    return movies.filter(movie => {
+      const userRating = movie.userRating || movie.rating;
+      if (!userRating && userRating !== 0) return false;
+      
+      const rating = typeof userRating === 'number' ? userRating : parseFloat(userRating);
+      
+      if (minRating !== null && rating < minRating) return false;
+      if (maxRating !== null && rating > maxRating) return false;
+      
+      return true;
+    });
+  }, []);
+
+  const filterByFriendRating = useCallback((movies, minFriendRating, maxFriendRating) => {
+    if (minFriendRating === null && maxFriendRating === null) return movies;
+    
+    return movies.filter(movie => {
+      const friendData = movie.friendRatingData;
+      if (!friendData || !friendData.averageRating) return false;
+      
+      const avgRating = friendData.averageRating;
+      
+      if (minFriendRating !== null && avgRating < minFriendRating) return false;
+      if (maxFriendRating !== null && avgRating > maxFriendRating) return false;
+      
+      return true;
+    });
+  }, []);
+
+  const applyAdvancedFilters = useCallback((movies, filters) => {
+    let filtered = [...movies];
+    
+    // Apply streaming service filter
+    if (filters.selectedStreamingServices && filters.selectedStreamingServices.length > 0) {
+      filtered = filterByStreamingServices(filtered, filters.selectedStreamingServices);
+    }
+    
+    // Apply user rating filter
+    if (filters.userRatingMin !== null || filters.userRatingMax !== null) {
+      filtered = filterByUserRating(filtered, filters.userRatingMin, filters.userRatingMax);
+    }
+    
+    // Apply friend rating filter
+    if (filters.friendRatingMin !== null || filters.friendRatingMax !== null) {
+      filtered = filterByFriendRating(filtered, filters.friendRatingMin, filters.friendRatingMax);
+    }
+    
+    return filtered;
+  }, [filterByStreamingServices, filterByUserRating, filterByFriendRating]);
 
   useEffect(() => {
     fetchStreamingProviders();
@@ -673,7 +860,7 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
       ? movie.userRating.toFixed(1)
       : (movie.eloRating / 100).toFixed(1);
     setNewRating(initialRating);
-    setEditModalVisible(true);
+    setFilterModalVisible(true);
     Animated.timing(slideAnim, {
       toValue: 0,
       duration: 300,
@@ -1519,6 +1706,215 @@ Please rate a few more movies first!`,
               )}
             </View>
             
+            {/* Advanced Filter Section for Watchlist */}
+            <View style={[
+              profileStyles.filterSection, 
+              { 
+                borderBottomColor: colors.border.color,
+                backgroundColor: colors.background,
+                marginTop: 0
+              }
+            ]}>
+              <View style={profileStyles.filterHeader}>
+                <TouchableOpacity 
+                  style={profileStyles.filterTitleContainer}
+                  onPress={() => setAdvancedFilterVisible(!advancedFilterVisible)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[profileStyles.filterTitle, { color: colors.text }]}>
+                    Advanced Filters
+                  </Text>
+                  <Ionicons 
+                    name={advancedFilterVisible ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={colors.subText} 
+                  />
+                </TouchableOpacity>
+                {(selectedAdvancedStreamingServices.length > 0 || 
+                  userRatingMin !== null || userRatingMax !== null ||
+                  friendRatingMin !== null || friendRatingMax !== null) && (
+                  <TouchableOpacity 
+                    style={profileStyles.clearButton}
+                    onPress={() => {
+                      setSelectedAdvancedStreamingServices([]);
+                      setUserRatingMin(null);
+                      setUserRatingMax(null);
+                      setFriendRatingMin(null);
+                      setFriendRatingMax(null);
+                    }}
+                  >
+                    <Text style={[profileStyles.clearButtonText, { color: colors.accent }]}>
+                      Clear All
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              {/* Advanced Filter Controls */}
+              {advancedFilterVisible && (
+                <View style={profileStyles.advancedFilterContainer}>
+                  
+                  {/* Streaming Services Filter */}
+                  <View style={profileStyles.filterCategory}>
+                    <Text style={[profileStyles.filterCategoryTitle, { color: colors.text }]}>
+                      Streaming Services
+                    </Text>
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      style={profileStyles.streamingServicesScroll}
+                    >
+                      {STREAMING_SERVICES.map((service) => (
+                        <TouchableOpacity
+                          key={service.id}
+                          style={[
+                            profileStyles.streamingServiceChip,
+                            {
+                              backgroundColor: selectedAdvancedStreamingServices.includes(service.id) 
+                                ? colors.accent 
+                                : colors.card,
+                              borderColor: colors.accent
+                            }
+                          ]}
+                          onPress={() => {
+                            setSelectedAdvancedStreamingServices(prev => 
+                              prev.includes(service.id)
+                                ? prev.filter(id => id !== service.id)
+                                : [...prev, service.id]
+                            );
+                          }}
+                        >
+                          <Text style={[
+                            profileStyles.streamingServiceChipText,
+                            { 
+                              color: selectedAdvancedStreamingServices.includes(service.id)
+                                ? colors.background 
+                                : colors.accent 
+                            }
+                          ]}>
+                            {service.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* User Rating Range Filter */}
+                  <View style={profileStyles.filterCategory}>
+                    <Text style={[profileStyles.filterCategoryTitle, { color: colors.text }]}>
+                      Your Rating
+                    </Text>
+                    <View style={profileStyles.ratingRangeContainer}>
+                      <View style={profileStyles.ratingInputContainer}>
+                        <Text style={[profileStyles.ratingLabel, { color: colors.subText }]}>Min:</Text>
+                        <TextInput
+                          style={[profileStyles.ratingInput, { color: colors.text, borderColor: colors.border.color }]}
+                          value={userRatingMin !== null ? userRatingMin.toString() : ''}
+                          onChangeText={(text) => {
+                            const value = text === '' ? null : parseFloat(text);
+                            if (value === null || (value >= 0 && value <= 10)) {
+                              setUserRatingMin(value);
+                            }
+                          }}
+                          placeholder="0"
+                          placeholderTextColor={colors.subText}
+                          keyboardType="numeric"
+                          maxLength={4}
+                        />
+                      </View>
+                      <View style={profileStyles.ratingInputContainer}>
+                        <Text style={[profileStyles.ratingLabel, { color: colors.subText }]}>Max:</Text>
+                        <TextInput
+                          style={[profileStyles.ratingInput, { color: colors.text, borderColor: colors.border.color }]}
+                          value={userRatingMax !== null ? userRatingMax.toString() : ''}
+                          onChangeText={(text) => {
+                            const value = text === '' ? null : parseFloat(text);
+                            if (value === null || (value >= 0 && value <= 10)) {
+                              setUserRatingMax(value);
+                            }
+                          }}
+                          placeholder="10"
+                          placeholderTextColor={colors.subText}
+                          keyboardType="numeric"
+                          maxLength={4}
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Friend Rating Range Filter */}
+                  <View style={profileStyles.filterCategory}>
+                    <Text style={[profileStyles.filterCategoryTitle, { color: colors.text }]}>
+                      Friend Rating Average
+                    </Text>
+                    <View style={profileStyles.ratingRangeContainer}>
+                      <View style={profileStyles.ratingInputContainer}>
+                        <Text style={[profileStyles.ratingLabel, { color: colors.subText }]}>Min:</Text>
+                        <TextInput
+                          style={[profileStyles.ratingInput, { color: colors.text, borderColor: colors.border.color }]}
+                          value={friendRatingMin !== null ? friendRatingMin.toString() : ''}
+                          onChangeText={(text) => {
+                            const value = text === '' ? null : parseFloat(text);
+                            if (value === null || (value >= 0 && value <= 10)) {
+                              setFriendRatingMin(value);
+                            }
+                          }}
+                          placeholder="0"
+                          placeholderTextColor={colors.subText}
+                          keyboardType="numeric"
+                          maxLength={4}
+                        />
+                      </View>
+                      <View style={profileStyles.ratingInputContainer}>
+                        <Text style={[profileStyles.ratingLabel, { color: colors.subText }]}>Max:</Text>
+                        <TextInput
+                          style={[profileStyles.ratingInput, { color: colors.text, borderColor: colors.border.color }]}
+                          value={friendRatingMax !== null ? friendRatingMax.toString() : ''}
+                          onChangeText={(text) => {
+                            const value = text === '' ? null : parseFloat(text);
+                            if (value === null || (value >= 0 && value <= 10)) {
+                              setFriendRatingMax(value);
+                            }
+                          }}
+                          placeholder="10"
+                          placeholderTextColor={colors.subText}
+                          keyboardType="numeric"
+                          maxLength={4}
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Active Filters Summary */}
+                  {(selectedAdvancedStreamingServices.length > 0 || 
+                    userRatingMin !== null || userRatingMax !== null ||
+                    friendRatingMin !== null || friendRatingMax !== null) && (
+                    <View style={profileStyles.activeFiltersContainer}>
+                      <Text style={[profileStyles.activeFiltersTitle, { color: colors.subText }]}>
+                        Active Filters:
+                      </Text>
+                      {selectedAdvancedStreamingServices.length > 0 && (
+                        <Text style={[profileStyles.activeFilterItem, { color: colors.subText }]}>
+                          • Streaming: {selectedAdvancedStreamingServices.map(id => 
+                            STREAMING_SERVICES.find(s => s.id === id)?.name
+                          ).filter(Boolean).join(', ')}
+                        </Text>
+                      )}
+                      {(userRatingMin !== null || userRatingMax !== null) && (
+                        <Text style={[profileStyles.activeFilterItem, { color: colors.subText }]}>
+                          • Your Rating: {userRatingMin || 0} - {userRatingMax || 10}
+                        </Text>
+                      )}
+                      {(friendRatingMin !== null || friendRatingMax !== null) && (
+                        <Text style={[profileStyles.activeFilterItem, { color: colors.subText }]}>
+                          • Friend Rating: {friendRatingMin || 0} - {friendRatingMax || 10}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
             
             {/* Movie/TV Show List */}
             <ScrollView style={[listStyles.rankingsList, { backgroundColor: colors.background }]}>
@@ -3624,58 +4020,6 @@ const profileStyles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
   },
-  activeFilterText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  ratingLabel: {
-    fontSize: 9,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  finalScore: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  unwatchedIndicator: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 4,
-    marginTop: 4,
-  },
-  unwatchedIndicatorText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  clearFiltersButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  clearFiltersButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  advancedFiltersButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 12,
-    alignSelf: 'flex-start',
-  },
-  advancedFiltersText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  // **Comparison Modal Styles from Home screen**
-  // **Final Rating Modal Styles**
 });
 
-export default ProfileScreen;
+export default ProfileScreen; 

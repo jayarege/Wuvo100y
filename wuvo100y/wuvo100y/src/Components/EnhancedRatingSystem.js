@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, Alert, Image, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Alert, Image, Dimensions, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import MovieCard from './MovieCard';
 
 // Console log to verify file is loading
 console.log('✅ Enhanced Confidence-Based Rating System loaded successfully!');
@@ -45,10 +46,10 @@ const ENHANCED_RATING_CONFIG = {
     TIE_SCORE: 0.5
   },
   PERCENTILE_RANGES: {
-    LOVED: [0.75, 1.0], // Top 25% (highest rated movies)
-    LIKED: [0.50, 0.75], // Upper-middle 25%
-    AVERAGE: [0.25, 0.50], // Lower-middle 25%
-    DISLIKED: [0.0, 0.25] // Bottom 25% (lowest rated movies)
+    LOVED: [0.0, 0.25], // Top 0-25% (highest rated movies)
+    LIKED: [0.25, 0.50], // 25-50% (upper-middle movies)
+    AVERAGE: [0.50, 0.75], // 50-75% (lower-middle movies)
+    DISLIKED: [0.75, 1.0] // 75-100% (lowest rated movies)
   },
   // Sentiment-aware starting baselines (consultant's good idea)
   SENTIMENT_BASELINES: {
@@ -58,10 +59,10 @@ const ENHANCED_RATING_CONFIG = {
     DISLIKED: { idealRange: [1.5, 4.5], fallback: 3.0 }
   },
   DYNAMIC_PERCENTILE_RANGES: {
-    LOVED: [0.75, 1.0], // Top 25% (highest rated movies)
-    LIKED: [0.50, 0.75], // Upper-middle 25%
-    AVERAGE: [0.25, 0.50], // Lower-middle 25%
-    DISLIKED: [0.0, 0.25] // Bottom 25% (lowest rated movies)
+    LOVED: [0.0, 0.25], // Top 0-25% (highest rated movies)
+    LIKED: [0.25, 0.50], // 25-50% (upper-middle movies)
+    AVERAGE: [0.50, 0.75], // 50-75% (lower-middle movies)
+    DISLIKED: [0.75, 1.0] // 75-100% (lowest rated movies)
   },
   PERCENTILE_THRESHOLDS: {
     QUARTER: 0.25,
@@ -254,6 +255,8 @@ const selectInitialOpponent = (sentiment, availableMovies, excludeIds = []) => {
   
   console.log('🎯 Percentile indices:', { startIndex, endIndex, moviesInRange: moviesInRange.length });
   console.log('🎯 Selected opponent candidates:', moviesInRange.map(m => `${m.title}: ${m.userRating}`));
+  console.log('🎯 ALL sorted movies for percentile debug:', sortedMovies.map(m => `${m.title}: ${m.userRating}`));
+  console.log('🎯 Sentiment:', sentiment, '- Expected percentile range:', percentileRange, '- Actual indices:', startIndex, 'to', endIndex);
   
   const selectedOpponent = moviesInRange[Math.floor(Math.random() * moviesInRange.length)] || sortedMovies[0];
   console.log('✅ Final selected opponent:', selectedOpponent ? `${selectedOpponent.title}: ${selectedOpponent.userRating}` : 'None');
@@ -598,43 +601,57 @@ const calculateDynamicRatingCategories = (userMovies, mediaType = 'movie') => {
     return calculateDynamicRatingCategories([]);
   }
   
-  // Calculate percentile thresholds
-  const get25thPercentile = () => sortedRatings[Math.floor(sortedRatings.length * ENHANCED_RATING_CONFIG.PERCENTILE_THRESHOLDS.QUARTER)] || sortedRatings[0];
-  const get50thPercentile = () => sortedRatings[Math.floor(sortedRatings.length * ENHANCED_RATING_CONFIG.PERCENTILE_THRESHOLDS.HALF)] || sortedRatings[0];
-  const get75thPercentile = () => sortedRatings[Math.floor(sortedRatings.length * ENHANCED_RATING_CONFIG.PERCENTILE_THRESHOLDS.THREE_QUARTER)] || sortedRatings[0];
+  // Calculate rating-based percentiles using min/max spread (not movie pooling)
+  const minRating = sortedRatings[0];  // Your lowest rating (0%)
+  const maxRating = sortedRatings[sortedRatings.length - 1];  // Your highest rating (100%)
+  const ratingSpread = maxRating - minRating;
   
-  const minRating = sortedRatings[0];
-  const maxRating = sortedRatings[sortedRatings.length - 1];
-  const p25 = get25thPercentile();
-  const p50 = get50thPercentile();
-  const p75 = get75thPercentile();
+  // Split the rating range evenly for percentiles
+  const p25 = minRating + (ratingSpread * 0.25);  // 25% of rating range
+  const p50 = minRating + (ratingSpread * 0.50);  // 50% of rating range  
+  const p75 = minRating + (ratingSpread * 0.75);  // 75% of rating range
   
   console.log(`📊 Dynamic Rating Ranges - Min: ${minRating}, 25th: ${p25}, 50th: ${p50}, 75th: ${p75}, Max: ${maxRating}`);
+  console.log(`🎯 LOVE will select from: ${p75}-${maxRating} (top 25% of your ratings)`);
+  console.log(`🎯 LIKE will select from: ${p50}-${p75} (50-75th percentile)`);
+  console.log(`🎯 OKAY will select from: ${p25}-${p50} (25-50th percentile)`);
+  console.log(`🎯 DISLIKE will select from: ${minRating}-${p25} (bottom 25%)`);
+console.log(`🔧 CODE_BIBLE Fix: Using dynamic percentiles based on user's actual data, not hardcoded ranges`);
   
+  // Use rating-based ranges (not movie pooling percentiles)
+  // For your ratings 6.2-9.7: Love gets 8.825-9.7 (top 25% of rating spread)
   return {
     LOVED: {
-      percentile: ENHANCED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.LOVED,
+      ratingRange: [p75, maxRating], // Top 25% of rating range
+      minRating: p75,
+      maxRating: maxRating,
       color: ENHANCED_RATING_CONFIG.COLORS.LOVED,
       borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.LOVED,
       label: 'Love',
       description: 'This was amazing!'
     },
     LIKED: {
-      percentile: ENHANCED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.LIKED,
+      ratingRange: [p50, p75], // 50-75% of rating range
+      minRating: p50,
+      maxRating: p75,
       color: ENHANCED_RATING_CONFIG.COLORS.LIKED,
       borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.LIKED,
       label: 'Like',
       description: 'Pretty good!'
     },
     AVERAGE: {
-      percentile: ENHANCED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.AVERAGE,
+      ratingRange: [p25, p50], // 25-50% of rating range
+      minRating: p25,
+      maxRating: p50,
       color: ENHANCED_RATING_CONFIG.COLORS.AVERAGE,
       borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.AVERAGE,
       label: 'Okay',
       description: 'Nothing special'
     },
     DISLIKED: {
-      percentile: ENHANCED_RATING_CONFIG.DYNAMIC_PERCENTILE_RANGES.DISLIKED,
+      ratingRange: [minRating, p25], // Bottom 25% of rating range
+      minRating: minRating,
+      maxRating: p25,
       color: ENHANCED_RATING_CONFIG.COLORS.DISLIKED,
       borderColor: ENHANCED_RATING_CONFIG.BORDER_COLORS.DISLIKED,
       label: 'Dislike',
@@ -649,29 +666,38 @@ const calculateDynamicRatingCategories = (userMovies, mediaType = 'movie') => {
  * Select movie from percentile range based on sentiment category
  * Uses dynamic percentiles for opponent selection
  */
-const selectOpponentFromPercentile = (percentileRange, seenMovies, excludeMovieId = null, mediaType = 'movie') => {
+const selectOpponentFromPercentile = (categoryData, seenMovies, excludeMovieId = null, mediaType = 'movie') => {
   if (!seenMovies || seenMovies.length === 0) return null;
-  if (!percentileRange) return null;
+  if (!categoryData || !categoryData.ratingRange) return null;
   
-  // Get movies sorted by rating, filtered by media type
-  const sortedMovies = seenMovies
+  // Get movies filtered by media type
+  const availableMovies = seenMovies
     .filter(movie => movie.userRating && movie.id !== excludeMovieId)
-    .filter(movie => (movie.mediaType || 'movie') === mediaType)
-    .sort((a, b) => b.userRating - a.userRating);
+    .filter(movie => (movie.mediaType || 'movie') === mediaType);
     
-  if (sortedMovies.length === 0) return null;
+  if (availableMovies.length === 0) return null;
   
-  // Calculate percentile indices
-  const startIndex = Math.floor(percentileRange[0] * sortedMovies.length);
-  const endIndex = Math.floor(percentileRange[1] * sortedMovies.length);
+  // Filter movies by rating range (not array percentiles)
+  const [minRating, maxRating] = categoryData.ratingRange;
+  const moviesInRange = availableMovies.filter(movie => 
+    movie.userRating >= minRating && movie.userRating <= maxRating
+  );
   
-  // Get movies in percentile range
-  const moviesInRange = sortedMovies.slice(startIndex, Math.max(endIndex, startIndex + 1));
+  console.log(`🎯 Selecting from rating range ${minRating.toFixed(2)}-${maxRating.toFixed(2)}`);
+  console.log(`🎯 Movies in range: ${moviesInRange.map(m => `${m.title}(${m.userRating})`).join(', ')}`);
   
-  if (moviesInRange.length === 0) return sortedMovies[0];
+  if (moviesInRange.length === 0) {
+    // Fallback: find closest movie to range
+    const targetRating = (minRating + maxRating) / 2;
+    availableMovies.sort((a, b) => Math.abs(a.userRating - targetRating) - Math.abs(b.userRating - targetRating));
+    console.log(`⚠️ No movies in range, using closest: ${availableMovies[0].title}(${availableMovies[0].userRating})`);
+    return availableMovies[0];
+  }
   
-  // Return random movie from range
-  return moviesInRange[Math.floor(Math.random() * moviesInRange.length)];
+  // Return random movie from rating range
+  const selected = moviesInRange[Math.floor(Math.random() * moviesInRange.length)];
+  console.log(`✅ Selected opponent: ${selected.title}(${selected.userRating}) from range ${minRating.toFixed(2)}-${maxRating.toFixed(2)}`);
+  return selected;
 };
 
 /**
@@ -825,13 +851,12 @@ const processUnifiedRatingFlow = async (config) => {
     console.log(`🎬 Starting unified rating flow for: ${newMovie.title}`);
     console.log(`🎭 User sentiment: ${selectedCategory}`);
     
-    // Get dynamic categories and percentile for selected sentiment
+    // Get dynamic categories and rating range for selected sentiment
     const categories = calculateDynamicRatingCategories(seenMovies, mediaType);
     const selectedCategoryData = categories[selectedCategory];
-    const percentileRange = selectedCategoryData.percentile;
     
-    // Round 1: Unknown vs Known (sentiment-based opponent using dynamic percentiles)
-    const round1Opponent = selectOpponentFromPercentile(percentileRange, seenMovies, newMovie.id, mediaType);
+    // Round 1: Unknown vs Known (sentiment-based opponent using rating ranges)
+    const round1Opponent = selectOpponentFromPercentile(selectedCategoryData, seenMovies, newMovie.id, mediaType);
     
     if (!round1Opponent) {
       throw new Error('No suitable opponent found for sentiment-based comparison');
@@ -1597,46 +1622,15 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
               </View>
 
               <View style={styles.moviesComparison}>
-                {/* New Movie */}
-                <TouchableOpacity
-                  style={[styles.movieComparisonCard, styles.wildcardStyleCard]}
-                  onPress={() => handleComparison('new')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.posterContainer}>
-                    <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w500${newMovie?.poster_path}` }}
-                      style={styles.comparisonPoster}
-                      resizeMode="cover"
-                    />
-                    <View style={[styles.newMovieBadge, { backgroundColor: colors.accent }]}>
-                      <Text style={styles.newMovieText}>NEW</Text>
-                    </View>
-                  </View>
-                  <View style={[styles.movieInfoBox, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
-                    <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
-                      {newMovie?.title || newMovie?.name}
-                    </Text>
-                    <Text style={[styles.movieCardYear, { color: colors.subText }]}>
-                      {newMovie?.release_date ? new Date(newMovie.release_date).getFullYear() : 'N/A'}
-                    </Text>
-                    {movieStats.rating ? (
-                      <View style={[styles.ratingBadgeWildcard, { backgroundColor: colors.accent, marginTop: 4 }]}>
-                        <Ionicons name="star" size={12} color="#FFF" />
-                        <Text style={styles.ratingTextWildcard}>
-                          {movieStats.rating.toFixed(1)}
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={[styles.ratingBadgeWildcard, { backgroundColor: colors.subText, marginTop: 4 }]}>
-                        <Ionicons name="help" size={12} color="#FFF" />
-                        <Text style={styles.ratingTextWildcard}>
-                          ?
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                {/* New Movie - Using MovieCard component for exact home screen appearance */}
+                <MovieCard
+                  item={newMovie}
+                  handleMovieSelect={() => handleComparison('new')}
+                  handleNotInterested={() => {}} // No "not interested" in comparison modal
+                  isDarkMode={true} // Match comparison modal theme
+                  context="comparison" // Use comparison context for proper sizing
+                  getRatingBorderColor={() => 'transparent'}
+                />
 
                 {/* VS Indicator with Confidence */}
                 <View style={styles.vsIndicatorWildcard}>
@@ -1651,34 +1645,15 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
                   </Text>
                 </View>
 
-                {/* Opponent Movie */}
-                <TouchableOpacity
-                  style={[styles.movieComparisonCard, styles.wildcardStyleCard]}
-                  onPress={() => handleComparison('opponent')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.posterContainer}>
-                    <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w500${currentOpponent?.poster_path}` }}
-                      style={styles.comparisonPoster}
-                      resizeMode="cover"
-                    />
-                  </View>
-                  <View style={[styles.movieInfoBox, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
-                    <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
-                      {currentOpponent?.title || currentOpponent?.name}
-                    </Text>
-                    <Text style={[styles.movieCardYear, { color: colors.subText }]}>
-                      {currentOpponent?.release_date ? new Date(currentOpponent.release_date).getFullYear() : 'N/A'}
-                    </Text>
-                    <View style={[styles.ratingBadgeWildcard, { backgroundColor: CONFIDENCE_RATING_CONFIG.COLORS.LIKED, marginTop: 4 }]}>
-                      <Ionicons name="star" size={12} color="#FFF" />
-                      <Text style={styles.ratingTextWildcard}>
-                        {currentOpponent?.userRating?.toFixed(1)}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
+                {/* Opponent Movie - Using MovieCard component for exact home screen appearance */}
+                <MovieCard
+                  item={currentOpponent}
+                  handleMovieSelect={() => handleComparison('opponent')}
+                  handleNotInterested={() => {}} // No "not interested" in comparison modal
+                  isDarkMode={true} // Match comparison modal theme
+                  context="comparison" // Use comparison context for proper sizing
+                  getRatingBorderColor={() => 'transparent'}
+                />
               </View>
 
               {/* Too Tough to Decide Button */}
@@ -2236,8 +2211,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 6,
   },
   confidenceLabel: {
     fontSize: 12,
@@ -2352,15 +2327,16 @@ const styles = StyleSheet.create({
     width: '95%',
     maxWidth: 500,
     borderRadius: 16,
-    maxHeight: '85%',
-    overflow: 'hidden',
+    maxHeight: '90%',
+    minHeight: '80%',
   },
   scrollContainer: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 10,
+    padding: 15,
+    paddingBottom: 20,
+    flexGrow: 1,
   },
   modalFooter: {
     padding: 15,
@@ -2368,7 +2344,7 @@ const styles = StyleSheet.create({
   },
   comparisonHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   comparisonSubtitle: {
     fontSize: 14,
@@ -2394,13 +2370,13 @@ const styles = StyleSheet.create({
   },
   movieInfoBox: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -20, // Match MovieCard.js bottom positioning exactly
     left: 0,
     right: 0,
     width: '100%',
-    minHeight: 60,
+    minHeight: 80, // Match MovieCard.js minHeight
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 1, // Match MovieCard.js tight padding
     backgroundColor: 'rgba(0,0,0,0.8)',
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
@@ -2464,19 +2440,20 @@ const styles = StyleSheet.create({
     height: '70%', // Match MovieCard.js poster height ratio
   },
   movieComparisonCard: {
-    // Remove flex: 1 to maintain fixed sizing
+    // Match home screen MovieCard dimensions exactly
     alignItems: 'center',
     borderRadius: 12,
-    marginHorizontal: 6, // Reduced margin
-    width: 100,
-    maxWidth: 100,
-    minWidth: 100,
-    height: 100 * 1.8,
+    marginHorizontal: 6,
+    width: Math.min((Dimensions.get('window').width - 48) / 2.8, 130),
+    maxWidth: Math.min((Dimensions.get('window').width - 48) / 2.8, 130),
+    minWidth: Math.min((Dimensions.get('window').width - 48) / 2.8, 130),
+    height: Math.min((Dimensions.get('window').width - 48) / 2.8, 130) * 1.9,
   },
   comparisonPoster: {
     width: '100%',
-    height: '100%',
+    height: '70%', // Match MovieCard.js poster height ratio exactly
     borderRadius: 12, // Match MovieCard.js rounded corners
+    overflow: 'hidden', // Ensure rounded corners are clean
   },
   newMovieBadge: {
     position: 'absolute',
@@ -3041,6 +3018,19 @@ const calculateRatingFromELOComparisons = (results, selectedMovie) => {
  * Unified opponent selection with media type filtering support
  * Consolidates all selectMovieFromPercentile implementations
  */
+// Helper function to get adjacent buckets (max 1 bucket away)
+const getAdjacentBuckets = (emotion) => {
+  const bucketOrder = ['LOVED', 'LIKED', 'AVERAGE', 'DISLIKED'];
+  const currentIndex = bucketOrder.indexOf(emotion);
+  const adjacent = [];
+  
+  // Add immediately adjacent buckets only
+  if (currentIndex > 0) adjacent.push(bucketOrder[currentIndex - 1]);
+  if (currentIndex < bucketOrder.length - 1) adjacent.push(bucketOrder[currentIndex + 1]);
+  
+  return adjacent;
+};
+
 const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => {
   const { mediaType = null, excludeMovieId = null, enableMediaTypeFilter = false, enhancedLogging = false } = options;
   const percentileRanges = ENHANCED_RATING_CONFIG.PERCENTILE_RANGES;
@@ -3065,8 +3055,8 @@ const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => 
     filteredMovies = seenMovies.filter(movie => movie.id !== excludeMovieId);
   }
   
-  // Sort movies by rating to establish percentile ranges
-  const sortedMovies = [...filteredMovies].sort((a, b) => (a.userRating || 0) - (b.userRating || 0));
+  // Sort movies by rating to establish percentile ranges (HIGH to LOW for correct percentiles)
+  const sortedMovies = [...filteredMovies].sort((a, b) => (b.userRating || 0) - (a.userRating || 0));
   
   const [minPercent, maxPercent] = percentileRanges[emotion] || [0.5, 0.75];
   const startIndex = Math.floor(sortedMovies.length * minPercent);
@@ -3077,7 +3067,28 @@ const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => 
   }
   
   const percentileMovies = sortedMovies.slice(startIndex, endIndex + 1);
-  if (percentileMovies.length === 0) return sortedMovies[0]; // Fallback
+  
+  if (percentileMovies.length === 0) {
+    // Adjacent bucket fallback - never skip more than one bucket
+    const adjacentBuckets = getAdjacentBuckets(emotion);
+    
+    for (const adjacentEmotion of adjacentBuckets) {
+      const adjacentRange = percentileRanges[adjacentEmotion];
+      const adjStartIndex = Math.floor(sortedMovies.length * adjacentRange[0]);
+      const adjEndIndex = Math.min(Math.floor(sortedMovies.length * adjacentRange[1]), sortedMovies.length - 1);
+      const adjacentMovies = sortedMovies.slice(adjStartIndex, adjEndIndex + 1);
+      
+      if (adjacentMovies.length > 0) {
+        if (enhancedLogging) {
+          console.log(`🔄 Fallback to adjacent bucket ${adjacentEmotion}: ${adjacentMovies[0].title} (Rating: ${adjacentMovies[0].userRating})`);
+        }
+        return adjacentMovies[Math.floor(Math.random() * adjacentMovies.length)];
+      }
+    }
+    
+    // Final fallback if no adjacent buckets have movies
+    return sortedMovies[0];
+  }
   
   // Random selection from percentile
   const selectedMovie = percentileMovies[Math.floor(Math.random() * percentileMovies.length)];
