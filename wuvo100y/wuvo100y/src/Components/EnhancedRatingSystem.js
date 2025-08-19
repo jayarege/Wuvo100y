@@ -1550,6 +1550,11 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
           colors={colors.primaryGradient || ['#667eea', '#764ba2']}
           style={styles.comparisonModalContent}
         >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            style={styles.scrollContainer}
+          >
           {!isComplete && currentOpponent ? (
             <>
               <View style={styles.comparisonHeader}>
@@ -1563,18 +1568,12 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
                 {/* Confidence Indicator */}
                 <View style={styles.confidenceIndicator}>
                   <Text style={[styles.confidenceLabel, { color: colors.subText }]}>
-                    Current Confidence:
+                    Progress:
                   </Text>
                   <View style={[
                     styles.confidenceBadge,
                     { backgroundColor: getConfidenceColor(movieStats.confidenceInterval?.width) }
                   ]}>
-                    <Text style={styles.confidenceText}>
-                      {movieStats.confidenceInterval ? 
-                        `±${movieStats.confidenceInterval.width.toFixed(2)}` : 
-                        'Calculating...'
-                      }
-                    </Text>
                   </View>
                   <View style={[styles.targetContainer, { borderColor: colors.accent }]}>
                     <Text style={[styles.targetLabel, { color: colors.subText }]}>
@@ -1645,7 +1644,7 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
                     <Text style={[styles.vsText, { color: colors.accent }]}>VS</Text>
                   </View>
                   <Text style={[styles.comparisonCountText, { color: colors.subText }]}>
-                    Round {currentComparison} of 3-6
+                    Round {currentComparison}
                   </Text>
                   <Text style={[styles.informationGainText, { color: colors.subText }]}>
                     Info Gain: High
@@ -1693,12 +1692,9 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
                 </Text>
               </TouchableOpacity>
 
-              {/* Confidence Indicator */}
+              {/* Progress Bar */}
               {movieStats.comparisons > 0 && (
                 <View style={styles.confidenceContainer}>
-                  <Text style={[styles.confidenceLabel, { color: colors.subText }]}>
-                    Confidence Level
-                  </Text>
                   <View style={[styles.confidenceBar, { backgroundColor: colors.surface }]}>
                     <View 
                       style={[
@@ -1710,11 +1706,6 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
                       ]} 
                     />
                   </View>
-                  <Text style={[styles.confidenceText, { color: colors.subText }]}>
-                    {movieStats.confidenceInterval ? 
-                      `±${movieStats.confidenceInterval.width.toFixed(2)} points` : 
-                      'Calculating...'}
-                  </Text>
                 </View>
               )}
 
@@ -1738,85 +1729,38 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
               </View>
             </>
           ) : (
-            // **FIXED COMPLETION SCREEN** - Uses actual tracked data (movieStats, comparisonHistory)
+            // **SIMPLIFIED COMPLETION SCREEN** - Just poster, title, rating, close button
             <View style={styles.completionScreen}>
-              <View style={[styles.completionHeader, { borderBottomColor: colors.border?.color || '#333' }]}>
-                <Text style={[styles.completionTitle, { color: colors.text }]}>
-                  Rating Calculated!
+              <View style={styles.completionMovieCard}>
+                <Image
+                  source={{ uri: `https://image.tmdb.org/t/p/w500${newMovie?.poster_path}` }}
+                  style={styles.completionPoster}
+                  resizeMode="cover"
+                />
+                <Text style={[styles.completionMovieTitle, { color: colors.text }]} numberOfLines={2}>
+                  {newMovie?.title || newMovie?.name}
                 </Text>
-                <View style={[styles.winsBadge, { backgroundColor: colors.accent }]}>
-                  <Text style={styles.winsText}>
-                    {comparisonHistory.filter(r => r.result === 'new').length}/{movieStats.comparisons} Wins
+                <View style={styles.completionRatingContainer}>
+                  <Ionicons name="star" size={20} color={colors.accent} />
+                  <Text style={[styles.completionRating, { color: colors.accent }]}>
+                    {(movieStats.rating || 0).toFixed(1)}/10
                   </Text>
-                </View>
-                {/* Show final rating with confidence interval */}
-                <View style={[styles.ratingPreview, { borderColor: colors.accent }]}>
-                  <Text style={[styles.ratingPreviewLabel, { color: colors.subText }]}>Final Rating:</Text>
-                  <View style={styles.ratingPreviewValue}>
-                    <Ionicons name="star" size={16} color={colors.accent} />
-                    <Text style={[styles.ratingPreviewText, { color: colors.accent }]}>
-                      {(movieStats.rating || 0).toFixed(1)}/10
-                    </Text>
-                    {movieStats.confidenceInterval && (
-                      <Text style={[styles.confidenceText, { color: colors.subText }]}>
-                        ±{movieStats.confidenceInterval.width.toFixed(2)}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.resultsContainer}>
-                <Text style={[styles.resultsHeader, { color: colors.text }]}>Comparison Results:</Text>
-                {comparisonHistory.map((record, index) => (
-                  <View key={index} style={[styles.resultRowWildcard, { 
-                    borderLeftColor: record.result === 'new' ? '#4CAF50' : 
-                                   record.result === 'too_tough' ? '#FF9800' : '#F44336' 
-                  }]}>
-                    <View style={styles.resultContent}>
-                      <Text style={[styles.resultNumber, { color: colors.accent }]}>
-                        #{record.comparison}
-                      </Text>
-                      <Text style={[styles.resultText, { color: colors.text }]}>
-                        vs {record.opponent}
-                      </Text>
-                      <View style={[styles.resultBadge, { 
-                        backgroundColor: record.result === 'new' ? '#4CAF50' : 
-                                       record.result === 'too_tough' ? '#FF9800' : '#F44336' 
-                      }]}>
-                        <Text style={styles.resultBadgeText}>
-                          {record.result === 'new' ? 'WON' : 
-                           record.result === 'too_tough' ? 'TIE' : 'LOST'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                ))}
-
-                <View style={[styles.performanceSummary, { backgroundColor: colors.card || 'rgba(255,255,255,0.05)' }]}>
-                  <Text style={[styles.performanceSummaryText, { color: colors.subText }]}>
-                    Performance Summary: <Text style={{ color: colors.accent, fontWeight: 'bold' }}>
-                      {movieStats.wins} wins, {movieStats.losses} losses, {movieStats.ties} ties
-                    </Text>
-                  </Text>
-                  {movieStats.confidenceInterval && (
-                    <Text style={[styles.performanceSummaryText, { color: colors.subText, fontSize: 12 }]}>
-                      Target confidence {movieStats.confidenceInterval.width <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.TARGET_INTERVAL_WIDTH ? '✅ reached' : '⚠️ not reached'}
-                    </Text>
-                  )}
                 </View>
               </View>
             </View>
           )}
+          </ScrollView>
 
-          <TouchableOpacity
-            style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
-            onPress={onClose}
-          >
-            <Text style={[styles.cancelButtonText, { color: colors.subText }]}>
-              {isComplete ? 'Close' : 'Cancel'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={[styles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+              onPress={onClose}
+            >
+              <Text style={[styles.cancelButtonText, { color: colors.subText }]}>
+                {isComplete ? 'Close' : 'Cancel'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
       </View>
     </Modal>
@@ -2407,9 +2351,20 @@ const styles = StyleSheet.create({
   comparisonModalContent: {
     width: '95%',
     maxWidth: 500,
-    padding: 20,
     borderRadius: 16,
-    maxHeight: '80%',
+    maxHeight: '85%',
+    overflow: 'hidden',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 10,
+  },
+  modalFooter: {
+    padding: 15,
+    paddingTop: 10,
   },
   comparisonHeader: {
     alignItems: 'center',
@@ -2486,7 +2441,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // **Wildcard-Style Comparison Cards - MovieCard.js styling**
+  // **Wildcard-Style Comparison Cards - Mobile-optimized sizing**
   wildcardStyleCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
@@ -2496,11 +2451,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 3,
-    // Fixed dimensions from MovieCard.js
-    width: 120,
-    maxWidth: 120,
-    minWidth: 120,
-    height: 120 * 1.9, // 228px
+    // Reduced dimensions for mobile modal
+    width: 100,
+    maxWidth: 100,
+    minWidth: 100,
+    height: 100 * 1.8, // 180px (reduced from 228px)
     overflow: 'hidden',
   },
   posterContainer: {
@@ -2512,11 +2467,11 @@ const styles = StyleSheet.create({
     // Remove flex: 1 to maintain fixed sizing
     alignItems: 'center',
     borderRadius: 12,
-    marginHorizontal: 8,
-    width: 120,
-    maxWidth: 120,
-    minWidth: 120,
-    height: 120 * 1.9,
+    marginHorizontal: 6, // Reduced margin
+    width: 100,
+    maxWidth: 100,
+    minWidth: 100,
+    height: 100 * 1.8,
   },
   comparisonPoster: {
     width: '100%',
@@ -2746,6 +2701,51 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderRadius: 12,
     marginBottom: 6,
+  },
+
+  // **SIMPLIFIED COMPLETION SCREEN STYLES**
+  completionScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  completionMovieCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  completionPoster: {
+    width: 150,
+    height: 225,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  completionMovieTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 24,
+  },
+  completionRatingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  completionRating: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });
 

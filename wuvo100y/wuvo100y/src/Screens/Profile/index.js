@@ -2334,7 +2334,7 @@ Please rate a few more movies first!`,
                             : 'Unknown'}
                         </Text>
                       </View>
-                      <View style={styles.listRatings}>
+                      <View style={styles.ratingsContainer}>
                         <View style={styles.ratingColumn}>
                           <Text style={styles.ratingLabel}>USER</Text>
                           <Text style={styles.ratingValue}>{displayRating(movie)}</Text>
@@ -2654,7 +2654,7 @@ Please rate a few more movies first!`,
                             : 'Unknown'}
                         </Text>
                       </View>
-                      <View style={styles.listRatings}>
+                      <View style={styles.ratingsContainer}>
                         <View style={styles.ratingColumn}>
                           <Text style={styles.ratingLabel}>USER</Text>
                           <Text style={styles.ratingValue}>N/A</Text>
@@ -3332,15 +3332,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Grid styles removed - now using single-line FlatList matching Home screen
-  listGenres: {
-    color: '#999',
-    fontSize: 12,
-  },
-  listRatings: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+
   ratingColumn: {
     alignItems: 'center',
     marginLeft: 12,
