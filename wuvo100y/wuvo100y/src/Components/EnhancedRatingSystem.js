@@ -13,62 +13,6 @@ import { STORAGE_KEYS } from '../config/storageConfig';
 // Dynamic storage keys based on media type (matching useMovieData hook)
 const getStorageKey = (mediaType) => mediaType === 'movie' ? STORAGE_KEYS.MOVIES.SEEN : STORAGE_KEYS.TV_SHOWS.SEEN;
 
-/**
- * Get sentiment-aware starting rating based on user's history and emotion
- * Combines consultant's good idea with user data respect
- */
-const getSentimentBaseline = (sentiment, userMovies = []) => {
-  const baseline = ENHANCED_RATING_CONFIG.SENTIMENT_BASELINES[sentiment];
-  if (!baseline) return 5.5; // fallback
-  
-  // If user has insufficient data, use sentiment fallback
-  if (!userMovies || userMovies.length < 10) {
-    return baseline.fallback;
-  }
-  
-  // Find user's typical ratings in this sentiment range
-  const userRatings = userMovies
-    .map(m => m.userRating)
-    .filter(r => r != null)
-    .sort((a, b) => a - b);
-    
-  if (userRatings.length < 5) {
-    return baseline.fallback;
-  }
-  
-  // Calculate user's actual sentiment ranges based on percentiles
-  let sentimentMovies = [];
-  
-  if (sentiment === 'LOVED') {
-    // Top 25% of user's ratings
-    const cutoff = Math.floor(userRatings.length * 0.75);
-    sentimentMovies = userRatings.slice(cutoff);
-  } else if (sentiment === 'LIKED') {
-    // 50-75% percentile
-    const start = Math.floor(userRatings.length * 0.50);
-    const end = Math.floor(userRatings.length * 0.75);
-    sentimentMovies = userRatings.slice(start, end);
-  } else if (sentiment === 'AVERAGE') {
-    // 25-50% percentile
-    const start = Math.floor(userRatings.length * 0.25);
-    const end = Math.floor(userRatings.length * 0.50);
-    sentimentMovies = userRatings.slice(start, end);
-  } else if (sentiment === 'DISLIKED') {
-    // Bottom 25%
-    const end = Math.floor(userRatings.length * 0.25);
-    sentimentMovies = userRatings.slice(0, end);
-  }
-  
-  if (sentimentMovies.length > 0) {
-    // Use user's actual average for this sentiment
-    const userSentimentAvg = sentimentMovies.reduce((a, b) => a + b, 0) / sentimentMovies.length;
-    // Ensure it's reasonable (within broad bounds)
-    const { idealRange } = baseline;
-    return Math.max(idealRange[0] - 1, Math.min(idealRange[1] + 1, userSentimentAvg));
-  }
-  
-  return baseline.fallback;
-};
 
 // **ENHANCED RATING SYSTEM CONFIGURATION**
 const ENHANCED_RATING_CONFIG = {
@@ -1157,18 +1101,8 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
 
   // **RATING-PROXIMITY SELECTION STATE**
   const [placementState, setPlacementState] = useState(() => {
-    // Get sentiment baseline for anchor point
-    const getSentimentBaseline = (sentiment) => {
-      const baselines = {
-        'LOVED': 8.5,
-        'LIKED': 7.0, 
-        'AVERAGE': 5.5,
-        'DISLIKED': 3.0
-      };
-      return baselines[sentiment] || 7.0;
-    };
-
-    const currentEstimate = getSentimentBaseline(selectedSentiment);
+    // Start with a neutral rating, no sentiment assumptions
+    const currentEstimate = 5.5;
     
     return {
       currentEstimate: currentEstimate,
@@ -1680,27 +1614,29 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
                       <Text style={styles.newMovieText}>NEW</Text>
                     </View>
                   </View>
-                  <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
-                    {newMovie?.title || newMovie?.name}
-                  </Text>
-                  <Text style={[styles.movieCardYear, { color: colors.subText }]}>
-                    {newMovie?.release_date ? new Date(newMovie.release_date).getFullYear() : 'N/A'}
-                  </Text>
-                  {movieStats.rating ? (
-                    <View style={[styles.ratingBadgeWildcard, { backgroundColor: colors.accent }]}>
-                      <Ionicons name="star" size={12} color="#FFF" />
-                      <Text style={styles.ratingTextWildcard}>
-                        {movieStats.rating.toFixed(1)}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.ratingBadgeWildcard, { backgroundColor: colors.subText }]}>
-                      <Ionicons name="help" size={12} color="#FFF" />
-                      <Text style={styles.ratingTextWildcard}>
-                        ?
-                      </Text>
-                    </View>
-                  )}
+                  <View style={[styles.movieInfoBox, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
+                    <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                      {newMovie?.title || newMovie?.name}
+                    </Text>
+                    <Text style={[styles.movieCardYear, { color: colors.subText }]}>
+                      {newMovie?.release_date ? new Date(newMovie.release_date).getFullYear() : 'N/A'}
+                    </Text>
+                    {movieStats.rating ? (
+                      <View style={[styles.ratingBadgeWildcard, { backgroundColor: colors.accent, marginTop: 4 }]}>
+                        <Ionicons name="star" size={12} color="#FFF" />
+                        <Text style={styles.ratingTextWildcard}>
+                          {movieStats.rating.toFixed(1)}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.ratingBadgeWildcard, { backgroundColor: colors.subText, marginTop: 4 }]}>
+                        <Ionicons name="help" size={12} color="#FFF" />
+                        <Text style={styles.ratingTextWildcard}>
+                          ?
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </TouchableOpacity>
 
                 {/* VS Indicator with Confidence */}
@@ -1729,17 +1665,19 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
                       resizeMode="cover"
                     />
                   </View>
-                  <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
-                    {currentOpponent?.title || currentOpponent?.name}
-                  </Text>
-                  <Text style={[styles.movieCardYear, { color: colors.subText }]}>
-                    {currentOpponent?.release_date ? new Date(currentOpponent.release_date).getFullYear() : 'N/A'}
-                  </Text>
-                  <View style={[styles.ratingBadgeWildcard, { backgroundColor: CONFIDENCE_RATING_CONFIG.COLORS.LIKED }]}>
-                    <Ionicons name="star" size={12} color="#FFF" />
-                    <Text style={styles.ratingTextWildcard}>
-                      {currentOpponent?.userRating?.toFixed(1)}
+                  <View style={[styles.movieInfoBox, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
+                    <Text style={[styles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                      {currentOpponent?.title || currentOpponent?.name}
                     </Text>
+                    <Text style={[styles.movieCardYear, { color: colors.subText }]}>
+                      {currentOpponent?.release_date ? new Date(currentOpponent.release_date).getFullYear() : 'N/A'}
+                    </Text>
+                    <View style={[styles.ratingBadgeWildcard, { backgroundColor: CONFIDENCE_RATING_CONFIG.COLORS.LIKED, marginTop: 4 }]}>
+                      <Ionicons name="star" size={12} color="#FFF" />
+                      <Text style={styles.ratingTextWildcard}>
+                        {currentOpponent?.userRating?.toFixed(1)}
+                      </Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -2499,15 +2437,35 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
+  movieInfoBox: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    width: '100%',
+    minHeight: 60,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   movieCardName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
+    lineHeight: 16,
+    marginBottom: 2,
+    width: '100%',
     textAlign: 'center',
-    marginBottom: 4,
   },
   movieCardYear: {
-    fontSize: 12,
-    marginBottom: 8,
+    fontSize: 10,
+    opacity: 0.7,
+    lineHeight: 14,
+    width: '100%',
+    textAlign: 'center',
   },
   ratingBadge: {
     paddingVertical: 4,
@@ -2528,7 +2486,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // **Wildcard-Style Comparison Cards**
+  // **Wildcard-Style Comparison Cards - MovieCard.js styling**
   wildcardStyleCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
@@ -2538,22 +2496,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 3,
+    // Fixed dimensions from MovieCard.js
+    width: 120,
+    maxWidth: 120,
+    minWidth: 120,
+    height: 120 * 1.9, // 228px
+    overflow: 'hidden',
   },
   posterContainer: {
     position: 'relative',
-    marginBottom: 12,
+    width: '100%',
+    height: '70%', // Match MovieCard.js poster height ratio
   },
   movieComparisonCard: {
-    flex: 1,
+    // Remove flex: 1 to maintain fixed sizing
     alignItems: 'center',
-    padding: 16,
     borderRadius: 12,
     marginHorizontal: 8,
+    width: 120,
+    maxWidth: 120,
+    minWidth: 120,
+    height: 120 * 1.9,
   },
   comparisonPoster: {
-    width: 120,
-    height: 180,
-    borderRadius: 8,
+    width: '100%',
+    height: '100%',
+    borderRadius: 12, // Match MovieCard.js rounded corners
   },
   newMovieBadge: {
     position: 'absolute',
@@ -2949,42 +2917,22 @@ export const calculatePairwiseRating = (config) => {
   // Handle Round 1 case where new movie has no rating
   if (!aRating && bRating) {
     if (result === ComparisonResults.TIE) {
-      // For ties, still average but consider sentiment if available
-      const baseline = sentiment ? getSentimentBaseline(sentiment, userMovies) : bRating;
-      const avgRating = (baseline + bRating) / 2;
+      // For ties, average with opponent rating
+      const avgRating = bRating;
       return {
         updatedARating: Math.min(10, Math.max(1, avgRating + 0.05)),
         updatedBRating: Math.min(10, Math.max(1, avgRating - 0.05))
       };
     }
     
-    // FIXED: Use sentiment-aware baseline instead of blind ± 0.5
+    // Simple logic without sentiment baselines
     let newMovieRating;
-    if (sentiment) {
-      const sentimentBaseline = getSentimentBaseline(sentiment, userMovies);
-      
-      if (result === ComparisonResults.A_WINS) {
-        // New movie won - should be higher than opponent, but respect sentiment
-        newMovieRating = Math.max(sentimentBaseline, bRating + 0.3);
-      } else {
-        // New movie lost - should be lower than opponent, but respect sentiment
-        newMovieRating = Math.min(sentimentBaseline, bRating - 0.3);
-      }
-      
-      // Apply soft bounds based on sentiment (consultant's good idea, softly applied)
-      const baseline = ENHANCED_RATING_CONFIG.SENTIMENT_BASELINES[sentiment];
-      if (baseline) {
-        const { idealRange } = baseline;
-        // Soft enforcement - allow some drift but pull toward reasonable range
-        if (newMovieRating < idealRange[0] - 1.5) {
-          newMovieRating = idealRange[0] - 1.0; // Allow some flexibility
-        } else if (newMovieRating > idealRange[1] + 1.5) {
-          newMovieRating = idealRange[1] + 1.0; // Allow some flexibility
-        }
-      }
+    if (result === ComparisonResults.A_WINS) {
+      // New movie won - should be higher than opponent
+      newMovieRating = bRating + 0.5;
     } else {
-      // Fallback to old logic if no sentiment
-      newMovieRating = bRating + (result === ComparisonResults.A_WINS ? 0.5 : -0.5);
+      // New movie lost - should be lower than opponent
+      newMovieRating = bRating - 0.5;
     }
     
     return {
@@ -3217,6 +3165,5 @@ export {
   calculateRatingFromELOComparisons,
   selectMovieFromPercentileUnified,
   handleComparisonUnified,
-  calculateAverageRating,
-  getSentimentBaseline
+  calculateAverageRating
 };
