@@ -606,10 +606,10 @@ const calculateDynamicRatingCategories = (userMovies, mediaType = 'movie') => {
   const maxRating = sortedRatings[sortedRatings.length - 1];  // Your highest rating (100%)
   const ratingSpread = maxRating - minRating;
   
-  // Split the rating range evenly for percentiles
-  const p25 = minRating + (ratingSpread * 0.25);  // 25% of rating range
-  const p50 = minRating + (ratingSpread * 0.50);  // 50% of rating range  
-  const p75 = minRating + (ratingSpread * 0.75);  // 75% of rating range
+  // Split the rating range evenly for percentiles - round to 1 decimal in calculations
+  const p25 = Math.round((minRating + (ratingSpread * 0.25)) * 10) / 10;  // 25% of rating range
+  const p50 = Math.round((minRating + (ratingSpread * 0.50)) * 10) / 10;  // 50% of rating range  
+  const p75 = Math.round((minRating + (ratingSpread * 0.75)) * 10) / 10;  // 75% of rating range
   
   console.log(`📊 Dynamic Rating Ranges - Min: ${minRating}, 25th: ${p25}, 50th: ${p50}, 75th: ${p75}, Max: ${maxRating}`);
   console.log(`🎯 LOVE will select from: ${p75}-${maxRating} (top 25% of your ratings)`);
@@ -667,17 +667,32 @@ console.log(`🔧 CODE_BIBLE Fix: Using dynamic percentiles based on user's actu
  * Uses dynamic percentiles for opponent selection
  */
 const selectOpponentFromPercentile = (categoryData, seenMovies, excludeMovieId = null, mediaType = 'movie') => {
-  if (!seenMovies || seenMovies.length === 0) return null;
-  if (!categoryData || !categoryData.ratingRange) return null;
+  if (!seenMovies || seenMovies.length === 0) {
+    console.log('❌ No seen movies available for opponent selection');
+    return null;
+  }
+  
+  if (!categoryData) {
+    console.log('❌ Category data is undefined');
+    return null;
+  }
+  
+  if (!categoryData.ratingRange || !Array.isArray(categoryData.ratingRange)) {
+    console.log('❌ Category ratingRange is invalid:', categoryData);
+    return null;
+  }
   
   // Get movies filtered by media type
   const availableMovies = seenMovies
     .filter(movie => movie.userRating && movie.id !== excludeMovieId)
     .filter(movie => (movie.mediaType || 'movie') === mediaType);
     
-  if (availableMovies.length === 0) return null;
+  if (availableMovies.length === 0) {
+    console.log('❌ No available movies after filtering');
+    return null;
+  }
   
-  // Filter movies by rating range (not array percentiles)
+  // Filter movies by rating range (not array percentiles) - with error handling
   const [minRating, maxRating] = categoryData.ratingRange;
   const moviesInRange = availableMovies.filter(movie => 
     movie.userRating >= minRating && movie.userRating <= maxRating
@@ -853,10 +868,20 @@ const processUnifiedRatingFlow = async (config) => {
     
     // Get dynamic categories and rating range for selected sentiment
     const categories = calculateDynamicRatingCategories(seenMovies, mediaType);
-    const selectedCategoryData = categories[selectedCategory];
+    console.log(`🔍 Categories generated:`, Object.keys(categories));
+    console.log(`🔍 Selected category key: "${selectedCategory}"`);
+    
+    const categoryData = categories[selectedCategory];
+    console.log(`🔍 Selected category data:`, categoryData);
+    
+    if (!categoryData) {
+      console.log(`❌ No category data found for key: "${selectedCategory}"`);
+      console.log(`❌ Available keys:`, Object.keys(categories));
+      throw new Error(`Invalid sentiment category: ${selectedCategory}`);
+    }
     
     // Round 1: Unknown vs Known (sentiment-based opponent using rating ranges)
-    const round1Opponent = selectOpponentFromPercentile(selectedCategoryData, seenMovies, newMovie.id, mediaType);
+    const round1Opponent = selectOpponentFromPercentile(categoryData, seenMovies, newMovie.id, mediaType);
     
     if (!round1Opponent) {
       throw new Error('No suitable opponent found for sentiment-based comparison');
@@ -1105,7 +1130,7 @@ const MovieComparisonEngine = {
 };
 
 // **CONFIDENCE-BASED COMPARISON MODAL**
-const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selectedSentiment, onClose, onComparisonComplete, colors, mediaType = 'movie' }) => {
+const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selectedSentiment, sentimentRating, onClose, onComparisonComplete, colors, mediaType = 'movie' }) => {
   const [currentComparison, setCurrentComparison] = useState(0);
   const [currentOpponent, setCurrentOpponent] = useState(null);
   const [movieStats, setMovieStats] = useState({
@@ -1126,8 +1151,9 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
 
   // **RATING-PROXIMITY SELECTION STATE**
   const [placementState, setPlacementState] = useState(() => {
-    // Start with a neutral rating, no sentiment assumptions
-    const currentEstimate = 5.5;
+    // Use sentiment-based starting rating instead of neutral 5.5
+    const currentEstimate = sentimentRating || newMovie.suggestedRating || 5.5;
+    console.log(`🔧 ConfidenceBasedComparison init - sentimentRating: ${sentimentRating}, suggestedRating: ${newMovie.suggestedRating}, final: ${currentEstimate}`);
     
     return {
       currentEstimate: currentEstimate,
@@ -1766,9 +1792,9 @@ const SentimentRatingModal = ({ visible, movie, onClose, onRatingSelect, colors,
     
     const category = RATING_CATEGORIES[categoryKey];
     
-    // Calculate mid-rating based on percentile position (default to dynamic midpoint for new users)
-    const midRating = userMovies && userMovies.length > 0 ?
-      calculateMidRatingFromPercentile(userMovies, category.percentile) :
+    // Calculate mid-rating based on rating range (default to dynamic midpoint for new users)
+    const midRating = userMovies && userMovies.length > 0 && category.ratingRange ?
+      (category.ratingRange[0] + category.ratingRange[1]) / 2 :
       getDefaultRatingForCategory(categoryKey);
     
     const movieWithRating = {
@@ -1904,12 +1930,14 @@ const EnhancedRatingButton = ({
     const RATING_CATEGORIES = calculateDynamicRatingCategories(seen);
     const categoryInfo = RATING_CATEGORIES[categoryKey];
     
-    // Find movies in the same percentile range for comparison
-    const categoryMovies = MovieComparisonEngine.getMoviesInPercentileRange(
-      seen,
-      categoryInfo.percentile,
-      movie.id
-    );
+    // Find movies in the same rating range for comparison
+    const categoryMovies = seen
+      .filter(m => m.id !== movie.id && m.userRating)
+      .filter(m => {
+        if (!categoryInfo.ratingRange) return false;
+        const [minRating, maxRating] = categoryInfo.ratingRange;
+        return m.userRating >= minRating && m.userRating <= maxRating;
+      });
     
     // Always route through Wildcard UI for 3 comparisons if enough movies exist
     if (categoryMovies.length >= 3) {
@@ -1929,7 +1957,9 @@ const EnhancedRatingButton = ({
     }
     
     // Not enough movies for comparison, use category average but still show in wildcard-style UI
-    const categoryAverage = calculateMidRatingFromPercentile(seen, categoryInfo.percentile);
+    const categoryAverage = categoryInfo.ratingRange ? 
+      (categoryInfo.ratingRange[0] + categoryInfo.ratingRange[1]) / 2 :
+      getDefaultRatingForCategory(categoryKey);
     
     // Create mock comparison movies if needed to demonstrate the flow
     const mockComparisons = seen.slice(0, 3).map(m => ({ ...m, comparisonScore: 50 }));
@@ -2778,18 +2808,13 @@ const getRatingCategory = (rating, userMovies) => {
     return { key: 'DISLIKED', ...categories.DISLIKED };
   }
   
-  const sortedRatings = userMovies
-    .map(m => m.userRating || (m.eloRating / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
-    .filter(r => r && !isNaN(r))
-    .sort((a, b) => a - b);
-  
-  // Find rating's percentile position
-  const position = sortedRatings.findIndex(r => r >= rating);
-  const percentile = position === -1 ? 100 : (position / sortedRatings.length) * 100;
-  
+  // Find which rating range this rating falls into
   for (const [key, category] of Object.entries(categories)) {
-    if (percentile >= category.percentile[0] && percentile <= category.percentile[1]) {
-      return { key, ...category };
+    if (category.ratingRange && Array.isArray(category.ratingRange)) {
+      const [minRating, maxRating] = category.ratingRange;
+      if (rating >= minRating && rating <= maxRating) {
+        return { key, ...category };
+      }
     }
   }
   

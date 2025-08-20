@@ -1798,10 +1798,10 @@ function HomeScreen({
     const RATING_CATEGORIES = memoizedRatingCategories;
     const categoryInfo = RATING_CATEGORIES[categoryKey];
     
-    // Find movies in the same percentile range for comparison (filtered by media type)
-    const categoryMovies = getMoviesInPercentileRange(
+    // Find movies in the same rating range for comparison (filtered by media type)
+    const categoryMovies = getMoviesInRatingRange(
       currentMediaMovies,
-      categoryInfo.percentile,
+      categoryInfo.ratingRange,
       selectedMovie.id
     );
     
@@ -1823,16 +1823,32 @@ function HomeScreen({
       return;
     }
     
-    // Not enough movies for comparison, use category average based on percentile
-    const categoryAverage = seen && seen.length > 0 ? 
+    // Not enough movies for comparison, use category average based on rating range
+    const categoryAverage = seen && seen.length > 0 && categoryInfo.ratingRange ? 
       (() => {
-        const range = getRatingRangeFromPercentile(seen, categoryInfo.percentile);
-        return (range[0] + range[1]) / 2;
+        const [minRating, maxRating] = categoryInfo.ratingRange;
+        return (minRating + maxRating) / 2;
       })() :
       getDefaultRatingForCategory(categoryKey);
     handleConfirmRating(categoryAverage);
-  }, [currentSeenContent, selectedMovie, genres, calculateComparisonScore, getMoviesInPercentileRange, handleConfirmRating, memoizedRatingCategories, seen]);
+  }, [currentSeenContent, selectedMovie, genres, calculateComparisonScore, getMoviesInRatingRange, handleConfirmRating, memoizedRatingCategories, seen]);
 
+  // CODE_BIBLE Fix: Replace percentile-based selection with rating-range-based selection
+  const getMoviesInRatingRange = useCallback((userMovies, ratingRange, excludeMovieId) => {
+    if (!userMovies || userMovies.length === 0 || !ratingRange || !Array.isArray(ratingRange)) return [];
+    
+    const [minRating, maxRating] = ratingRange;
+    
+    const filteredMovies = userMovies
+      .filter(movie => movie.id !== excludeMovieId && movie.userRating)
+      .filter(movie => movie.userRating >= minRating && movie.userRating <= maxRating);
+    
+    console.log(`🎯 Found ${filteredMovies.length} movies in rating range ${minRating.toFixed(1)}-${maxRating.toFixed(1)}`);
+    
+    return filteredMovies;
+  }, []);
+
+  // Keep old function for legacy compatibility if needed elsewhere
   const getMoviesInPercentileRange = useCallback((userMovies, targetPercentile, excludeMovieId) => {
     if (!userMovies || userMovies.length === 0) return [];
     
@@ -1889,8 +1905,9 @@ function HomeScreen({
   }, [mediaType, selectedMovie?.id]);
   
   // Handle emotion selection and start comparison process
-  const handleEmotionSelected = useCallback((emotion) => {
+  const handleEmotionSelected = useCallback((emotion, sentimentRating = null) => {
     console.log('🎭 EMOTION SELECTED:', emotion);
+    console.log('🔧 SENTIMENT RATING RECEIVED:', sentimentRating);
     console.log('🎭 CURRENT MEDIA TYPE:', mediaType);
     console.log('🎭 FILTERED CONTENT COUNT:', currentSeenContent.length);
     console.log('🎭 FILTERED CONTENT:', currentSeenContent.map(m => `${m.title}: ${m.userRating} (${m.mediaType || 'movie'})`));
@@ -3295,7 +3312,10 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
           onRatingSelect={(movieWithRating, categoryKey, rating) => {
             console.log('🎭 Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
             setSelectedCategory(categoryKey);
-            handleEmotionSelected(categoryKey);
+            // Store the sentiment rating for the comparison system
+            setCurrentMovieRating(rating);
+            // Pass rating directly to avoid async state timing issues
+            handleEmotionSelected(categoryKey, rating);
           }}
           colors={colors}
           userMovies={currentSeenContent}
@@ -3310,7 +3330,10 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
           onRatingSelect={(movieWithRating, categoryKey, rating) => {
             console.log('🎭 Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
             setSelectedCategory(categoryKey);
-            handleEmotionSelected(categoryKey);
+            // Store the sentiment rating for the comparison system
+            setCurrentMovieRating(rating);
+            // Pass rating directly to avoid async state timing issues
+            handleEmotionSelected(categoryKey, rating);
           }}
           colors={colors}
           userMovies={currentSeenContent}
@@ -3322,10 +3345,12 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
           visible={comparisonModalVisible}
           newMovie={{
             ...selectedMovie,
-            // No suggestedRating - starts as truly unknown
+            // Use sentiment-based starting rating instead of unknown
+            suggestedRating: currentMovieRating
           }}
           availableMovies={currentSeenContent}
           selectedSentiment={selectedEmotion}
+          sentimentRating={currentMovieRating}
           onClose={handleCloseEnhancedModals}
           onComparisonComplete={(result) => {
             console.log('🎯 ConfidenceBasedComparison completed:', result);
