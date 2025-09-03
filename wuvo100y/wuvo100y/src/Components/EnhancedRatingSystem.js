@@ -2814,17 +2814,17 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   completionPoster: {
-    width: 150,
-    height: 225,
+    width: 225, // 50% larger (150 * 1.5)
+    height: 338, // 50% larger (225 * 1.5) 
     borderRadius: 12,
     marginBottom: 16,
   },
   completionMovieTitle: {
-    fontSize: 18,
+    fontSize: 27, // 50% larger (18 * 1.5)
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 12,
-    lineHeight: 24,
+    lineHeight: 36, // 50% larger (24 * 1.5)
   },
   completionRatingContainer: {
     flexDirection: 'row',
@@ -2835,7 +2835,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   completionRating: {
-    fontSize: 20,
+    fontSize: 30, // 50% larger (20 * 1.5)
     fontWeight: 'bold',
     marginLeft: 8,
   },

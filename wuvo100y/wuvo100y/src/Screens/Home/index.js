@@ -1958,13 +1958,11 @@ function HomeScreen({
   }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, setFinalCalculatedRating, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, closeDetailModal, mediaType, memoizedRatingCategories, removeMovieFromAllSections]);
 
   const handleCloseEnhancedModals = useCallback(() => {
-    setComparisonModalVisible(false);
     setSelectedCategory(null);
-    setComparisonMovies([]);
-    setCurrentComparison(0);
-    setComparisonResults([]);
-    setIsComparisonComplete(false);
+    setSelectedEmotion(null);
+    setSelectedMovieForRating(null);
     setFinalCalculatedRating(null);
+    setEmotionModalVisible(false);
     
     // **CRITICAL FIX: Reset rating flag when modals are closed/cancelled**
     setIsRatingInProgress(false);
@@ -1976,7 +1974,6 @@ function HomeScreen({
       console.log('🔓 FORCE RESET: Rating flag set to false after timeout');
     }, 100);
     
-    // Fade animation removed
     setShowSentimentButtons(false);
   }, []);
 
@@ -3243,7 +3240,7 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
 
         {/* **CONFIDENCE-BASED COMPARISON MODAL** */}
         <ConfidenceBasedComparison
-          visible={confidenceModalVisible}
+          visible={selectedEmotion && selectedMovie && !emotionModalVisible}
           newMovie={{
             ...selectedMovie,
             // No suggestedRating - starts as truly unknown
