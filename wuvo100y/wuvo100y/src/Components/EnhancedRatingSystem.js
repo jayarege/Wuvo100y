@@ -592,31 +592,74 @@ const calculateDynamicRatingCategories = (userMovies, mediaType = 'movie') => {
     (movie.mediaType || 'movie') === mediaType
   );
   
-  const sortedRatings = filteredMovies
-    .map(m => m.userRating || (m.eloRating / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR))
-    .filter(rating => rating && !isNaN(rating))
-    .sort((a, b) => a - b);
+  const sortedMovies = filteredMovies
+    .filter(m => m.userRating || m.eloRating)
+    .map(m => ({
+      ...m,
+      rating: m.userRating || (m.eloRating / ENHANCED_RATING_CONFIG.ELO_CONFIG.SCALE_FACTOR)
+    }))
+    .filter(m => m.rating && !isNaN(m.rating))
+    .sort((a, b) => a.rating - b.rating);
     
-  if (sortedRatings.length === 0) {
+  if (sortedMovies.length === 0) {
     return calculateDynamicRatingCategories([]);
   }
   
-  // Calculate rating-based percentiles using min/max spread (not movie pooling)
-  const minRating = sortedRatings[0];  // Your lowest rating (0%)
-  const maxRating = sortedRatings[sortedRatings.length - 1];  // Your highest rating (100%)
-  const ratingSpread = maxRating - minRating;
+  // Get unique ratings to check for edge cases
+  const uniqueRatings = [...new Set(sortedMovies.map(m => m.rating))].sort((a, b) => a - b);
+  const minRating = uniqueRatings[0];
+  const maxRating = uniqueRatings[uniqueRatings.length - 1];
   
-  // Split the rating range evenly for percentiles - round to 1 decimal in calculations
-  const p25 = Math.round((minRating + (ratingSpread * 0.25)) * 10) / 10;  // 25% of rating range
-  const p50 = Math.round((minRating + (ratingSpread * 0.50)) * 10) / 10;  // 50% of rating range  
-  const p75 = Math.round((minRating + (ratingSpread * 0.75)) * 10) / 10;  // 75% of rating range
+  let p25, p50, p75;
   
-  console.log(`📊 Dynamic Rating Ranges - Min: ${minRating}, 25th: ${p25}, 50th: ${p50}, 75th: ${p75}, Max: ${maxRating}`);
-  console.log(`🎯 LOVE will select from: ${p75}-${maxRating} (top 25% of your ratings)`);
-  console.log(`🎯 LIKE will select from: ${p50}-${p75} (50-75th percentile)`);
-  console.log(`🎯 OKAY will select from: ${p25}-${p50} (25-50th percentile)`);
-  console.log(`🎯 DISLIKE will select from: ${minRating}-${p25} (bottom 25%)`);
-console.log(`🔧 CODE_BIBLE Fix: Using dynamic percentiles based on user's actual data, not hardcoded ranges`);
+  // EDGE CASE HANDLING: Check if we have enough rating diversity
+  if (uniqueRatings.length < 4 || sortedMovies.length < 4) {
+    // Not enough diversity - use simple midpoint split
+    console.log(`⚠️ Edge case detected: Only ${uniqueRatings.length} unique ratings among ${sortedMovies.length} movies`);
+    console.log(`⚠️ Using fallback: simple midpoint split instead of percentiles`);
+    
+    const midpoint = Math.round((minRating + maxRating) / 2 * 10) / 10;
+    
+    // For extreme narrow ranges, adjust the split
+    if (maxRating - minRating < 1.0) {
+      // Ultra narrow range (like 8.8-9.2)
+      p25 = minRating;
+      p50 = Math.round((minRating + maxRating) / 2 * 10) / 10;
+      p75 = maxRating;
+    } else {
+      // Simple binary split for limited data
+      p25 = midpoint;
+      p50 = midpoint;
+      p75 = midpoint;
+    }
+    
+    console.log(`📊 Fallback Ranges - Min: ${minRating}, Mid: ${midpoint}, Max: ${maxRating}`);
+  } else {
+    // NORMAL CASE: Use positional percentiles based on actual movie distribution
+    const p25Index = Math.floor(sortedMovies.length * 0.25);
+    const p50Index = Math.floor(sortedMovies.length * 0.50);
+    const p75Index = Math.floor(sortedMovies.length * 0.75);
+    
+    // Get the ratings at those positions
+    p25 = Math.round(sortedMovies[p25Index].rating * 10) / 10;
+    p50 = Math.round(sortedMovies[p50Index].rating * 10) / 10;
+    p75 = Math.round(sortedMovies[p75Index].rating * 10) / 10;
+    
+    // Ensure percentiles are distinct (handle clustered ratings)
+    if (p25 === p50) p50 = Math.min(p25 + 0.1, p75);
+    if (p50 === p75) p75 = Math.min(p50 + 0.1, maxRating);
+    
+    console.log(`📊 True Percentile Ranges based on movie positions:`);
+    console.log(`   Bottom 25% (${p25Index + 1} movies): ${minRating} - ${p25}`);
+    console.log(`   25-50% (${p50Index - p25Index} movies): ${p25} - ${p50}`);
+    console.log(`   50-75% (${p75Index - p50Index} movies): ${p50} - ${p75}`);
+    console.log(`   Top 25% (${sortedMovies.length - p75Index} movies): ${p75} - ${maxRating}`);
+  }
+  
+  console.log(`🎯 LOVE will select from: ${p75}-${maxRating} (your top-rated movies)`);
+  console.log(`🎯 LIKE will select from: ${p50}-${p75} (your above-average movies)`);
+  console.log(`🎯 OKAY will select from: ${p25}-${p50} (your below-average movies)`);
+  console.log(`🎯 DISLIKE will select from: ${minRating}-${p25} (your lowest-rated movies)`);
   
   // Use rating-based ranges (not movie pooling percentiles)
   // For your ratings 6.2-9.7: Love gets 8.825-9.7 (top 25% of rating spread)
@@ -666,53 +709,78 @@ console.log(`🔧 CODE_BIBLE Fix: Using dynamic percentiles based on user's actu
  * Select movie from percentile range based on sentiment category
  * Uses dynamic percentiles for opponent selection
  */
-const selectOpponentFromPercentile = (categoryData, seenMovies, excludeMovieId = null, mediaType = 'movie') => {
+// **WORKING POSITIONAL PERCENTILE LOGIC** (copied from selectMovieFromPercentileUnified)
+const selectOpponentFromPercentile = (emotion, seenMovies, excludeMovieId = null, mediaType = 'movie', enhancedLogging = true) => {
+  const percentileRanges = ENHANCED_RATING_CONFIG.PERCENTILE_RANGES;
+  
   if (!seenMovies || seenMovies.length === 0) {
-    console.log('❌ No seen movies available for opponent selection');
+    if (enhancedLogging) console.log('🚨 No seen movies available');
     return null;
   }
   
-  if (!categoryData) {
-    console.log('❌ Category data is undefined');
-    return null;
+  // Apply media type filtering
+  let filteredMovies = seenMovies;
+  if (mediaType) {
+    filteredMovies = seenMovies.filter(movie => 
+      movie.userRating && 
+      movie.id !== excludeMovieId && 
+      (movie.mediaType || 'movie') === mediaType
+    );
+  } else {
+    // Standard filtering without media type
+    filteredMovies = seenMovies.filter(movie => movie.userRating && movie.id !== excludeMovieId);
   }
   
-  if (!categoryData.ratingRange || !Array.isArray(categoryData.ratingRange)) {
-    console.log('❌ Category ratingRange is invalid:', categoryData);
-    return null;
-  }
-  
-  // Get movies filtered by media type
-  const availableMovies = seenMovies
-    .filter(movie => movie.userRating && movie.id !== excludeMovieId)
-    .filter(movie => (movie.mediaType || 'movie') === mediaType);
-    
-  if (availableMovies.length === 0) {
+  if (filteredMovies.length === 0) {
     console.log('❌ No available movies after filtering');
     return null;
   }
   
-  // Filter movies by rating range (not array percentiles) - with error handling
-  const [minRating, maxRating] = categoryData.ratingRange;
-  const moviesInRange = availableMovies.filter(movie => 
-    movie.userRating >= minRating && movie.userRating <= maxRating
-  );
+  // Sort movies by rating to establish percentile ranges (HIGH to LOW for correct percentiles)
+  const sortedMovies = [...filteredMovies].sort((a, b) => (b.userRating || 0) - (a.userRating || 0));
   
-  console.log(`🎯 Selecting from rating range ${minRating.toFixed(2)}-${maxRating.toFixed(2)}`);
-  console.log(`🎯 Movies in range: ${moviesInRange.map(m => `${m.title}(${m.userRating})`).join(', ')}`);
+  const [minPercent, maxPercent] = percentileRanges[emotion] || [0.5, 0.75];
+  const startIndex = Math.floor(sortedMovies.length * minPercent);
+  const endIndex = Math.min(Math.floor(sortedMovies.length * maxPercent), sortedMovies.length - 1);
   
-  if (moviesInRange.length === 0) {
-    // Fallback: find closest movie to range
-    const targetRating = (minRating + maxRating) / 2;
-    availableMovies.sort((a, b) => Math.abs(a.userRating - targetRating) - Math.abs(b.userRating - targetRating));
-    console.log(`⚠️ No movies in range, using closest: ${availableMovies[0].title}(${availableMovies[0].userRating})`);
-    return availableMovies[0];
+  if (enhancedLogging) {
+    console.log(`🎯 ${emotion} percentile [${minPercent}-${maxPercent}]: indices ${startIndex}-${endIndex}`);
+    console.log(`🎯 Sorted movies (high to low): ${sortedMovies.map(m => `${m.title}(${m.userRating})`).join(', ')}`);
   }
   
-  // Return random movie from rating range
-  const selected = moviesInRange[Math.floor(Math.random() * moviesInRange.length)];
-  console.log(`✅ Selected opponent: ${selected.title}(${selected.userRating}) from range ${minRating.toFixed(2)}-${maxRating.toFixed(2)}`);
-  return selected;
+  const percentileMovies = sortedMovies.slice(startIndex, endIndex + 1);
+  
+  if (percentileMovies.length === 0) {
+    // Adjacent bucket fallback - never skip more than one bucket
+    const adjacentBuckets = getAdjacentBuckets(emotion);
+    
+    for (const adjacentEmotion of adjacentBuckets) {
+      const adjacentRange = percentileRanges[adjacentEmotion];
+      const adjStartIndex = Math.floor(sortedMovies.length * adjacentRange[0]);
+      const adjEndIndex = Math.min(Math.floor(sortedMovies.length * adjacentRange[1]), sortedMovies.length - 1);
+      const adjacentMovies = sortedMovies.slice(adjStartIndex, adjEndIndex + 1);
+      
+      if (adjacentMovies.length > 0) {
+        if (enhancedLogging) {
+          console.log(`🔄 Fallback to adjacent bucket ${adjacentEmotion}: ${adjacentMovies[0].title} (Rating: ${adjacentMovies[0].userRating})`);
+        }
+        return adjacentMovies[Math.floor(Math.random() * adjacentMovies.length)];
+      }
+    }
+    
+    // Final fallback if no adjacent buckets have movies
+    return sortedMovies[0];
+  }
+  
+  // Random selection from percentile
+  const selectedMovie = percentileMovies[Math.floor(Math.random() * percentileMovies.length)];
+  
+  if (enhancedLogging) {
+    console.log(`🎬 Selected from ${emotion} percentile: ${selectedMovie.title} (Rating: ${selectedMovie.userRating})`);
+    console.log(`🎯 Selected from movies: ${percentileMovies.map(m => `${m.title}(${m.userRating})`).join(', ')}`);
+  }
+  
+  return selectedMovie;
 };
 
 /**
@@ -1300,7 +1368,18 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
       console.warn(`⚠️ Used ${excludeIds.length - 1} opponents, ${availablePool.length} remaining in total pool`);
     }
     
-    const opponent = pickOpponentFromProximity(availableMovies, currentRating, searchRadius, excludeIds);
+    // **ALL RANDOM SELECTION: No percentile logic**
+    let opponent;
+    const availableOpponents = availableMovies.filter(movie => !excludeIds.includes(movie.id));
+    
+    if (availableOpponents.length > 0) {
+      // Random selection for all opponents
+      const shuffled = availableOpponents.sort(() => 0.5 - Math.random());
+      opponent = shuffled[0];
+      console.log(`🎲 Using random opponent: ${opponent?.title} (${opponent?.userRating})`);
+    } else {
+      opponent = null;
+    }
     
     if (opponent) {
       // **CRITICAL VALIDATION: Double-check opponent isn't already used**
@@ -1480,33 +1559,14 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
 
     console.log(`📊 Comparison ${currentComparison}: Rating ${newRating?.toFixed(2)} ± ${newStats.confidenceInterval?.width?.toFixed(2)}`);
 
-    // **DYNAMIC 3-6 ROUNDS STOPPING CRITERIA**
+    // **MATCH ADD MOVIE: Always exactly 3 comparisons**
     let shouldStop = false;
     let stopReason = '';
     
-    // Check if we've reached minimum comparisons
-    if (newStats.comparisons >= CONFIDENCE_RATING_CONFIG.CONFIDENCE.MIN_COMPARISONS) {
-      const confidenceWidth = newStats.confidenceInterval?.width || Infinity;
-      const ratingStability = comparisonHistory.length >= 1 ? 
-        Math.abs(newRating - (comparisonHistory[comparisonHistory.length - 1]?.ratingAfter || newRating)) : 
-        Infinity;
-      
-      // Check for excellent confidence (immediate stop)
-      if (confidenceWidth <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.CONFIDENCE_EXCELLENT) {
-        shouldStop = true;
-        stopReason = 'Excellent confidence achieved';
-      }
-      // Check for good confidence AND rating stability
-      else if (confidenceWidth <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.CONFIDENCE_GOOD && 
-               ratingStability <= CONFIDENCE_RATING_CONFIG.CONFIDENCE.RATING_STABILITY_THRESHOLD) {
-        shouldStop = true;
-        stopReason = 'Good confidence with stable rating';
-      }
-      // Check if maximum comparisons reached
-      else if (newStats.comparisons >= CONFIDENCE_RATING_CONFIG.CONFIDENCE.MAX_COMPARISONS) {
-        shouldStop = true;
-        stopReason = 'Maximum comparisons reached';
-      }
+    // Stop after exactly 3 comparisons (matching Add Movie screen)
+    if (newStats.comparisons >= 3) {
+      shouldStop = true;
+      stopReason = 'Completed 3 comparisons (matching Add Movie logic)';
     }
     
     // Also stop if no more opponents available
@@ -3116,10 +3176,13 @@ const selectMovieFromPercentileUnified = (seenMovies, emotion, options = {}) => 
   }
   
   // Random selection from percentile
-  const selectedMovie = percentileMovies[Math.floor(Math.random() * percentileMovies.length)];
+  const randomIndex = Math.floor(Math.random() * percentileMovies.length);
+  const selectedMovie = percentileMovies[randomIndex];
   
   if (enhancedLogging) {
     console.log(`🎬 Selected from ${emotion} percentile: ${selectedMovie.title} (Rating: ${selectedMovie.userRating})`);
+    console.log(`🎯 Available in ${emotion} percentile:`, percentileMovies.map(m => `${m.title}(${m.userRating})`));
+    console.log(`🎲 Random index: ${randomIndex} of ${percentileMovies.length} options`);
   }
   
   return selectedMovie;
@@ -3192,6 +3255,7 @@ export {
   ConfidenceBasedComparison,
   getRatingCategory,
   calculateDynamicRatingCategories,
+  selectOpponentFromPercentile,
   processUnifiedRatingFlow,
   updateRatingWithConfidence,
   calculateConfidenceInterval,

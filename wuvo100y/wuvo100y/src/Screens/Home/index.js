@@ -68,42 +68,12 @@ import {
   selectRandomOpponent, 
   handleTooToughToDecide,
   calculateRatingFromELOComparisons,
-  selectMovieFromPercentileUnified
+  selectMovieFromPercentileUnified,
+  calculateAverageRating
 } from '../../Components/EnhancedRatingSystem';
 
 
-// Helper functions for calculating range from percentile (moved from component)
-const getRatingRangeFromPercentile = (userMovies, percentile) => {
-  const sortedRatings = userMovies
-    .map(m => m.userRating || (m.eloRating / 100))
-    .filter(rating => rating && !isNaN(rating))
-    .sort((a, b) => a - b);
-
-  if (sortedRatings.length === 0) return [1, 10];
-
-  const lowIndex = Math.floor((percentile[0] / 100) * sortedRatings.length);
-  const highIndex = Math.floor((percentile[1] / 100) * sortedRatings.length);
-  
-  const lowRating = sortedRatings[Math.max(0, lowIndex)] || sortedRatings[0];
-  const highRating = sortedRatings[Math.min(highIndex, sortedRatings.length - 1)] || sortedRatings[sortedRatings.length - 1];
-  
-  return [lowRating, highRating];
-};
-
-const getDefaultRatingForCategory = (categoryKey) => {
-  // Calculate dynamic defaults based on 1-10 rating bounds
-  const midpoint = 5.5; // (1 + 10) / 2
-  const quarterRange = 2.25; // (10 - 1) / 4
-  
-  const defaults = {
-    LOVED: midpoint + quarterRange * 1.5,    // ~8.875 for 1-10 range
-    LIKED: midpoint + quarterRange * 0.5,     // ~6.625 for 1-10 range  
-    AVERAGE: midpoint,                        // 5.5 for 1-10 range
-    DISLIKED: midpoint - quarterRange * 1.5  // ~2.125 for 1-10 range
-  };
-  
-  return defaults[categoryKey] || midpoint;
-};
+// Removed custom percentile logic - now relying ONLY on EnhancedRatingSystem
 
 // **DEBUG LOGGING**
 console.log('🏠 HomeScreen: Enhanced Rating System loaded');
@@ -332,6 +302,9 @@ function HomeScreen({
   const [currentMovieRating, setCurrentMovieRating] = useState(null);
   const [emotionModalVisible, setEmotionModalVisible] = useState(false);
   const [finalCalculatedRating, setFinalCalculatedRating] = useState(null);
+  
+  // **ADD MISSING STATE VARIABLES FROM ADDMOVIE**
+  const [selectedMovieForRating, setSelectedMovieForRating] = useState(null);
   
   const {
     currentSession,
@@ -1849,21 +1822,7 @@ function HomeScreen({
   }, []);
 
   // Keep old function for legacy compatibility if needed elsewhere
-  const getMoviesInPercentileRange = useCallback((userMovies, targetPercentile, excludeMovieId) => {
-    if (!userMovies || userMovies.length === 0) return [];
-    
-    const sortedMovies = [...userMovies]
-      .filter(movie => movie.id !== excludeMovieId && movie.userRating)
-      .sort((a, b) => b.userRating - a.userRating);
-    
-    if (sortedMovies.length === 0) return [];
-    
-    const totalMovies = sortedMovies.length;
-    const startIndex = Math.floor((targetPercentile[0] / 100) * totalMovies);
-    const endIndex = Math.ceil((targetPercentile[1] / 100) * totalMovies);
-    
-    return sortedMovies.slice(startIndex, Math.min(endIndex, totalMovies));
-  }, []);
+  // Removed getMoviesInPercentileRange - now using EnhancedRatingSystem only
 
   const calculateComparisonScore = useCallback((movie, newMovie, genres) => {
     let score = 0;
@@ -1894,16 +1853,14 @@ function HomeScreen({
 
   // Note: Emotion baselines removed - using pure Unknown vs Known comparison
   
-  // ✅ CONSOLIDATED: Now using unified opponent selection with media type filtering
-  const selectMovieFromPercentile = useCallback((seenMovies, emotion) => {
-    return selectMovieFromPercentileUnified(seenMovies, emotion, {
-      mediaType,
-      excludeMovieId: selectedMovie?.id,
-      enableMediaTypeFilter: true,
-      enhancedLogging: true
-    });
-  }, [mediaType, selectedMovie?.id]);
+  // REMOVED: Local percentile selection - now using EnhancedRatingSystem directly
   
+  // REMOVED: 200+ line duplicate handleComparison function - now handled by ConfidenceBasedComparison
+  // - Removed manual ELO calculations that duplicate EnhancedRatingSystem
+  // - Removed manual AsyncStorage updates that duplicate EnhancedRatingSystem  
+  // - Removed manual comparison state management that bypasses ConfidenceBasedComparison
+  // - ALL RATING LOGIC NOW DELEGATED TO ENHANCEDRATINGSYSTEM
+
   // Handle emotion selection and start comparison process
   const handleEmotionSelected = useCallback((emotion, sentimentRating = null) => {
     console.log('🎭 EMOTION SELECTED:', emotion);
@@ -1924,66 +1881,12 @@ function HomeScreen({
     console.log('🔒 Rating flow started - blocking movie selection');
     
     setSelectedEmotion(emotion);
-    // Store sentiment rating if provided (for proper opponent selection)
-    if (sentimentRating !== null) {
-      setCurrentMovieRating(sentimentRating);
-      console.log('🔧 Updated currentMovieRating to sentiment rating:', sentimentRating);
-    }
     setEmotionModalVisible(false);
-    // Don't clear selectedMovie here - keep it for comparison modal
     
-    // Select first opponent from percentile - USING MEDIA-TYPE-FILTERED CONTENT
-    const firstOpponent = selectMovieFromPercentile(currentSeenContent, emotion);
-    if (!firstOpponent) {
-      console.log('❌ NO FIRST OPPONENT FOUND');
-      console.log('❌ DEBUG INFO:');
-      console.log('- Current media type:', mediaType);
-      console.log('- Filtered content count:', currentSeenContent.length);
-      console.log('- Emotion/sentiment:', emotion);
-      console.log('- Content with userRating:', currentSeenContent.filter(movie => movie.userRating).length);
-      console.log('- Sample filtered content:', currentSeenContent[0] ? {
-        title: currentSeenContent[0].title,
-        userRating: currentSeenContent[0].userRating,
-        mediaType: currentSeenContent[0].mediaType,
-        id: currentSeenContent[0].id
-      } : 'No content found');
-      
-      const errorData = formatUtils.getMinimumRatingError(movieUtils.getMovieCount(currentSeenContent, 'all', { rated: true }), mediaType);
-      Alert.alert(errorData.title, errorData.message, errorData.buttons);
-      return;
-    }
-    
-    // Select second and third opponents randomly from current media type content (for known vs known)
-    const remainingMovies = currentSeenContent
-      .filter(movie => movie.id !== firstOpponent.id);
-    
-    if (remainingMovies.length < 2) {
-      console.log('❌ NOT ENOUGH REMAINING MOVIES');
-      Alert.alert(
-        '🎬 Need More Ratings', 
-        `You need at least 3 total rated ${mediaType === 'movie' ? 'movies' : 'TV shows'} to use this feature.\n\nCurrently you have: ${currentSeenContent.length} rated ${mediaType === 'movie' ? 'movies' : 'TV shows'}.\n\nPlease rate a few more ${mediaType === 'movie' ? 'movies' : 'TV shows'} first!`,
-        [{ text: "OK", style: "default" }]
-      );
-      return;
-    }
-    
-    // Use ConfidenceBasedComparison instead of hardcoded 3-round logic
-    const movieWithSuggestedRating = {
-      ...selectedMovie,
-      // No suggestedRating - true unknown vs known first round
-    };
-    
-    // Set up for ConfidenceBasedComparison modal
-    setComparisonMovies(currentSeenContent); // Pass all available movies for dynamic selection
-    setCurrentComparison(0);
-    setComparisonResults([]);
-    setIsComparisonComplete(false);
-    setCurrentMovieRating(null);
+    // Delegate everything to EnhancedRatingSystem
+    console.log(`🎭 Delegating to EnhancedRatingSystem for ${selectedMovie?.title} with emotion: ${emotion}`);
     setComparisonModalVisible(true);
-    
-    console.log(`🎭 Starting ConfidenceBasedComparison for ${selectedMovie?.title} with sentiment: ${emotion}`);
-    console.log(`🎯 Available movies for comparison: ${currentSeenContent.length} total`);
-  }, [selectedMovie, currentSeenContent, selectMovieFromPercentile, mediaType]);
+  }, [selectedMovie, currentSeenContent, mediaType]);
 
 
   const handleConfirmRating = useCallback((finalRating) => {
@@ -3350,12 +3253,10 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
           visible={comparisonModalVisible}
           newMovie={{
             ...selectedMovie,
-            // Use sentiment-based starting rating instead of unknown
-            suggestedRating: currentMovieRating
+            // No suggestedRating - starts as truly unknown
           }}
           availableMovies={currentSeenContent}
           selectedSentiment={selectedEmotion}
-          sentimentRating={currentMovieRating}
           onClose={handleCloseEnhancedModals}
           onComparisonComplete={(result) => {
             console.log('🎯 ConfidenceBasedComparison completed:', result);
@@ -3365,6 +3266,205 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
           colors={colors}
           mediaType={mediaType}
         />
+        
+        {/* **FALLBACK MODAL - keeping old implementation hidden for now** */}
+        <Modal visible={false && comparisonModalVisible} transparent animationType="slide">
+          <View style={homeStyles.modalOverlay}>
+            <LinearGradient
+              colors={Array.isArray(colors.background) ? colors.background : [colors.background, colors.background]}
+              locations={[0, 0.1, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[homeStyles.comparisonModalContent, {
+                borderWidth: 0.5,
+                borderColor: colors.primaryGradient[1],
+              }]}
+            >
+              {!isComparisonComplete ? (
+                <>
+                  <View style={homeStyles.comparisonHeader}>
+                    <Text style={[homeStyles.modalTitle, { color: colors.text }]}>
+                      🎬 Comparison {currentComparison + 1}/3
+                    </Text>
+                    <Text style={[homeStyles.comparisonSubtitle, { color: colors.subText }]}>
+                      Which one do you prefer?
+                    </Text>
+                  </View>
+                  
+                  <View style={homeStyles.moviesComparison}>
+                    {/* New Movie */}
+                    <TouchableOpacity 
+                      style={homeStyles.movieComparisonCard}
+                      onPress={() => handleComparison('new')}
+                      activeOpacity={0.8}
+                    >
+                      <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovieForRating?.poster_path}` }}
+                        style={homeStyles.comparisonPoster}
+                        resizeMode="cover"
+                      />
+                      <Text style={[homeStyles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                        {selectedMovieForRating?.title || selectedMovieForRating?.name}
+                      </Text>
+                      <Text style={[homeStyles.movieCardYear, { color: colors.subText }]}>
+                        {selectedMovieForRating?.release_date ? new Date(selectedMovieForRating.release_date).getFullYear() : 'N/A'}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {/* VS Indicator */}
+                    <View style={homeStyles.vsIndicator}>
+                      <Text style={[homeStyles.vsText, { color: colors.accent }]}>VS</Text>
+                    </View>
+                    
+                    {/* Comparison Movie */}
+                    {comparisonMovies[currentComparison] && (
+                      <TouchableOpacity 
+                        style={homeStyles.movieComparisonCard}
+                        onPress={() => handleComparison('comparison')}
+                        activeOpacity={0.8}
+                      >
+                        <Image
+                          source={{ uri: `https://image.tmdb.org/t/p/w500${comparisonMovies[currentComparison]?.poster_path}` }}
+                          style={homeStyles.comparisonPoster}
+                          resizeMode="cover"
+                        />
+                        <Text style={[homeStyles.movieCardName, { color: colors.text }]} numberOfLines={2}>
+                          {comparisonMovies[currentComparison]?.title || comparisonMovies[currentComparison]?.name}
+                        </Text>
+                        <Text style={[homeStyles.movieCardYear, { color: colors.subText }]}>
+                          {comparisonMovies[currentComparison]?.release_date ? new Date(comparisonMovies[currentComparison].release_date).getFullYear() : 'N/A'}
+                        </Text>
+                        <View style={[homeStyles.ratingBadge, { backgroundColor: colors.accent }]}>
+                          <Text style={homeStyles.ratingText}>
+                            {comparisonMovies[currentComparison]?.userRating?.toFixed(1)}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Progress Indicator */}
+                  <View style={homeStyles.progressIndicator}>
+                    {[0, 1, 2].map(index => (
+                      <View
+                        key={index}
+                        style={[
+                          homeStyles.progressDot,
+                          { 
+                            backgroundColor: index <= currentComparison ? colors.accent : colors.border?.color || '#ccc'
+                          }
+                        ]}
+                      />
+                    ))}
+                  </View>
+
+                  {/* Too Tough to Decide Button */}
+                  <TouchableOpacity 
+                    style={[homeStyles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+                    onPress={() => {
+                      console.log('User selected: Too tough to decide');
+                      // Handle too tough to decide logic - could skip this comparison or record as neutral
+                      if (currentComparison < 2) {
+                        setCurrentComparison(currentComparison + 1);
+                      } else {
+                        // Calculate average rating between current movie and opponent for "too tough to decide"
+                        const currentComparisonMovie = comparisonMovies[currentComparison];
+                        const currentRating = currentMovieRating || 5.0;
+                        const opponentRating = currentComparisonMovie?.userRating || 5.0;
+                        const averageRating = calculateAverageRating(currentRating, opponentRating);
+                        
+                        // Assign very close ratings (like Wildcard screen)
+                        const neutralRating = Math.min(10, Math.max(1, averageRating + 0.05));
+                        const opponentNewRating = Math.min(10, Math.max(1, averageRating - 0.05));
+                        
+                        console.log('🤷 Too tough to decide - current:', currentRating, 'opponent:', opponentRating, 'average:', averageRating);
+                        console.log('🎯 SETTING finalCalculatedRating BEFORE completion screen (neutral):', neutralRating);
+                        
+                        // Update opponent's rating too (similar to Wildcard logic)
+                        if (currentComparisonMovie) {
+                          currentComparisonMovie.userRating = opponentNewRating;
+                          // Save updated opponent rating to storage
+                          const updateOpponentRating = async () => {
+                            try {
+                              const storageKey = mediaType === 'movie' ? 'wuvo_seen_movies' : 'wuvo_seen_tvshows';
+                              const storedMovies = await AsyncStorage.getItem(storageKey);
+                              if (storedMovies) {
+                                const movies = JSON.parse(storedMovies);
+                                const movieIndex = movies.findIndex(m => m.id === currentComparisonMovie.id);
+                                if (movieIndex !== -1) {
+                                  movies[movieIndex].userRating = opponentNewRating;
+                                  await AsyncStorage.setItem(storageKey, JSON.stringify(movies));
+                                }
+                              }
+                            } catch (error) {
+                              console.error('Error updating opponent rating:', error);
+                            }
+                          };
+                          updateOpponentRating();
+                        }
+                        
+                        setFinalCalculatedRating(neutralRating);
+                        setIsComparisonComplete(true);
+                        setTimeout(() => {
+                          setComparisonModalVisible(false);
+                          handleConfirmRating(neutralRating);
+                        }, 1500);
+                      }
+                    }}
+                  >
+                    <Text style={[homeStyles.cancelButtonText, { color: colors.subText }]}>Too Tough to Decide</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // Completion Screen
+                <View style={homeStyles.finalRatingModal}>
+                  {console.log('🎬 COMPLETION SCREEN RENDERING - finalCalculatedRating:', finalCalculatedRating)}
+                  {/* Movie Poster */}
+                  <Image
+                    source={{ uri: `https://image.tmdb.org/t/p/w500${selectedMovieForRating?.poster_path}` }}
+                    style={homeStyles.finalRatingPoster}
+                    resizeMode="cover"
+                  />
+                  
+                  {/* Movie Title */}
+                  <Text style={homeStyles.finalRatingTitle} numberOfLines={1} ellipsizeMode="tail">
+                    {selectedMovieForRating?.title || selectedMovieForRating?.name}
+                  </Text>
+                  
+                  {/* Movie Year */}
+                  <Text style={homeStyles.finalRatingYear} numberOfLines={1} ellipsizeMode="tail">
+                    ({selectedMovieForRating?.release_date ? new Date(selectedMovieForRating.release_date).getFullYear() : selectedMovieForRating?.first_air_date ? new Date(selectedMovieForRating.first_air_date).getFullYear() : 'N/A'})
+                  </Text>
+                  
+                  {/* Emotion Text */}
+                  <Text style={[homeStyles.finalRatingEmotion, { color: colors.text }]}>
+                    {selectedEmotion === 'LOVED' ? 'Love' : 
+                     selectedEmotion === 'LIKED' ? 'Like' : 
+                     selectedEmotion === 'AVERAGE' ? 'Okay' : 
+                     selectedEmotion === 'DISLIKED' ? 'Dislike' : selectedEmotion}
+                  </Text>
+                  
+                  {/* Final Score */}
+                  <Text style={[homeStyles.finalRatingScore, { color: colors.secondary }]}>
+                    {(() => {
+                      console.log('🔍 Rendering final score, finalCalculatedRating is:', finalCalculatedRating);
+                      return finalCalculatedRating?.toFixed(1) || 'test';
+                    })()}
+                  </Text>
+                </View>
+              )}
+              
+              <TouchableOpacity 
+                style={[homeStyles.cancelButton, { borderColor: colors.border?.color || '#ccc' }]}
+                onPress={handleCloseEnhancedModals}
+              >
+                <Text style={[homeStyles.cancelButtonText, { color: colors.subText }]}>
+                  {isComparisonComplete ? 'Close' : 'Cancel'}
+                </Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </Modal>
 
         {/* Legacy RatingModal removed - now uses SentimentRatingModal from EnhancedRatingSystem */}
 
