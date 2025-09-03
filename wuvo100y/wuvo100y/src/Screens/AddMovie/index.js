@@ -591,7 +591,7 @@ ${user.overview || 'No bio available'}`,
             // No suggestedRating - starts as truly unknown
           }}
           availableMovies={getCurrentSeen()}
-          selectedEmotion={selectedEmotion}
+          selectedSentiment={selectedEmotion}
           onClose={() => {
             setEnhancedRatingModalVisible(false);
             setSelectedMovieForRating(null);

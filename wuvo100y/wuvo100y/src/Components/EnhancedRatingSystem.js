@@ -1368,17 +1368,42 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
       console.warn(`⚠️ Used ${excludeIds.length - 1} opponents, ${availablePool.length} remaining in total pool`);
     }
     
-    // **ALL RANDOM SELECTION: No percentile logic**
+    // **PERCENTILE-BASED SELECTION: Use emotion for first opponent, random for subsequent**
     let opponent;
-    const availableOpponents = availableMovies.filter(movie => !excludeIds.includes(movie.id));
     
-    if (availableOpponents.length > 0) {
-      // Random selection for all opponents
-      const shuffled = availableOpponents.sort(() => 0.5 - Math.random());
-      opponent = shuffled[0];
-      console.log(`🎲 Using random opponent: ${opponent?.title} (${opponent?.userRating})`);
+    if (movieStats.comparisons === 0 && selectedSentiment) {
+      // First opponent: Use percentile selection based on user's emotion
+      console.log(`🎯 First opponent: Using percentile selection for emotion ${selectedSentiment}`);
+      opponent = selectOpponentFromPercentile(
+        selectedSentiment,
+        availableMovies,
+        newMovie.id, // exclude the new movie
+        mediaType,
+        true // enhanced logging
+      );
+      
+      // Fallback to random if percentile selection fails
+      if (!opponent) {
+        console.warn(`⚠️ Percentile selection failed for ${selectedSentiment}, falling back to random`);
+        const availableOpponents = availableMovies.filter(movie => !excludeIds.includes(movie.id));
+        if (availableOpponents.length > 0) {
+          const shuffled = availableOpponents.sort(() => 0.5 - Math.random());
+          opponent = shuffled[0];
+        }
+      } else {
+        console.log(`🎬 Percentile opponent selected: ${opponent?.title} (${opponent?.userRating})`);
+      }
     } else {
-      opponent = null;
+      // Subsequent opponents: Random selection from remaining movies
+      const availableOpponents = availableMovies.filter(movie => !excludeIds.includes(movie.id));
+      
+      if (availableOpponents.length > 0) {
+        const shuffled = availableOpponents.sort(() => 0.5 - Math.random());
+        opponent = shuffled[0];
+        console.log(`🎲 Subsequent opponent: Random selection: ${opponent?.title} (${opponent?.userRating})`);
+      } else {
+        opponent = null;
+      }
     }
     
     if (opponent) {
