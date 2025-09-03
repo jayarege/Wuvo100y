@@ -1924,6 +1924,11 @@ function HomeScreen({
     console.log('🔒 Rating flow started - blocking movie selection');
     
     setSelectedEmotion(emotion);
+    // Store sentiment rating if provided (for proper opponent selection)
+    if (sentimentRating !== null) {
+      setCurrentMovieRating(sentimentRating);
+      console.log('🔧 Updated currentMovieRating to sentiment rating:', sentimentRating);
+    }
     setEmotionModalVisible(false);
     // Don't clear selectedMovie here - keep it for comparison modal
     
