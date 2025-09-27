@@ -1202,9 +1202,9 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
   const [currentComparison, setCurrentComparison] = useState(0);
   const [currentOpponent, setCurrentOpponent] = useState(null);
   const [movieStats, setMovieStats] = useState({
-    rating: newMovie?.suggestedRating || null, // Use existing rating if available
+    rating: newMovie?.userRating || null, // Use actual user rating if available
     standardError: CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
-    comparisons: 0,
+    comparisons: newMovie?.userRating ? 1 : 0, // Set > 0 if movie was rated before
     wins: 0,
     losses: 0,
     ties: 0,
