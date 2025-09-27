@@ -1030,6 +1030,12 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     console.log('🎭 PROFILE EMOTION SELECTED:', emotion);
     console.log('🎭 SEEN MOVIES COUNT:', seen.length);
     
+    // Prevent rapid repeated calls
+    if (comparisonModalVisible) {
+      console.log('🚫 Comparison modal already visible, ignoring repeated call');
+      return;
+    }
+    
     // Check minimum count for rating
     if (seen.length < 3) {
       Alert.alert(
@@ -1047,13 +1053,20 @@ Please rate a few more movies first!`,
     setSelectedEmotion(emotion);
     // Don't clear selectedMovie here - keep it for comparison modal
     
+    // Close emotion modal first
+    setEmotionModalVisible(false);
+    
     // Set up for ConfidenceBasedComparison modal
     setComparisonMovies(seen); // Pass all available movies for dynamic selection
     setCurrentComparison(0);
     setComparisonResults([]);
     setIsComparisonComplete(false);
     setCurrentMovieRating(null);
-    setComparisonModalVisible(true);
+    
+    // Add small delay to prevent state conflicts
+    setTimeout(() => {
+      setComparisonModalVisible(true);
+    }, 100);
     
     console.log(`🎭 Starting ConfidenceBasedComparison for ${selectedMovie?.title} with sentiment: ${emotion}`);
     console.log(`🎯 Available movies for comparison: ${seen.length} total`);
@@ -1171,11 +1184,7 @@ Please rate a few more movies first!`,
     setCurrentMovieRating(null);
     setSelectedEmotion(null);
 
-    Alert.alert(
-      "Rating Added!", 
-      `You rated "${selectedMovie.title}" (${finalRating.toFixed(1)}/10) using ConfidenceBasedComparison`,
-      [{ text: "OK" }]
-    );
+    // Alert.alert removed - using custom completion flow instead
   }, [selectedMovie, selectedCategory, selectedEmotion, onAddToSeen]);
 
   // Render functions
@@ -2642,6 +2651,7 @@ Please rate a few more movies first!`,
         handleEmotionSelected={handleEmotionSelected}
         cancelSentimentSelection={null}
         // Profile-specific props for conditional button logic
+        context={movieContext || (selectedMovie?.userRating ? 'toprated' : 'general')}
         isProfileScreen={true}
         movieContext={movieContext}
         isTopRatedMovie={movieContext === 'toprated' || (selectedMovie?.userRating && selectedMovie?.userRating >= 7)}
@@ -3267,7 +3277,7 @@ Please rate a few more movies first!`,
         visible={comparisonModalVisible}
         newMovie={{
           ...selectedMovie,
-          suggestedRating: 7.0
+          suggestedRating: selectedMovie?.userRating || null
         }}
         availableMovies={seen}
         selectedSentiment={selectedEmotion}

@@ -25,7 +25,7 @@ const ENHANCED_RATING_CONFIG = {
   CONFIDENCE: {
     TARGET_INTERVAL_WIDTH: 0.6, // Stop when 95% CI width < 0.6 points (85% confidence target)
     MIN_COMPARISONS: 3, // Minimum comparisons required before checking confidence
-    MAX_COMPARISONS: 6, // Maximum comparisons (3-6 dynamic range)
+    MAX_COMPARISONS: 5, // Maximum comparisons (3-5 dynamic range)
     CONFIDENCE_LEVEL: 0.95, // 95% confidence intervals
     INITIAL_UNCERTAINTY: 2.0, // Initial rating standard deviation
     // Dynamic round termination thresholds (85% confidence = ±0.6 points)
@@ -649,17 +649,17 @@ const calculateDynamicRatingCategories = (userMovies, mediaType = 'movie') => {
     if (p25 === p50) p50 = Math.min(p25 + 0.1, p75);
     if (p50 === p75) p75 = Math.min(p50 + 0.1, maxRating);
     
-    console.log(`📊 True Percentile Ranges based on movie positions:`);
-    console.log(`   Bottom 25% (${p25Index + 1} movies): ${minRating} - ${p25}`);
-    console.log(`   25-50% (${p50Index - p25Index} movies): ${p25} - ${p50}`);
-    console.log(`   50-75% (${p75Index - p50Index} movies): ${p50} - ${p75}`);
-    console.log(`   Top 25% (${sortedMovies.length - p75Index} movies): ${p75} - ${maxRating}`);
+    // console.log(`📊 True Percentile Ranges based on movie positions:`);
+    // console.log(`   Bottom 25% (${p25Index + 1} movies): ${minRating} - ${p25}`);
+    // console.log(`   25-50% (${p50Index - p25Index} movies): ${p25} - ${p50}`);
+    // console.log(`   50-75% (${p75Index - p50Index} movies): ${p50} - ${p75}`);
+    // console.log(`   Top 25% (${sortedMovies.length - p75Index} movies): ${p75} - ${maxRating}`);
   }
   
-  console.log(`🎯 LOVE will select from: ${p75}-${maxRating} (your top-rated movies)`);
-  console.log(`🎯 LIKE will select from: ${p50}-${p75} (your above-average movies)`);
-  console.log(`🎯 OKAY will select from: ${p25}-${p50} (your below-average movies)`);
-  console.log(`🎯 DISLIKE will select from: ${minRating}-${p25} (your lowest-rated movies)`);
+  // console.log(`🎯 LOVE will select from: ${p75}-${maxRating} (your top-rated movies)`);
+  // console.log(`🎯 LIKE will select from: ${p50}-${p75} (your above-average movies)`);
+  // console.log(`🎯 OKAY will select from: ${p25}-${p50} (your below-average movies)`);
+  // console.log(`🎯 DISLIKE will select from: ${minRating}-${p25} (your lowest-rated movies)`);
   
   // Use rating-based ranges (not movie pooling percentiles)
   // For your ratings 6.2-9.7: Love gets 8.825-9.7 (top 25% of rating spread)
@@ -1202,7 +1202,7 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
   const [currentComparison, setCurrentComparison] = useState(0);
   const [currentOpponent, setCurrentOpponent] = useState(null);
   const [movieStats, setMovieStats] = useState({
-    rating: null, // Start as truly unknown - no initial rating
+    rating: newMovie?.suggestedRating || null, // Use existing rating if available
     standardError: CONFIDENCE_RATING_CONFIG.CONFIDENCE.INITIAL_UNCERTAINTY,
     comparisons: 0,
     wins: 0,
@@ -1216,6 +1216,13 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
   
   // **CODE_BIBLE: "Update both ref and state" - Immediate exclusion tracking**
   const usedOpponentIdsRef = useRef([]);
+  
+  // Reset ref when modal opens
+  useEffect(() => {
+    if (visible) {
+      usedOpponentIdsRef.current = [];
+    }
+  }, [visible]);
 
   // **RATING-PROXIMITY SELECTION STATE**
   const [placementState, setPlacementState] = useState(() => {
