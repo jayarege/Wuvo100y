@@ -33,7 +33,7 @@ module.exports = ({ config }) => {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: isDevelopment ? 'com.wuvo.wuvo.dev' : 'com.wuvo.wuvo',
+      bundleIdentifier: isDevelopment ? 'com.wuvo.wuvo.app.dev' : 'com.wuvo.wuvo.app',
       // Dynamic build number based on environment
       buildNumber: buildNumber
     },
