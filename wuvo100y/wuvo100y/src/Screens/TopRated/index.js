@@ -24,7 +24,7 @@ import { getListStyles } from '../../Styles/listStyles';
 import { getModalStyles } from '../../Styles/modalStyles';
 import { getButtonStyles } from '../../Styles/buttonStyles';
 import { getMovieCardStyles } from '../../Styles/movieCardStyles';
-import { EnhancedRatingButton } from '../../Components/EnhancedRatingSystem';
+// EnhancedRatingButton removed - not needed in simplified BradleyTerry system
 import stateStyles from '../../Styles/StateStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '../../utils/Theme';
@@ -368,16 +368,10 @@ return (
                 : 'Unknown'}
             </Text>
           </View>
-          <EnhancedRatingButton
-            size="small"
-            variant="edit"
-            movie={movie}
-            onRatingUpdate={(updatedMovie) => {
-              onUpdateRating(updatedMovie.id, updatedMovie.userRating);
-            }}
-            showRatingValue={true}
-            mediaType={mediaType}
-          />
+          {/* EnhancedRatingButton removed - simplified rating system */}
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }}>
+            Rating: {movie.userRating?.toFixed(1) || 'N/A'}
+          </Text>
         </View>
       </View>
     ))}

@@ -20,13 +20,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
-  EnhancedRatingButton, 
-  SentimentRatingModal, 
-  calculateDynamicRatingCategories,
-  adjustRatingWildcard,
-  selectMovieFromPercentileUnified,
-  calculateAverageRating
-} from '../Components/EnhancedRatingSystem';
+  SentimentRatingModal,
+  ComparisonModal,
+  selectOpponentFromSentiment,
+  selectRandomOpponent
+} from '../Components/BradleyTerryRatingSystem';
 import { 
   isObfuscatedAdultContent, 
   hasSuspiciousAdultStructure, 

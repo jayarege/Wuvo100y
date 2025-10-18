@@ -59,16 +59,11 @@ const getStorageKey = (mediaType) => mediaType === 'movie' ? STORAGE_KEYS.MOVIES
 
 // **ENHANCED RATING SYSTEM IMPORT**
 import { 
-  calculateDynamicRatingCategories, 
   SentimentRatingModal, 
-  ConfidenceBasedComparison,
-  selectOpponentFromEmotion, 
-  selectRandomOpponent, 
-  handleTooToughToDecide,
-  calculateRatingFromELOComparisons,
-  selectMovieFromPercentileUnified,
-  calculateAverageRating
-} from '../../Components/EnhancedRatingSystem';
+  ComparisonModal,
+  selectOpponentFromSentiment, 
+  selectRandomOpponent
+} from '../../Components/BradleyTerryRatingSystem';
 
 
 // Removed custom percentile logic - now relying ONLY on EnhancedRatingSystem
@@ -1751,53 +1746,14 @@ function HomeScreen({
   // **ENHANCED RATING SYSTEM LOGIC - ENGINEER TEAM 12.5**
   // ============================================================================
 
+  // **SIMPLIFIED: BradleyTerry ComparisonModal handles opponent selection internally**
   const handleSentimentSelect = useCallback((categoryKey) => {
     console.log('🎭 User selected sentiment:', categoryKey);
     setSelectedCategory(categoryKey);
-    
-    // Hide sentiment buttons and show processing state
+    setSelectedEmotion(categoryKey);
     setShowSentimentButtons(false);
-    
-    // Fade animation removed
-    
-    // **PERFORMANCE: Use memoized rating categories instead of recalculating**
-    const RATING_CATEGORIES = memoizedRatingCategories;
-    const categoryInfo = RATING_CATEGORIES[categoryKey];
-    
-    // Find movies in the same rating range for comparison (filtered by media type)
-    const categoryMovies = getMoviesInRatingRange(
-      currentMediaMovies,
-      categoryInfo.ratingRange,
-      selectedMovie.id
-    );
-    
-    if (categoryMovies.length >= 3) {
-      // Get best 3 comparison movies
-      const scoredMovies = categoryMovies.map(m => ({
-        ...m,
-        comparisonScore: calculateComparisonScore(m, selectedMovie, genres)
-      }));
-      
-      const bestComparisons = scoredMovies
-        .sort((a, b) => b.comparisonScore - a.comparisonScore);
-      
-      setComparisonMovies(bestComparisons);
-      setCurrentComparison(0);
-
-      setIsComparisonComplete(false);
-      setComparisonModalVisible(true);
-      return;
-    }
-    
-    // Not enough movies for comparison, use category average based on rating range
-    const categoryAverage = seen && seen.length > 0 && categoryInfo.ratingRange ? 
-      (() => {
-        const [minRating, maxRating] = categoryInfo.ratingRange;
-        return (minRating + maxRating) / 2;
-      })() :
-      getDefaultRatingForCategory(categoryKey);
-    handleConfirmRating(categoryAverage);
-  }, [currentSeenContent, selectedMovie, genres, calculateComparisonScore, getMoviesInRatingRange, handleConfirmRating, memoizedRatingCategories, seen]);
+    // ComparisonModal will open via visibility condition and handle everything
+  }, []);
 
   // CODE_BIBLE Fix: Replace percentile-based selection with rating-range-based selection
   const getMoviesInRatingRange = useCallback((userMovies, ratingRange, excludeMovieId) => {
@@ -1947,15 +1903,13 @@ function HomeScreen({
     setIsRatingInProgress(false);
     console.log('🔓 Rating flow completed - allowing movie selection');
     
-    // **PERFORMANCE: Use memoized rating categories instead of recalculating**
-    const RATING_CATEGORIES = memoizedRatingCategories;
-    
+    // **SIMPLIFIED: No rating categories needed in BradleyTerry**
     Alert.alert(
       "Rating Added!", 
-      `You ${RATING_CATEGORIES[selectedCategory]?.label?.toLowerCase()} "${selectedMovie.title}" (${finalRating.toFixed(1)}/10)`,
+      `You rated "${selectedMovie.title}" (${finalRating.toFixed(1)}/10)`,
       [{ text: "OK" }]
     );
-  }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, setFinalCalculatedRating, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, closeDetailModal, mediaType, memoizedRatingCategories, removeMovieFromAllSections]);
+  }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, setFinalCalculatedRating, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, closeDetailModal, mediaType, removeMovieFromAllSections]);
 
   const handleCloseEnhancedModals = useCallback(() => {
     setSelectedCategory(null);
@@ -2221,11 +2175,8 @@ function HomeScreen({
   // **COMPUTED VALUES - ENGINEER TEAM 14**
   // ============================================================================
 
-  // **PERFORMANCE OPTIMIZATION: Memoize rating categories to prevent 8x redundant calculations**
-  const memoizedRatingCategories = useMemo(() => {
-    console.log('🎯 PERFORMANCE: Calculating rating categories once for', mediaType, '- content count:', currentSeenContent.length);
-    return calculateDynamicRatingCategories(currentSeenContent, mediaType);
-  }, [currentSeenContent, mediaType]);
+  // **REMOVED: calculateDynamicRatingCategories - not needed in simplified BradleyTerry system**
+  // Rating categories are handled internally by the ComparisonModal component
 
   const recommendations = useMemo(() => {
     if (currentSeenContent.length === 0) return [];
@@ -3190,7 +3141,7 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
           handleWatchlistToggle={handleWatchlistToggle}
           colors={colors}
           standardButtonStyles={standardButtonStyles}
-          memoizedRatingCategories={memoizedRatingCategories}
+          // memoizedRatingCategories removed - not needed in BradleyTerry system
           handleEmotionSelected={handleSentimentSelect}
           cancelSentimentSelection={() => {
             console.log('🔙 Back to options pressed');
@@ -3198,26 +3149,23 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
           }}
         />
 
-        {/* **EMOTION SELECTION MODAL - Using Reusable Component** */}
+        {/* **SENTIMENT SELECTION MODAL (Bradley-Terry Simplified)** */}
         <SentimentRatingModal
           visible={emotionModalVisible}
           movie={selectedMovie}
+          onSelect={(sentiment) => {
+            console.log('🎭 Sentiment selected:', sentiment);
+            setSelectedCategory(sentiment);
+            setSelectedEmotion(sentiment);
+            setEmotionModalVisible(false);
+            // Comparison modal will open automatically via visibility condition
+          }}
           onClose={() => {
             setEmotionModalVisible(false);
             setIsRatingInProgress(false);
             console.log('🔓 Emotion modal closed - reset rating flag');
           }}
-          onRatingSelect={(movieWithRating, categoryKey, rating) => {
-            console.log('🎭 Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
-            setSelectedCategory(categoryKey);
-            // Store the sentiment rating for the comparison system
-            setCurrentMovieRating(rating);
-            // Pass rating directly to avoid async state timing issues
-            handleEmotionSelected(categoryKey, rating);
-          }}
           colors={colors}
-          userMovies={currentSeenContent}
-          mediaType={mediaType}
         />
 
         {/* **EMOTION SELECTION MODAL - Using Reusable Component** */}
@@ -3238,23 +3186,19 @@ const renderRecentReleaseCard = useCallback(({ item }) => {
           mediaType={mediaType}
         />
 
-        {/* **CONFIDENCE-BASED COMPARISON MODAL** */}
-        <ConfidenceBasedComparison
+        {/* **BRADLEY-TERRY COMPARISON MODAL** */}
+        <ComparisonModal
           visible={selectedEmotion && selectedMovie && !emotionModalVisible}
-          newMovie={{
-            ...selectedMovie,
-            // No suggestedRating - starts as truly unknown
-          }}
-          availableMovies={currentSeenContent}
-          selectedSentiment={selectedEmotion}
-          onClose={handleCloseEnhancedModals}
-          onComparisonComplete={(result) => {
-            console.log('🎯 ConfidenceBasedComparison completed:', result);
-            handleConfirmRating(result.finalRating);
-            // Comparison modal closed by ConfidenceBasedComparison
-          }}
-          colors={colors}
+          newMovie={selectedMovie}
+          sentiment={selectedEmotion}
+          ratedMovies={currentSeenContent}
           mediaType={mediaType}
+          colors={colors}
+          onComplete={(updatedMovie) => {
+            console.log('🎯 ComparisonModal completed:', updatedMovie);
+            handleConfirmRating(updatedMovie.userRating);
+          }}
+          onClose={handleCloseEnhancedModals}
         />
         
         {/* **FALLBACK MODAL - keeping old implementation hidden for now** */}

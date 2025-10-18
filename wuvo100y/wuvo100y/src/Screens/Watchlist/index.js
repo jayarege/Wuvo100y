@@ -29,7 +29,7 @@ import { getMovieCardStyles } from '../../Styles/movieCardStyles';
 import stateStyles from '../../Styles/StateStyles';
 import theme from '../../utils/Theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { EnhancedRatingButton } from '../../Components/EnhancedRatingSystem';
+// EnhancedRatingButton removed - not needed in simplified BradleyTerry system
 import { filterAdultContent } from '../../utils/ContentFiltering';
  
 
@@ -529,18 +529,16 @@ const moviesByMediaType = useMemo(() => {
               : 'Unknown'}
           </Text>
         </View>
-        <EnhancedRatingButton
-          size="small"
-          variant="compact"
-          movie={item}
-          onRatingUpdate={(updatedMovie) => {
-            onAddToSeen(updatedMovie);
-            // Remove from watchlist after rating
-            onRemoveFromWatchlist(updatedMovie.id);
+        {/* EnhancedRatingButton removed - simplified rating system */}
+        <TouchableOpacity 
+          style={{ padding: 8, backgroundColor: '#4A5568', borderRadius: 4 }}
+          onPress={() => {
+            // Simple placeholder - implement rating flow if needed
+            console.log('Rate from watchlist:', item.title);
           }}
-          showRatingValue={false}
-          mediaType={mediaType}
-        />
+        >
+          <Text style={{ color: '#FFF', fontSize: 12 }}>Rate</Text>
+        </TouchableOpacity>
       </View>
     </View>
   ))}

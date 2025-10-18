@@ -97,20 +97,13 @@ import theme from '../../utils/Theme';
 import UserSearchModal from '../../Components/UserSearchModal';
 import { useAuth } from '../../hooks/useAuth';
 import FirebaseAuthTest from '../../Components/FirebaseAuthTest';
-// RatingModal replaced with EnhancedRatingSystem components
+// **SIMPLIFIED: Using BradleyTerry rating system**
 import { 
-  calculateDynamicRatingCategories,
   SentimentRatingModal, 
-  ConfidenceBasedComparison,
-  calculatePairwiseRating, 
-  ComparisonResults, 
-  selectOpponentFromEmotion, 
-  selectRandomOpponent, 
-  handleTooToughToDecide,
-  calculateRatingFromELOComparisons,
-  selectMovieFromPercentileUnified,
-  calculateAverageRating
-} from '../../Components/EnhancedRatingSystem';
+  ComparisonModal,
+  selectOpponentFromSentiment, 
+  selectRandomOpponent
+} from '../../Components/BradleyTerryRatingSystem';
 import MovieCard, { MOVIE_CARD_WIDTH } from '../../Components/MovieCard/MovieCard';
 import MovieDetailModal from '../../Components/MovieDetailModal/MovieDetailModal';
 import { filterAdultContent } from '../../utils/ContentFiltering';
@@ -343,9 +336,8 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
 
   // TopRated data processing
   // Memoized rating categories for performance (CODE_BIBLE Commandment 8)
-  const memoizedRatingCategories = useMemo(() => {
-    return calculateDynamicRatingCategories(currentSeen);
-  }, [currentSeen]);
+  // **REMOVED: calculateDynamicRatingCategories - not needed in simplified BradleyTerry system**
+  // Rating categories are handled internally by the ComparisonModal component
 
   const mediaFilteredMovies = useMemo(() => {
     if (!currentSeen || !Array.isArray(currentSeen)) return [];
@@ -2647,7 +2639,7 @@ Please rate a few more movies first!`,
         handleWatchlistToggle={handleWatchlistToggle}
         colors={theme[mediaType][isDarkMode ? 'dark' : 'light']}
         standardButtonStyles={getStandardizedButtonStyles(theme[mediaType][isDarkMode ? 'dark' : 'light'])}
-        memoizedRatingCategories={memoizedRatingCategories}
+        // memoizedRatingCategories removed - not needed in BradleyTerry system
         handleEmotionSelected={handleEmotionSelected}
         cancelSentimentSelection={null}
         // Profile-specific props for conditional button logic
@@ -3256,39 +3248,35 @@ Please rate a few more movies first!`,
       {/* Watchlist Rating Modal */}
       {/* Watchlist RatingModal removed - now uses EnhancedRatingButton */}
       
-      {/* Enhanced Emotion Selection Modal */}
+      {/* **SENTIMENT SELECTION MODAL (Bradley-Terry Simplified)** */}
       <SentimentRatingModal
         visible={emotionModalVisible}
         movie={selectedMovie}
-        onClose={() => setEmotionModalVisible(false)}
-        onRatingSelect={(movieWithRating, categoryKey, rating) => {
-          console.log('🎭 Profile: Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
-          setSelectedCategory(categoryKey);
-          handleEmotionSelected(categoryKey);
+        onSelect={(sentiment) => {
+          console.log('🎭 Profile: Sentiment selected:', sentiment);
+          setSelectedCategory(sentiment);
+          setSelectedEmotion(sentiment);
+          setEmotionModalVisible(false);
+          setComparisonModalVisible(true);
         }}
+        onClose={() => setEmotionModalVisible(false)}
         colors={colors}
-        userMovies={currentSeen}
-        mediaType={mediaType}
-        memoizedRatingCategories={memoizedRatingCategories}
       />
 
-      {/* **CONFIDENCE-BASED COMPARISON MODAL** */}
-      <ConfidenceBasedComparison
+      {/* **BRADLEY-TERRY COMPARISON MODAL** */}
+      <ComparisonModal
         visible={comparisonModalVisible}
-        newMovie={{
-          ...selectedMovie,
-          suggestedRating: selectedMovie?.userRating || null
-        }}
-        availableMovies={seen}
-        selectedSentiment={selectedEmotion}
-        onClose={handleCloseEnhancedModals}
-        onComparisonComplete={(result) => {
-          console.log('🎯 ConfidenceBasedComparison completed:', result);
-          handleConfirmRating(result.finalRating);
+        newMovie={selectedMovie}
+        sentiment={selectedEmotion}
+        ratedMovies={seen}
+        mediaType={mediaType}
+        colors={colors}
+        onComplete={(updatedMovie) => {
+          console.log('🎯 ComparisonModal completed:', updatedMovie);
+          handleConfirmRating(updatedMovie.userRating);
           setComparisonModalVisible(false);
         }}
-        colors={colors}
-        mediaType={mediaType}
+        onClose={handleCloseEnhancedModals}
       />
       
       {/* Enhanced Filter Modal */}

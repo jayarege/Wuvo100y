@@ -23,14 +23,18 @@ const ENHANCED_RATING_CONFIG = {
     INITIAL_ELO: 1500 // Standard ELO baseline
   },
   CONFIDENCE: {
-    TARGET_INTERVAL_WIDTH: 0.6, // Stop when 95% CI width < 0.6 points (85% confidence target)
-    MIN_COMPARISONS: 3, // Minimum comparisons required before checking confidence
-    MAX_COMPARISONS: 5, // Maximum comparisons (3-5 dynamic range)
+    TARGET_INTERVAL_WIDTH: 0.8, // Wilson CI width ≤ 0.8 corresponds to ≥80% confidence
+    MIN_COMPARISONS: 3, // Minimum comparisons required (always do at least 3)
+    MAX_COMPARISONS: 5, // Maximum comparisons (hard stop at 5)
+    WILSON_CONFIDENCE_THRESHOLD: 0.80, // 80% confidence required to stop early
     CONFIDENCE_LEVEL: 0.95, // 95% confidence intervals
     INITIAL_UNCERTAINTY: 2.0, // Initial rating standard deviation
-    // Dynamic round termination thresholds (85% confidence = ±0.6 points)
-    CONFIDENCE_GOOD: 0.6, // 85% confidence threshold for early stop
-    CONFIDENCE_EXCELLENT: 0.4, // Excellent confidence for immediate stop
+    // Wilson Confidence Logic:
+    // - After 3: Check if CI width ≤ 0.8 (≥80% confidence) → stop or continue
+    // - After 4: Check if CI width ≤ 0.8 (≥80% confidence) → stop or continue  
+    // - After 5: Always stop (maximum reached)
+    CONFIDENCE_GOOD: 0.8, // 80% confidence threshold for early stop
+    CONFIDENCE_EXCELLENT: 0.6, // Excellent confidence threshold
     RATING_STABILITY_THRESHOLD: 0.2 // Consider stable if rating changes < 0.2
   },
   K_FACTORS: {
@@ -370,9 +374,10 @@ const processConfidenceBasedRating = async (config) => {
     let usedOpponentIds = [];
     let comparisonCount = 0;
     
-    // Continue comparisons until confidence target is met
+    // Continue comparisons: Min 3, Max 5, check 80% Wilson CI after each
+    // Logic: Always do 3, check confidence, if <80% do 4, check again, if <80% do 5 (max)
     while (comparisonCount < CONFIDENCE_RATING_CONFIG.CONFIDENCE.MAX_COMPARISONS && 
-           !hasTargetConfidence(movieStats)) {
+           (comparisonCount < CONFIDENCE_RATING_CONFIG.CONFIDENCE.MIN_COMPARISONS || !hasTargetConfidence(movieStats))) {
       
       comparisonCount++;
       
@@ -794,7 +799,7 @@ const selectAdaptiveELOOpponent = (seenMovies, currentRating, lastRoundWon, excl
   const availableMovies = seenMovies.filter(movie => 
     movie.userRating && 
     !excludeMovieIds.includes(movie.id) &&
-    (movie.mediaType || 'movie') === mediaType
+    (movie.mediaType || 'movie') === mediaTypethe
   );
   
   if (availableMovies.length === 0) return null;
@@ -1591,14 +1596,36 @@ const ConfidenceBasedComparison = ({ visible, newMovie, availableMovies, selecte
 
     console.log(`📊 Comparison ${currentComparison}: Rating ${newRating?.toFixed(2)} ± ${newStats.confidenceInterval?.width?.toFixed(2)}`);
 
-    // **MATCH ADD MOVIE: Always exactly 3 comparisons**
+    // **DYNAMIC COMPARISONS: Min 3, Max 5 with 80% Wilson Confidence Check**
     let shouldStop = false;
     let stopReason = '';
     
-    // Stop after exactly 3 comparisons (matching Add Movie screen)
-    if (newStats.comparisons >= 3) {
+    const MIN_COMPARISONS = 3;
+    const MAX_COMPARISONS = 5;
+    const WILSON_CONFIDENCE_THRESHOLD = 0.80; // 80% confidence threshold
+    
+    // Calculate Wilson confidence interval width as a percentage
+    // Narrower CI width = higher confidence
+    // We use CI width <= 0.8 as proxy for ≥80% confidence
+    const ciWidth = newStats.confidenceInterval?.width || 999;
+    const hasHighConfidence = ciWidth <= 0.8; // 80% confidence threshold
+    
+    if (newStats.comparisons >= MAX_COMPARISONS) {
+      // Reached maximum - always stop
       shouldStop = true;
-      stopReason = 'Completed 3 comparisons (matching Add Movie logic)';
+      stopReason = `Reached maximum ${MAX_COMPARISONS} comparisons`;
+    } else if (newStats.comparisons >= MIN_COMPARISONS && hasHighConfidence) {
+      // Reached minimum AND have high confidence - stop early
+      shouldStop = true;
+      stopReason = `High confidence (≥80%) after ${newStats.comparisons} comparisons`;
+    } else if (newStats.comparisons < MIN_COMPARISONS) {
+      // Haven't reached minimum yet - continue
+      shouldStop = false;
+      stopReason = `Minimum ${MIN_COMPARISONS} comparisons required (currently ${newStats.comparisons})`;
+    } else {
+      // Between min and max, but low confidence - continue
+      shouldStop = false;
+      stopReason = `Confidence <80% (CI width: ${ciWidth.toFixed(2)}) - continuing to comparison ${newStats.comparisons + 1}`;
     }
     
     // Also stop if no more opponents available

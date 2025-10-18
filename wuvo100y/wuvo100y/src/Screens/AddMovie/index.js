@@ -17,12 +17,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
-  EnhancedRatingButton, 
   SentimentRatingModal,
-  ConfidenceBasedComparison,
-  calculateDynamicRatingCategories,
-  processUnifiedRatingFlow
-} from '../../Components/EnhancedRatingSystem';
+  ComparisonModal,
+  selectOpponentFromSentiment,
+  selectRandomOpponent
+} from '../../Components/BradleyTerryRatingSystem';
 import { STORAGE_KEYS } from '../../config/storageConfig';
 import { 
   isObfuscatedAdultContent, 
@@ -567,46 +566,40 @@ ${user.overview || 'No bio available'}`,
         
       </SafeAreaView>
 
-      {/* **EMOTION SELECTION MODAL - Using Reusable Component** */}
+      {/* **SENTIMENT SELECTION MODAL (Bradley-Terry Simplified)** */}
       <SentimentRatingModal
         visible={emotionModalVisible}
         movie={selectedMovieForRating}
-        onClose={() => setEmotionModalVisible(false)}
-        onRatingSelect={(movieWithRating, categoryKey, rating) => {
-          console.log('🎭 Sentiment selected via reusable component:', categoryKey, 'Rating:', rating);
-          setSelectedCategory(categoryKey);
-          // Wire to existing handleEmotionSelected logic
-          handleEmotionSelected(categoryKey);
+        onSelect={(sentiment) => {
+          console.log('🎭 Sentiment selected:', sentiment);
+          setSelectedCategory(sentiment);
+          setSelectedEmotion(sentiment);
+          setEmotionModalVisible(false);
+          setEnhancedRatingModalVisible(true);
         }}
+        onClose={() => setEmotionModalVisible(false)}
         colors={colors}
-        userMovies={getCurrentSeen()}
       />
 
-      {/* **CONFIDENCE-BASED COMPARISON - DELEGATED TO ENHANCEDRATINGSYSTEM** */}
+      {/* **BRADLEY-TERRY COMPARISON MODAL** */}
       {selectedMovieForRating && (
-        <ConfidenceBasedComparison
+        <ComparisonModal
           visible={enhancedRatingModalVisible}
-          newMovie={{
-            ...selectedMovieForRating,
-            // No suggestedRating - starts as truly unknown
+          newMovie={selectedMovieForRating}
+          sentiment={selectedEmotion}
+          ratedMovies={getCurrentSeen()}
+          mediaType={mediaType}
+          colors={colors}
+          onComplete={(updatedMovie) => {
+            console.log('✅ BradleyTerry rating complete:', updatedMovie);
+            setEnhancedRatingModalVisible(false);
+            handleConfirmRating(updatedMovie.userRating);
           }}
-          availableMovies={getCurrentSeen()}
-          selectedSentiment={selectedEmotion}
           onClose={() => {
             setEnhancedRatingModalVisible(false);
             setSelectedMovieForRating(null);
             setSelectedEmotion(null);
           }}
-          onComparisonComplete={(result) => {
-            console.log('✅ Confidence-based rating complete:', result);
-            setEnhancedRatingModalVisible(false);
-            
-            // Use the final rating from EnhancedRatingSystem
-            if (result.finalRating) {
-              handleConfirmRating(result.finalRating);
-            }
-          }}
-          colors={colors}
         />
       )}
 

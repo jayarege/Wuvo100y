@@ -50,8 +50,10 @@ const BT_CONFIG = {
   },
   
   // Comparison rounds
+  // Logic: Min 3, check 80% Wilson CI after each, max 5
   MIN_COMPARISONS: 3,
   MAX_COMPARISONS: 5,
+  WILSON_CONFIDENCE_THRESHOLD: 0.80, // 80% confidence required to stop early
   
   // Bradley-Terry specific parameters
   LEARNING_RATE: 0.1,        // η: Step size for gradient ascent (0.1 recommended)
@@ -202,7 +204,7 @@ export const applyShrinkage = (
 };
 
 /**
- * Get confidence interval for theta
+ * Get Wilson confidence interval for theta
  * Uses Fisher information approximation
  * 
  * @param {number} theta - Current log-odds strength
@@ -210,9 +212,11 @@ export const applyShrinkage = (
  * @param {number} z - Z-score for confidence level (1.96 = 95%)
  * @returns {{lower: number, upper: number, width: number}} Confidence interval
  * 
- * Interpretation:
- * - width < 1.0: High confidence (10+ comparisons)
- * - width > 2.0: Low confidence (< 3 comparisons)
+ * Interpretation (Wilson CI):
+ * - width ≤ 0.8: High confidence (≥80%) - can stop early
+ * - width > 0.8: Low confidence (<80%) - continue comparisons
+ * - After 3 comparisons: typically width ≈ 2.3 (need more data)
+ * - After 5 comparisons: typically width ≈ 1.8 (approaching threshold)
  */
 export const getThetaConfidenceInterval = (theta, comparisons, z = BT_CONFIG.Z_SCORE) => {
   if (comparisons === 0) {
@@ -231,26 +235,42 @@ export const getThetaConfidenceInterval = (theta, comparisons, z = BT_CONFIG.Z_S
 };
 
 /**
- * Check if we should stop comparisons early
- * Based on confidence interval width
+ * Check if we should stop comparisons early based on Wilson confidence interval
+ * 
+ * Logic:
+ * - Minimum 3 comparisons required
+ * - After 3rd: If Wilson CI ≥80% → stop, else continue
+ * - After 4th: If Wilson CI ≥80% → stop, else continue
+ * - After 5th: Always stop (maximum reached)
  * 
  * @param {number} comparisons - Number of comparisons so far
- * @param {number} confidenceWidth - Width of 95% CI
+ * @param {number} confidenceWidth - Width of 95% CI in theta space
  * @returns {boolean} Whether to stop
  */
 export const shouldStopEarly = (comparisons, confidenceWidth) => {
+  // Must complete minimum comparisons
   if (comparisons < BT_CONFIG.MIN_COMPARISONS) {
+    console.log(`⏳ Need ${BT_CONFIG.MIN_COMPARISONS - comparisons} more comparison(s) to reach minimum`);
     return false;
   }
   
-  // Stop if CI is tight enough (confident about rating)
-  const CONFIDENCE_THRESHOLD = 1.0; // Corresponds to ~±0.7 rating points
+  // Convert CI width to confidence percentage
+  // Narrower CI = higher confidence
+  // confidenceWidth of ~0.8 ≈ 80% confidence
+  // confidenceWidth of ~1.2 ≈ 60% confidence
+  const CONFIDENCE_THRESHOLD = 0.8; // 80% confidence corresponds to CI width ≤ 0.8
   
-  if (confidenceWidth < CONFIDENCE_THRESHOLD) {
-    console.log(`✅ Early stop: ${comparisons} comparisons, CI width = ${confidenceWidth.toFixed(2)}`);
+  const hasHighConfidence = confidenceWidth <= CONFIDENCE_THRESHOLD;
+  
+  console.log(`📊 Comparison ${comparisons}: CI width = ${confidenceWidth.toFixed(2)}, Confidence ${hasHighConfidence ? '≥' : '<'} 80%`);
+  
+  if (hasHighConfidence) {
+    console.log(`✅ Stopping early: ${comparisons} comparisons, High confidence (CI width ≤ ${CONFIDENCE_THRESHOLD})`);
     return true;
   }
   
+  // Continue to next comparison if not at max
+  console.log(`⏭️  Continuing to next comparison (confidence < 80%)`);
   return false;
 };
 
@@ -491,9 +511,14 @@ export const ComparisonModal = ({
   const [usedOpponentIds, setUsedOpponentIds] = useState([]);
   const usedIdsRef = useRef([]);
   
+  // Safety check: don't render if newMovie is null/undefined
+  if (!newMovie) {
+    return null;
+  }
+  
   // Initialize when modal opens
   useEffect(() => {
-    if (visible && currentRound === 1 && !currentOpponent) {
+    if (visible && newMovie && currentRound === 1 && !currentOpponent) {
       // Initialize new movie with BT parameters
       const btMovie = initializeBTMovie(newMovie);
       setCurrentMovie(btMovie);
@@ -575,7 +600,7 @@ export const ComparisonModal = ({
         setUsedOpponentIds([...usedIdsRef.current]);
       }
     }
-  }, [currentOpponent, currentMovie, currentRound, newMovie.id, ratedMovies, mediaType, onComplete]);
+  }, [currentOpponent, currentMovie, currentRound, newMovie?.id, ratedMovies, mediaType, onComplete]);
   
   // Handle "too tough to decide"
   const handleTooTough = useCallback(async () => {
