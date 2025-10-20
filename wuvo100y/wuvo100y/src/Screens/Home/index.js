@@ -1251,10 +1251,10 @@ function HomeScreen({
           .filter(m => !notInterestedMoviesRef.current.includes(m.id))
           .filter(m => !dismissedInSession.includes(m.id))
           .filter(m => !m.userRating && m.userRating !== 0) // ✅ FINAL CHECK: Block any movie with userRating
-          .slice(0, 10);
-        
+          .slice(0, 5); // Always show exactly 5 movies
+
         results[mediaTypeToFetch] = filtered;
-        console.log(`✅ AI ${mediaTypeToFetch}: ${rawRecommendations.length} -> ${filtered.length} after filtering`);
+        console.log(`✅ AI ${mediaTypeToFetch}: ${rawRecommendations.length} -> ${filtered.length} after filtering (showing exactly 5)`);
       }
       
       // Store recommendations
@@ -1446,9 +1446,9 @@ function HomeScreen({
       
       const sortedFiltered = enrichedResults
         .sort((a, b) => b.weightedScore - a.weightedScore)
-        .slice(0, 10);
-      
-      console.log(`🎬 Popular ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items (filtered out ${allResults.length - sortedFiltered.length} rated/watchlisted items)`);
+        .slice(0, 5); // Always show exactly 5 movies
+
+      console.log(`🎬 Popular ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items (showing exactly 5)`);
       setPopularMovies(sortedFiltered);
       setLastDataFetch(Date.now()); // **PERFORMANCE: Update cache timestamp**
     } catch (err) {
@@ -1518,9 +1518,9 @@ function HomeScreen({
       
       const sortedFiltered = enrichedResults
         .sort((a, b) => b.weightedScore - a.weightedScore)
-        .slice(0, 10);
-      
-      console.log(`🎬 Action ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items`);
+        .slice(0, 5); // Always show exactly 5 movies
+
+      console.log(`🎬 Action ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items (showing exactly 5)`);
       setActionMovies(sortedFiltered);
     } catch (err) {
       console.warn(`Failed fetching action ${contentType}`, err);
@@ -1589,9 +1589,9 @@ function HomeScreen({
       
       const sortedFiltered = enrichedResults
         .sort((a, b) => b.weightedScore - a.weightedScore)
-        .slice(0, 10);
-      
-      console.log(`🎬 Thriller ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items`);
+        .slice(0, 5); // Always show exactly 5 movies
+
+      console.log(`🎬 Thriller ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items (showing exactly 5)`);
       setThrillerMovies(sortedFiltered);
     } catch (err) {
       console.warn(`Failed fetching thriller ${contentType}`, err);
@@ -1660,9 +1660,9 @@ function HomeScreen({
       
       const sortedFiltered = enrichedResults
         .sort((a, b) => b.weightedScore - a.weightedScore)
-        .slice(0, 10);
-      
-      console.log(`🎬 Comedy ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items`);
+        .slice(0, 5); // Always show exactly 5 movies
+
+      console.log(`🎬 Comedy ${mediaType === 'movie' ? 'movies' : 'TV shows'} updated: ${sortedFiltered.length} items (showing exactly 5)`);
       setComedyMovies(sortedFiltered);
     } catch (err) {
       console.warn(`Failed fetching comedy ${contentType}`, err);
