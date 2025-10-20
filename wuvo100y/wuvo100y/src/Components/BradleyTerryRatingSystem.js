@@ -511,11 +511,6 @@ export const ComparisonModal = ({
   const [usedOpponentIds, setUsedOpponentIds] = useState([]);
   const usedIdsRef = useRef([]);
   
-  // Safety check: don't render if newMovie is null/undefined
-  if (!newMovie) {
-    return null;
-  }
-  
   // Initialize when modal opens
   useEffect(() => {
     if (visible && newMovie && currentRound === 1 && !currentOpponent) {
