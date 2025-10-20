@@ -1245,11 +1245,12 @@ function HomeScreen({
         
         // **SIMPLE FILTER LIKE POPULAR MOVIES - EXACTLY THE SAME APPROACH**
         const filtered = rawRecommendations
-          .filter(m => !currentSeenContent.some(s => s.id === m.id)) // Remove rated content  
+          .filter(m => !currentSeenContent.some(s => s.id === m.id)) // Remove rated content
           .filter(m => !currentUnseenContent.some(u => u.id === m.id)) // Remove watchlist content
           .filter(m => !skippedMovies.includes(m.id))
           .filter(m => !notInterestedMoviesRef.current.includes(m.id))
           .filter(m => !dismissedInSession.includes(m.id))
+          .filter(m => !m.userRating && m.userRating !== 0) // ✅ FINAL CHECK: Block any movie with userRating
           .slice(0, 10);
         
         results[mediaTypeToFetch] = filtered;
@@ -1373,6 +1374,7 @@ function HomeScreen({
         .filter(m => !currentUnseenContent.some(u => u.id === m.id)) // Remove watchlist content
         .filter(m => !skippedMovies.includes(m.id))
         .filter(m => !notInterestedMoviesRef.current.includes(m.id))
+        .filter(m => !m.userRating && m.userRating !== 0) // ✅ FINAL CHECK: Block any movie with userRating
         .filter(item => {
           // **RATING FILTER: Only show movies/TV with TMDB rating >= 6.5**
           if (item.vote_average && item.vote_average < 6.5) {
@@ -1475,6 +1477,7 @@ function HomeScreen({
         .filter(m => !currentUnseenContent.some(u => u.id === m.id))
         .filter(m => !skippedMovies.includes(m.id))
         .filter(m => !notInterestedMoviesRef.current.includes(m.id))
+        .filter(m => !m.userRating && m.userRating !== 0) // ✅ FINAL CHECK: Block any movie with userRating
         .slice(0, 15);
 
       // Enrich with streaming providers and create weighted score
@@ -1545,6 +1548,7 @@ function HomeScreen({
         .filter(m => !currentUnseenContent.some(u => u.id === m.id))
         .filter(m => !skippedMovies.includes(m.id))
         .filter(m => !notInterestedMoviesRef.current.includes(m.id))
+        .filter(m => !m.userRating && m.userRating !== 0) // ✅ FINAL CHECK: Block any movie with userRating
         .slice(0, 15);
 
       // Enrich with streaming providers and create weighted score
@@ -1615,6 +1619,7 @@ function HomeScreen({
         .filter(m => !currentUnseenContent.some(u => u.id === m.id))
         .filter(m => !skippedMovies.includes(m.id))
         .filter(m => !notInterestedMoviesRef.current.includes(m.id))
+        .filter(m => !m.userRating && m.userRating !== 0) // ✅ FINAL CHECK: Block any movie with userRating
         .slice(0, 15);
 
       // Enrich with streaming providers and create weighted score
