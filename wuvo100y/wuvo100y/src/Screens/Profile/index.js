@@ -1164,9 +1164,10 @@ Please rate a few more movies first!`,
     };
 
     onAddToSeen(movieToAdd);
-    
+
     // Close modals and reset states
     setComparisonModalVisible(false);
+    setMovieDetailModalVisible(false); // CRITICAL FIX: Close detail modal after rating
     setSelectedMovie(null);
     setSelectedCategory(null);
     setComparisonMovies([]);
@@ -2633,8 +2634,18 @@ Please rate a few more movies first!`,
         handleNotInterested={handleNotInterested}
         handleRateButton={() => {
           console.log('🎬 Rate button clicked from Profile modal');
+
+          // ✅ RE-RATING DETECTION: In Profile, all movies are already rated
+          // Skip sentiment modal and go straight to comparison
+          console.log('🔄 RE-RATING in Profile: Skipping sentiment modal');
+          console.log('   Movie:', selectedMovie?.title || selectedMovie?.name);
+          console.log('   Current rating:', selectedMovie?.userRating?.toFixed(2));
+          console.log('   Comparisons:', selectedMovie?.comparisons);
+
           closeDetailModal(true);
-          setEmotionModalVisible(true);
+          setSelectedEmotion(null); // No sentiment for re-rating
+          setEmotionModalVisible(false);
+          setComparisonModalVisible(true); // Go straight to comparison
         }}
         handleWatchlistToggle={handleWatchlistToggle}
         colors={theme[mediaType][isDarkMode ? 'dark' : 'light']}

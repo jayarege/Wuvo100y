@@ -107,6 +107,8 @@ const getModalStyles = (mediaType = 'movie', mode = 'light', theme) => {
       maxWidth: 350,
       backgroundColor: colors.primary,
       borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.primary,
       padding: 20,
       alignItems: 'center',
       shadowColor: '#000',

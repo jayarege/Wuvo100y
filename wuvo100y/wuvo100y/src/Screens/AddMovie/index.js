@@ -264,19 +264,15 @@ function AddMovieScreen({ seen, unseen, seenTVShows, unseenTVShows, onAddToSeen,
     setSelectedMovieForRating(null);
     
     // Update search results to show as rated
-    setSearchResults(prev => 
-      prev.map(m => 
-        m.id === selectedMovieForRating.id 
-          ? { ...m, alreadyRated: true, currentRating: finalRating } 
+    setSearchResults(prev =>
+      prev.map(m =>
+        m.id === selectedMovieForRating.id
+          ? { ...m, alreadyRated: true, currentRating: finalRating }
           : m
       )
     );
-    
-    Alert.alert(
-      "Rating Added!", 
-      `You rated "${selectedMovieForRating.title || selectedMovieForRating.name}" (${finalRating.toFixed(1)}/10)`,
-      [{ text: "OK" }]
-    );
+
+    // Note: Rating completion screen is now shown within ComparisonModal (3 second auto-close)
   }, [selectedMovieForRating, onAddToSeen, mediaType]);
 
   const handleCloseEnhancedModals = useCallback(() => {
@@ -462,16 +458,21 @@ ${user.overview || 'No bio available'}`,
                     const existingInMovies = safeSeen.find(m => m.id === item.id);
                     const existingInTVShows = safeSeenTVShows.find(m => m.id === item.id);
                     const existingMovie = existingInMovies || existingInTVShows;
-                    
+
                     if (existingMovie) {
                       console.log('🔄 Re-rating existing content:', item.title || item.name, 'Current rating:', existingMovie.userRating, 'Media type:', existingMovie.mediaType);
-                      // This is a re-rate operation - allow it to proceed
+                      // ✅ RE-RATING: Skip emotion modal, go straight to comparisons
+                      // Pass existing movie data with Bradley-Terry parameters preserved
+                      setSelectedMovieForRating({ ...item, ...existingMovie });
+                      setSelectedEmotion(null); // No sentiment for re-rating
+                      setEmotionModalVisible(false);
+                      setEnhancedRatingModalVisible(true); // Go straight to comparison modal
                     } else {
                       console.log('⭐ Rating new content:', item.title || item.name);
+                      // NEW RATING: Show emotion modal first
+                      setSelectedMovieForRating(item);
+                      setEmotionModalVisible(true);
                     }
-                    
-                    setSelectedMovieForRating(item);
-                    setEmotionModalVisible(true);
                   }}
                   mediaType={mediaType}
                   loading={loading && searchResults.length === 0}

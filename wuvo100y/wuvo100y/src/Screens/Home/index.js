@@ -1902,13 +1902,12 @@ function HomeScreen({
     // **FIX: Allow movie selection again after rating completion**
     setIsRatingInProgress(false);
     console.log('🔓 Rating flow completed - allowing movie selection');
-    
-    // **SIMPLIFIED: No rating categories needed in BradleyTerry**
-    Alert.alert(
-      "Rating Added!", 
-      `You rated "${selectedMovie.title}" (${finalRating.toFixed(1)}/10)`,
-      [{ text: "OK" }]
-    );
+
+    // **CRITICAL FIX: Close comparison modal by resetting emotion/rating state**
+    setSelectedEmotion(null);
+    console.log('🔓 Comparison modal closed - selectedEmotion reset to null');
+
+    // Note: Rating completion screen is now shown within ComparisonModal (3 second auto-close)
   }, [selectedMovie, selectedCategory, onAddToSeen, contentType, seen, fetchRecentReleases, fetchPopularMovies, setFinalCalculatedRating, setAiMovieRecommendations, setAiTvRecommendations, setPopularMovies, setRecentReleases, closeDetailModal, mediaType, removeMovieFromAllSections]);
 
   const handleCloseEnhancedModals = useCallback(() => {

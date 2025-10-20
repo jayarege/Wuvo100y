@@ -400,12 +400,8 @@ function InitialRatingFlow({ seen, unseen, seenTVShows, unseenTVShows, onAddToSe
           : m
       )
     );
-    
-    Alert.alert(
-      "Rating Added!", 
-      `You rated "${selectedMovieForRating.title || selectedMovieForRating.name}" (${finalRating.toFixed(1)}/10)`,
-      [{ text: "OK" }]
-    );
+
+    // Note: Rating completion screen shown within comparison flow
   }, [selectedMovieForRating, selectedCategory, onAddToSeen, mediaType]);
 
   const handleCloseEnhancedModals = useCallback(() => {
