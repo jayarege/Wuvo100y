@@ -29,6 +29,50 @@ import { getRatingStyles } from '../../Styles/ratingStyles';
 
 const { width } = Dimensions.get('window');
 
+/**
+ * Normalized rating accessor (1–10).
+ * Priority: userRating (Bradley-Terry) → legacy eloRating/10 → TMDB vote_average.
+ * Returns a number (0–10) or null if unavailable.
+ *
+ * @param {Object} m - Movie object
+ * @returns {number|null} - Rating from 0-10, or null if no rating available
+ */
+export const getDisplayRating = (m) => {
+  const num = (v) => {
+    if (v === null || v === undefined) return null;
+    const n = typeof v === 'number' ? v : parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  let r =
+    num(m?.userRating) ??
+    (num(m?.eloRating) != null ? num(m.eloRating) / 10 : null) ??
+    num(m?.vote_average) ??
+    null;
+
+  if (r == null) return null;
+  if (r < 0) r = 0;
+  if (r > 10) r = 10;
+  return r;
+};
+
+/**
+ * Sort comparator for movies by display rating (descending).
+ * Null ratings sort last.
+ *
+ * @param {Object} a - First movie
+ * @param {Object} b - Second movie
+ * @returns {number} - Sort order
+ */
+const byDisplayRatingDesc = (a, b) => {
+  const ra = getDisplayRating(a);
+  const rb = getDisplayRating(b);
+  if (ra == null && rb == null) return 0;
+  if (ra == null) return 1;  // null goes last
+  if (rb == null) return -1;
+  return rb - ra;
+};
+
 const getStandardizedButtonStyles = (colors) => ({
   // Base button style - consistent across all variants
   baseButton: {
@@ -274,26 +318,32 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   // Get top rated content for display
   const topRatedContent = useMemo(() => {
     let sortedContent = [...currentSeen];
-    
+
     // For friend profiles, apply different ranking logic
     if (!isOwnProfile) {
       switch (selectedRankingType) {
         case 'user':
-          sortedContent = sortedContent.sort((a, b) => (b.userRating || 0) - (a.userRating || 0));
+          // Use normalized rating (userRating → eloRating/10 → TMDB)
+          sortedContent = sortedContent.sort(byDisplayRatingDesc);
           break;
         case 'average':
-          // Mock average friend rating (in real app, this would be calculated from actual friends)
+          // Average of user rating and TMDB
           sortedContent = sortedContent.sort((a, b) => {
-            const avgA = ((a.userRating || 0) + (a.vote_average || 0)) / 2;
-            const avgB = ((b.userRating || 0) + (b.vote_average || 0)) / 2;
+            const rA = getDisplayRating(a);
+            const rB = getDisplayRating(b);
+            const tmdbA = typeof a?.vote_average === 'number' ? a.vote_average : 0;
+            const tmdbB = typeof b?.vote_average === 'number' ? b.vote_average : 0;
+            const avgA = rA != null ? (rA + tmdbA) / 2 : tmdbA;
+            const avgB = rB != null ? (rB + tmdbB) / 2 : tmdbB;
             return avgB - avgA;
           });
           break;
         case 'imdb':
+          // Sort by TMDB rating directly
           sortedContent = sortedContent.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
           break;
       }
-      
+
       // Include unwatched movies if enabled
       if (showUnwatchedMovies) {
         const unwatchedWithRatings = currentUnseen.map(movie => ({
@@ -303,12 +353,15 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
         sortedContent = [...sortedContent, ...unwatchedWithRatings];
       }
     } else {
-      // Own profile - original logic
+      // Own profile - use normalized rating
       sortedContent = sortedContent
-        .filter(item => item.userRating >= 7)
-        .sort((a, b) => b.userRating - a.userRating);
+        .filter(item => {
+          const r = getDisplayRating(item);
+          return r != null && r >= 7;
+        })
+        .sort(byDisplayRatingDesc);
     }
-    
+
     return sortedContent.slice(0, 9);
   }, [currentSeen, currentUnseen, isOwnProfile, selectedRankingType, showUnwatchedMovies]);
 
@@ -366,16 +419,23 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
     if (!isOwnProfile && selectedTab === 'toprated') {
       switch (selectedRankingType) {
         case 'user':
-          filtered = filtered.sort((a, b) => (b.userRating || 0) - (a.userRating || 0));
+          // Use normalized rating (userRating → eloRating/10 → TMDB)
+          filtered = filtered.sort(byDisplayRatingDesc);
           break;
         case 'average':
+          // Average of user rating and TMDB
           filtered = filtered.sort((a, b) => {
-            const avgA = ((a.userRating || 0) + (a.vote_average || 0)) / 2;
-            const avgB = ((b.userRating || 0) + (b.vote_average || 0)) / 2;
+            const rA = getDisplayRating(a);
+            const rB = getDisplayRating(b);
+            const tmdbA = typeof a?.vote_average === 'number' ? a.vote_average : 0;
+            const tmdbB = typeof b?.vote_average === 'number' ? b.vote_average : 0;
+            const avgA = rA != null ? (rA + tmdbA) / 2 : tmdbA;
+            const avgB = rB != null ? (rB + tmdbB) / 2 : tmdbB;
             return avgB - avgA;
           });
           break;
         case 'imdb':
+          // Sort by TMDB rating directly
           filtered = filtered.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
           break;
       }
@@ -819,7 +879,33 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   // Universal movie selection handler with context
   const handleMovieSelect = useCallback(async (movie, context = 'general') => {
     console.log('🎬 Movie selected:', movie.title || movie.name, 'Context:', context);
-    setSelectedMovie(movie);
+    console.log('📊 BEFORE MERGE - movie object:', JSON.stringify({
+      id: movie.id,
+      title: movie.title || movie.name,
+      userRating: movie.userRating,
+      theta: movie.theta,
+      comparisons: movie.comparisons,
+      confidencePercent: movie.confidencePercent,
+      wins: movie.wins
+    }, null, 2));
+
+    // ✅ FIX: Merge with complete Bradley-Terry data from seen array
+    const completeMovie = seen.find(m => m.id === movie.id) || movie;
+    console.log('📊 AFTER MERGE - completeMovie object:', JSON.stringify({
+      id: completeMovie.id,
+      title: completeMovie.title || completeMovie.name,
+      userRating: completeMovie.userRating,
+      theta: completeMovie.theta,
+      comparisons: completeMovie.comparisons,
+      confidencePercent: completeMovie.confidencePercent,
+      wins: completeMovie.wins,
+      thetaPrior: completeMovie.thetaPrior
+    }, null, 2));
+
+    console.log('📊 seen array length:', seen.length);
+    console.log('📊 Found in seen array?', seen.some(m => m.id === movie.id));
+
+    setSelectedMovie(completeMovie);
     setMovieContext(context);
     setIsLoadingMovieDetails(true);
     setMovieDetailModalVisible(true);
@@ -864,28 +950,29 @@ const ProfileScreen = ({ seen = [], unseen = [], seenTVShows = [], unseenTVShows
   // Removed closeEditModal and updateRating - now handled by EnhancedRatingButton components
 
   const displayRating = useCallback((movie) => {
-    // For friend profiles, show rating based on selected ranking type
+    const r = getDisplayRating(movie);
+
     if (!isOwnProfile) {
       switch (selectedRankingType) {
         case 'user':
-          return movie.userRating ? movie.userRating.toFixed(1) : 'N/A';
-        case 'average':
-          if (movie.userRating && movie.vote_average) {
-            return (((movie.userRating + movie.vote_average) / 2)).toFixed(1);
-          }
-          return movie.userRating ? movie.userRating.toFixed(1) : (movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A');
-        case 'imdb':
-          return movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A';
+          return r != null ? r.toFixed(1) : 'N/A';
+        case 'average': {
+          const tmdb = typeof movie?.vote_average === 'number' ? movie.vote_average : null;
+          if (r != null && tmdb != null) return ((r + tmdb) / 2).toFixed(1);
+          if (r != null) return r.toFixed(1);
+          return tmdb != null ? tmdb.toFixed(1) : 'N/A';
+        }
+        case 'imdb': {
+          const tmdb = typeof movie?.vote_average === 'number' ? movie.vote_average : null;
+          return tmdb != null ? tmdb.toFixed(1) : 'N/A';
+        }
         default:
-          return movie.userRating ? movie.userRating.toFixed(1) : 'N/A';
+          return r != null ? r.toFixed(1) : 'N/A';
       }
     }
-    
-    // Own profile - original logic
-    if (movie.userRating !== undefined) {
-      return movie.userRating.toFixed(1);
-    }
-    return (movie.eloRating / 100).toFixed(1);
+
+    // Own profile - use normalized rating
+    return r != null ? r.toFixed(1) : 'N/A';
   }, [isOwnProfile, selectedRankingType]);
 
   const handleGenreSelect = useCallback((genreId) => {
@@ -1756,7 +1843,7 @@ Please rate a few more movies first!`,
                               textAlign: 'center',
                               numberOfLines: 1
                             }]}>
-                              FRIENDS
+                              TMDB
                             </Text>
                             <Text style={[profileStyles.finalScore, { 
                               color: '#4CAF50', 
@@ -2091,7 +2178,7 @@ Please rate a few more movies first!`,
                   style={[listStyles.rankingItem, { backgroundColor: colors.card }]}
                   onPress={() => handleMovieSelect(item, 'watchlist')}
                   activeOpacity={0.7}
-                  accessibilityLabel={`View details for ${item.title || item.name}, rated ${item.score?.toFixed(1) || item.vote_average?.toFixed(1) || 'N/A'}`}
+                  accessibilityLabel={`View details for ${item.title || item.name}, TMDB rating ${item.vote_average?.toFixed(1) || 'N/A'}`}
                   accessibilityRole="button"
                   accessibilityHint="Double tap to view movie details and mark as watched"
                 >
@@ -2187,7 +2274,7 @@ Please rate a few more movies first!`,
                             textAlign: 'center',
                             numberOfLines: 1
                           }]}>
-                            FRIENDS
+                            TMDB
                           </Text>
                           <Text style={[profileStyles.finalScore, { 
                             color: '#4CAF50', 
@@ -2462,7 +2549,8 @@ Please rate a few more movies first!`,
                         <Text style={[styles.ratingValue, { color: colors.text }]}>{displayRating(movie)}</Text>
                       </View>
                       <View style={styles.ratingColumn}>
-                        <Text style={[styles.friendsRatingLabel, { color: colors.accent }]}>FRIENDS</Text>
+                        {/* TODO: Replace with friendRatingData.averageRating when friend system is implemented */}
+                        <Text style={[styles.friendsRatingLabel, { color: colors.accent }]}>TMDB</Text>
                         <Text style={[styles.friendsRatingValue, { color: colors.accent }]}>
                           {movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A'}
                         </Text>
@@ -2576,7 +2664,8 @@ Please rate a few more movies first!`,
                         <Text style={[styles.ratingValue, { color: colors.text }]}>N/A</Text>
                       </View>
                       <View style={styles.ratingColumn}>
-                        <Text style={[styles.friendsRatingLabel, { color: colors.accent }]}>FRIENDS</Text>
+                        {/* TODO: Replace with friendRatingData.averageRating when friend system is implemented */}
+                        <Text style={[styles.friendsRatingLabel, { color: colors.accent }]}>TMDB</Text>
                         <Text style={[styles.friendsRatingValue, { color: colors.accent }]}>
                           {movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A'}
                         </Text>
@@ -2914,7 +3003,8 @@ Please rate a few more movies first!`,
                           <Text style={styles.ratingValue}>{displayRating(movie)}</Text>
                         </View>
                         <View style={styles.ratingColumn}>
-                          <Text style={styles.friendsRatingLabel}>FRIENDS</Text>
+                          {/* TODO: Replace with friendRatingData.averageRating when friend system is implemented */}
+                          <Text style={styles.friendsRatingLabel}>TMDB</Text>
                           <Text style={styles.friendsRatingValue}>
                             {movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A'}
                           </Text>
@@ -3234,7 +3324,8 @@ Please rate a few more movies first!`,
                           <Text style={styles.ratingValue}>N/A</Text>
                         </View>
                         <View style={styles.ratingColumn}>
-                          <Text style={styles.friendsRatingLabel}>FRIENDS</Text>
+                          {/* TODO: Replace with friendRatingData.averageRating when friend system is implemented */}
+                          <Text style={styles.friendsRatingLabel}>TMDB</Text>
                           <Text style={styles.friendsRatingValue}>
                             {movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A'}
                           </Text>

@@ -75,8 +75,8 @@ const BT_CONFIG = {
   // Logic: Min 3, check 80% Wilson CI after each, max 5
   MIN_COMPARISONS: 3,
   MAX_COMPARISONS: 5,
-  WILSON_CONFIDENCE_THRESHOLD: 0.80, // 80% confidence required to stop early
-  
+  // Note: Early stopping uses confidencePercent >= 80 directly in shouldStopEarly()
+
   // Bradley-Terry specific parameters
   LEARNING_RATE: 1.3,        // η: Step size for gradient ascent (DRAMATIC: ~1-2 points per comparison)
   SHRINKAGE_STRENGTH: 0.15,  // α: Pull toward TMDB prior (MINIMAL: allows ±5-6 point swings)
@@ -336,6 +336,17 @@ export const shouldStopEarly = (comparisons, confidencePercent) => {
  * - Dislike: 0.7 × 3.5 + 0.3 × TMDB = 2.45 + 0.3×TMDB
  */
 export const initializeBTMovie = (movie, sentiment = null) => {
+  console.log('🟢 initializeBTMovie called with:', JSON.stringify({
+    id: movie.id,
+    title: movie.title || movie.name,
+    userRating: movie.userRating,
+    theta: movie.theta,
+    comparisons: movie.comparisons,
+    confidencePercent: movie.confidencePercent,
+    wins: movie.wins,
+    sentiment: sentiment
+  }, null, 2));
+
   // ✅ FIX: Check if movie already has Bradley-Terry data (re-rating scenario)
   if (movie.theta !== undefined && movie.comparisons !== undefined && movie.comparisons > 0) {
     console.log(`🔄 Re-rating existing movie: ${movie.title || movie.name}`);
@@ -349,16 +360,16 @@ export const initializeBTMovie = (movie, sentiment = null) => {
 
     if (confidencePercent === undefined || confidencePercent === 0) {
       // Calculate confidence from existing comparison data
+      console.log(`   🔍 Recalculating confidence - comparisons: ${movie.comparisons}, wins: ${movie.wins}`);
       const ci = getThetaConfidenceInterval(movie.theta, movie.comparisons, movie.wins);
       confidenceWidth = ci.width;
       confidencePercent = Math.min(80, Math.max(0, 80 - (ci.width - 0.8) * 20));
       console.log(`   ✨ Recalculated confidence: ${confidencePercent.toFixed(0)}% (was missing)`);
     } else {
-      console.log(`   Existing confidence: ${confidencePercent.toFixed(0)}%`);
+      console.log(`   ✅ Existing confidence: ${confidencePercent.toFixed(0)}%`);
     }
 
-    // Return movie with existing BT data PRESERVED + confidence ensured
-    return {
+    const result = {
       ...movie,
       // Ensure thetaPrior exists (for new comparisons)
       thetaPrior: movie.thetaPrior || ratingToTheta(movie.tmdbRating || BT_CONFIG.DEFAULT_TMDB_RATING),
@@ -366,6 +377,17 @@ export const initializeBTMovie = (movie, sentiment = null) => {
       confidencePercent: confidencePercent,
       confidenceWidth: confidenceWidth
     };
+
+    console.log('🟢 initializeBTMovie RETURNING (re-rating):', JSON.stringify({
+      userRating: result.userRating,
+      theta: result.theta,
+      comparisons: result.comparisons,
+      confidencePercent: result.confidencePercent,
+      wins: result.wins
+    }, null, 2));
+
+    // Return movie with existing BT data PRESERVED + confidence ensured
+    return result;
   }
 
   // ✅ NEW MOVIE: Calculate initial rating based on sentiment + TMDB
@@ -614,12 +636,12 @@ const updateOpponentInStorage = async (opponent, mediaType) => {
   try {
     const storageKey = getStorageKey(mediaType);
     const stored = await AsyncStorage.getItem(storageKey);
-    
+
     if (!stored) return;
-    
+
     const items = JSON.parse(stored);
     const index = items.findIndex(item => item.id === opponent.id);
-    
+
     if (index !== -1) {
       items[index] = opponent;
       await AsyncStorage.setItem(storageKey, JSON.stringify(items));
@@ -627,6 +649,30 @@ const updateOpponentInStorage = async (opponent, mediaType) => {
     }
   } catch (error) {
     console.error('❌ Failed to update opponent:', error);
+  }
+};
+
+const updateMovieInStorage = async (movie, mediaType) => {
+  try {
+    const storageKey = getStorageKey(mediaType);
+    const stored = await AsyncStorage.getItem(storageKey);
+
+    if (!stored) return;
+
+    const items = JSON.parse(stored);
+    const index = items.findIndex(item => item.id === movie.id);
+
+    if (index !== -1) {
+      items[index] = movie;
+      console.log(`💾 Updated rated movie: ${movie.title || movie.name} (userRating: ${movie.userRating?.toFixed(2)}, confidence: ${movie.confidencePercent?.toFixed(0)}%)`);
+    } else {
+      items.push(movie);
+      console.log(`💾 Added new rated movie: ${movie.title || movie.name}`);
+    }
+
+    await AsyncStorage.setItem(storageKey, JSON.stringify(items));
+  } catch (error) {
+    console.error('❌ Failed to update rated movie in storage:', error);
   }
 };
 
@@ -780,13 +826,37 @@ export const ComparisonModal = ({
   // Initialize when modal opens
   useEffect(() => {
     if (visible && newMovie && currentRound === 1 && !currentOpponent) {
+      console.log('🔵 ComparisonModal useEffect TRIGGERED');
+      console.log('🔵 newMovie received:', JSON.stringify({
+        id: newMovie.id,
+        title: newMovie.title || newMovie.name,
+        userRating: newMovie.userRating,
+        theta: newMovie.theta,
+        comparisons: newMovie.comparisons,
+        confidencePercent: newMovie.confidencePercent,
+        wins: newMovie.wins,
+        thetaPrior: newMovie.thetaPrior
+      }, null, 2));
+
       // ✅ RE-RATING DETECTION: Check if movie already has Bradley-Terry data
       const isRerating = newMovie.theta !== undefined && newMovie.comparisons !== undefined && newMovie.comparisons > 0;
+      console.log('🔵 Is Re-rating?', isRerating);
+      console.log('🔵 Sentiment:', sentiment);
 
       // Initialize new movie with BT parameters
       // For re-rating: Pass null sentiment to skip sentiment-based initial rating
       // For new rating: Pass sentiment to calculate weighted initial rating
       const btMovie = initializeBTMovie(newMovie, isRerating ? null : sentiment);
+      console.log('🔵 btMovie after initializeBTMovie:', JSON.stringify({
+        id: btMovie.id,
+        title: btMovie.title || btMovie.name,
+        userRating: btMovie.userRating,
+        theta: btMovie.theta,
+        comparisons: btMovie.comparisons,
+        confidencePercent: btMovie.confidencePercent,
+        wins: btMovie.wins
+      }, null, 2));
+
       setCurrentMovie(btMovie);
 
       // Select first opponent
@@ -846,10 +916,11 @@ export const ComparisonModal = ({
       currentMovie.theta,
       !userChoseNew
     );
-    
-    // Save opponent to storage
+
+    // Save both movies to storage
+    await updateMovieInStorage(updatedMovie, mediaType);
     await updateOpponentInStorage(updatedOpponent, mediaType);
-    
+
     setCurrentMovie(updatedMovie);
     
     // Check stopping conditions
@@ -888,6 +959,7 @@ export const ComparisonModal = ({
 
       if (!nextOpponent) {
         console.log(`⚠️ No more opponents available. Completing after ${updatedMovie.comparisons} comparison(s).`);
+        await updateMovieInStorage(updatedMovie, mediaType);
         onComplete(updatedMovie);
         resetState();
       } else {
@@ -976,6 +1048,8 @@ export const ComparisonModal = ({
       lastUpdated: new Date().toISOString()
     };
 
+    // Save both movies to storage
+    await updateMovieInStorage(updatedMovie, mediaType);
     await updateOpponentInStorage(updatedOpponent, mediaType);
 
     console.log(`   New movie updated: ${currentMovie.userRating?.toFixed(2)} → ${newRating.toFixed(2)}`);
@@ -1017,6 +1091,7 @@ export const ComparisonModal = ({
 
       if (!nextOpponent) {
         console.log(`⚠️ No more opponents available. Completing after ${updatedMovie.comparisons} comparison(s).`);
+        await updateMovieInStorage(updatedMovie, mediaType);
         onComplete(updatedMovie);
         resetState();
       } else {
@@ -1181,7 +1256,14 @@ export const ComparisonModal = ({
           
           <View style={styles.actionButtons}>
             <TouchableOpacity
-              style={[styles.tooToughButton, { borderColor: colors.border }]}
+              style={[
+                styles.tooToughButton,
+                colors.tertiaryButton && {
+                  backgroundColor: colors.tertiaryButton.backgroundColor,
+                  borderWidth: colors.tertiaryButton.borderWidth,
+                  borderColor: colors.tertiaryButton.borderColor
+                }
+              ]}
               onPress={handleTooTough}
             >
               <Text style={[styles.tooToughText, { color: colors.text }]}>
@@ -1190,7 +1272,14 @@ export const ComparisonModal = ({
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.cancelButton}
+              style={[
+                styles.cancelButton,
+                colors.tertiaryButton && {
+                  backgroundColor: colors.tertiaryButton.backgroundColor,
+                  borderWidth: colors.tertiaryButton.borderWidth,
+                  borderColor: colors.tertiaryButton.borderColor
+                }
+              ]}
               onPress={() => {
                 resetState();
                 onClose();
@@ -1382,13 +1471,25 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   cancelButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',  // Semi-transparent white
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
   },
   cancelButtonText: {
-    fontSize: 16,
-    textDecorationLine: 'underline',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 16,
   },
   // Completion Modal styles
   completionContainer: {

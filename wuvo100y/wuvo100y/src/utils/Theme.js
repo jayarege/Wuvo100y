@@ -186,6 +186,13 @@ const theme = {
         radius: 12,              // Border radius
         style: 'solid'           // Border style
       },
+
+      // Tertiary button - for less prominent actions (Cancel, Too Tough, Not Interested)
+      tertiaryButton: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.3)',
+      },
       
       // Shadow settings
       shadow: {
@@ -220,6 +227,13 @@ const theme = {
         color: '#8A2BE2',        // Brighter purple for dark mode
         radius: 12,              // Border radius
         style: 'solid'           // Border style
+      },
+
+      // Tertiary button - for less prominent actions (Cancel, Too Tough, Not Interested)
+      tertiaryButton: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.3)',
       },
       
       // Shadow settings
@@ -259,6 +273,13 @@ const theme = {
         radius: 12,              // Border radius
         style: 'solid'           // Border style
       },
+
+      // Tertiary button - for less prominent actions (Cancel, Too Tough, Not Interested)
+      tertiaryButton: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.3)',
+      },
       
       // Shadow settings
       shadow: {
@@ -293,6 +314,13 @@ const theme = {
         color: '#7BC3F0',        // Lighter blue for dark mode
         radius: 12,              // Border radius
         style: 'solid'           // Border style
+      },
+
+      // Tertiary button - for less prominent actions (Cancel, Too Tough, Not Interested)
+      tertiaryButton: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.3)',
       },
       
       // Shadow settings
